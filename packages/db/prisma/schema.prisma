@@ -1,0 +1,822 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["identity", "core", "catalog", "access", "wallet", "billing", "economics", "analytics", "comms", "audit", "motrend", "aeo", "ugc"]
+}
+
+enum AccountType {
+  PERSONAL
+
+  @@schema("core")
+}
+
+enum MembershipType {
+  STANDARD
+  BUNDLE
+  INTERNAL
+
+  @@schema("access")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+
+  @@schema("access")
+}
+
+enum WalletScope {
+  GLOBAL
+
+  @@schema("wallet")
+}
+
+enum LedgerEntryType {
+  GRANT
+  PURCHASE
+  SPEND
+  REFUND
+  EXPIRE
+  ADJUSTMENT
+
+  @@schema("wallet")
+}
+
+enum BillingOrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+
+  @@schema("billing")
+}
+
+enum BillingSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  PAUSED
+
+  @@schema("billing")
+}
+
+enum MotrendSelectionKind {
+  TEMPLATE
+  REFERENCE
+
+  @@schema("motrend")
+}
+
+enum MotrendJobStatus {
+  AWAITING_UPLOAD
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+
+  @@schema("motrend")
+}
+
+enum MotrendDownloadArtifactType {
+  INLINE
+  DOWNLOAD
+
+  @@schema("motrend")
+}
+
+enum MotrendTaskType {
+  SUBMIT
+  POLL
+
+  @@schema("motrend")
+}
+
+enum MotrendTaskStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+  CANCELLED
+
+  @@schema("motrend")
+}
+
+model IdentityUser {
+  id                  String               @id @default(cuid()) @db.Text
+  firebaseUid         String               @unique @map("firebase_uid") @db.Text
+  primaryEmail        String?              @map("primary_email") @db.Text
+  emailVerified       Boolean              @default(false) @map("email_verified")
+  displayName         String?              @map("display_name") @db.Text
+  photoUrl            String?              @map("photo_url") @db.Text
+  status              String               @default("active") @db.Text
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastLoginAt         DateTime?            @map("last_login_at") @db.Timestamptz(6)
+  loginIdentities     LoginIdentity[]
+  ownedAccounts       Account[]            @relation("AccountOwner")
+  accountMemberships  AccountMember[]
+  supportProfiles     SupportProfile[]
+  attributionProfiles AttributionProfile[]
+  commsPreferences    CommsUserPreference[]
+  pushSubscriptions   PushSubscription[]
+  analyticsEvents     AnalyticsEvent[]
+  auditLogs           AuditLog[]
+  motrendJobs         MoTrendJob[]
+  motrendJobRequests  MoTrendJobRequest[]
+  aeoScans            AeoScan[]
+  aeoScanClaims       AeoScanClaim[]
+  ugcProjects         UgcProject[]
+
+  @@map("users")
+  @@schema("identity")
+}
+
+model LoginIdentity {
+  id              String       @id @default(cuid()) @db.Text
+  userId          String       @map("user_id") @db.Text
+  provider        String       @db.Text
+  providerSubject String       @map("provider_subject") @db.Text
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@map("login_identities")
+  @@schema("identity")
+}
+
+model Account {
+  id                  String               @id @default(cuid()) @db.Text
+  ownerUserId         String               @map("owner_user_id") @db.Text
+  name                String?              @db.Text
+  accountType         AccountType          @default(PERSONAL) @map("account_type")
+  realmDefault        String               @default("consumer") @map("realm_default") @db.Text
+  status              String               @default("active") @db.Text
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  ownerUser           IdentityUser         @relation("AccountOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members             AccountMember[]
+  supportProfiles     SupportProfile[]
+  productMemberships  ProductMembership[]
+  entitlements        Entitlement[]
+  wallets             Wallet[]
+  ledgerEntries       LedgerEntry[]
+  billingOrders       BillingOrder[]
+  billingSubscriptions BillingSubscription[]
+  usageEvents         EconomicsUsageEvent[]
+  analyticsEvents     AnalyticsEvent[]
+  attributionProfiles AttributionProfile[]
+  auditLogs           AuditLog[]
+  motrendJobs         MoTrendJob[]
+  aeoScans            AeoScan[]
+  ugcProjects         UgcProject[]
+
+  @@map("accounts")
+  @@schema("core")
+}
+
+model AccountMember {
+  id        String       @id @default(cuid()) @db.Text
+  accountId String       @map("account_id") @db.Text
+  userId    String       @map("user_id") @db.Text
+  role      String       @default("owner") @db.Text
+  status    String       @default("active") @db.Text
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account   Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user      IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, userId])
+  @@map("account_members")
+  @@schema("core")
+}
+
+model SupportProfile {
+  id          String       @id @default(cuid()) @db.Text
+  accountId   String       @map("account_id") @db.Text
+  userId      String       @map("user_id") @db.Text
+  supportCode String       @unique @map("support_code") @db.Text
+  isAdmin     Boolean      @default(false) @map("is_admin")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user        IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId])
+  @@map("support_profiles")
+  @@schema("core")
+}
+
+model Realm {
+  id        String    @id @default(cuid()) @db.Text
+  code      String    @unique @db.Text
+  name      String    @db.Text
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  products  Product[]
+
+  @@map("realms")
+  @@schema("catalog")
+}
+
+model Product {
+  id               String               @id @default(cuid()) @db.Text
+  realmId          String               @map("realm_id") @db.Text
+  code             String               @unique @db.Text
+  name             String               @db.Text
+  entryDomain      String               @unique @map("entry_domain") @db.Text
+  status           String               @default("active") @db.Text
+  isDiscoverable   Boolean              @default(true) @map("is_discoverable")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  realm            Realm                @relation(fields: [realmId], references: [id], onDelete: Restrict)
+  features         Feature[]
+  sourceCrossSells CrossSellRule[]      @relation("CrossSellSource")
+  targetCrossSells CrossSellRule[]      @relation("CrossSellTarget")
+  memberships      ProductMembership[]
+  entitlements     Entitlement[]
+  usageEvents      EconomicsUsageEvent[]
+  analyticsEvents  AnalyticsEvent[]
+  ledgerEntries    LedgerEntry[]
+  featureCostModels FeatureCostModel[]
+  pushSubscriptions PushSubscription[]
+
+  @@map("products")
+  @@schema("catalog")
+}
+
+model Feature {
+  id             String    @id @default(cuid()) @db.Text
+  productId      String    @map("product_id") @db.Text
+  code           String    @db.Text
+  name           String    @db.Text
+  meteringType   String    @default("none") @map("metering_type") @db.Text
+  visibilityType String    @default("public") @map("visibility_type") @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, code])
+  @@map("features")
+  @@schema("catalog")
+}
+
+model CrossSellRule {
+  id                  String   @id @default(cuid()) @db.Text
+  sourceProductId     String   @map("source_product_id") @db.Text
+  targetProductId     String   @map("target_product_id") @db.Text
+  placementCode       String   @map("placement_code") @db.Text
+  eligibilityRuleJson Json?    @map("eligibility_rule_json")
+  priority            Int      @default(100)
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sourceProduct       Product  @relation("CrossSellSource", fields: [sourceProductId], references: [id], onDelete: Cascade)
+  targetProduct       Product  @relation("CrossSellTarget", fields: [targetProductId], references: [id], onDelete: Cascade)
+
+  @@map("cross_sell_rules")
+  @@schema("catalog")
+}
+
+model ProductMembership {
+  id             String           @id @default(cuid()) @db.Text
+  accountId      String           @map("account_id") @db.Text
+  productId      String           @map("product_id") @db.Text
+  membershipType MembershipType   @default(STANDARD) @map("membership_type")
+  status         MembershipStatus @default(ACTIVE)
+  origin         String           @default("self_signup") @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  product        Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, productId])
+  @@map("product_memberships")
+  @@schema("access")
+}
+
+model Entitlement {
+  id          String    @id @default(cuid()) @db.Text
+  accountId   String    @map("account_id") @db.Text
+  productId   String    @map("product_id") @db.Text
+  featureCode String    @map("feature_code") @db.Text
+  grantType   String    @map("grant_type") @db.Text
+  limitValue  Int?      @map("limit_value")
+  usagePeriod String?   @map("usage_period") @db.Text
+  startsAt    DateTime? @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime? @map("ends_at") @db.Timestamptz(6)
+  status      String    @default("active") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, productId, featureCode, status])
+  @@map("entitlements")
+  @@schema("access")
+}
+
+model Wallet {
+  id            String       @id @default(cuid()) @db.Text
+  accountId     String       @map("account_id") @db.Text
+  walletScope   WalletScope  @default(GLOBAL) @map("wallet_scope")
+  scopeRef      String       @default("") @map("scope_ref") @db.Text
+  currencyCode  String       @default("CREDITS") @map("currency_code") @db.Text
+  status        String       @default("active") @db.Text
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account       Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+
+  @@unique([accountId, walletScope, currencyCode, scopeRef])
+  @@map("wallets")
+  @@schema("wallet")
+}
+
+model LedgerEntry {
+  id           String          @id @default(cuid()) @db.Text
+  walletId     String          @map("wallet_id") @db.Text
+  accountId    String          @map("account_id") @db.Text
+  productId    String?         @map("product_id") @db.Text
+  entryType    LedgerEntryType @map("entry_type")
+  amountDelta  Int             @map("amount_delta")
+  reasonCode   String          @map("reason_code") @db.Text
+  refType      String          @map("ref_type") @db.Text
+  refId        String?         @map("ref_id") @db.Text
+  operationKey String?         @unique @map("operation_key") @db.Text
+  balanceAfter Int             @map("balance_after")
+  metadataJson Json?           @map("metadata_json")
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  wallet       Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  account      Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  product      Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([walletId, createdAt])
+  @@index([accountId, createdAt])
+  @@map("ledger_entries")
+  @@schema("wallet")
+}
+
+model BillingProvider {
+  id             String               @id @default(cuid()) @db.Text
+  code           String               @unique @db.Text
+  name           String               @db.Text
+  status         String               @default("active") @db.Text
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  prices         BillingPrice[]
+  orders         BillingOrder[]
+  subscriptions  BillingSubscription[]
+  webhookEvents  BillingWebhookEvent[]
+
+  @@map("providers")
+  @@schema("billing")
+}
+
+model BillingProduct {
+  id            String                @id @default(cuid()) @db.Text
+  code          String                @unique @db.Text
+  productType   String                @map("product_type") @db.Text
+  scopeType     String                @map("scope_type") @db.Text
+  scopeRef      String?               @map("scope_ref") @db.Text
+  name          String                @db.Text
+  status        String                @default("active") @db.Text
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  prices        BillingPrice[]
+  orders        BillingOrder[]
+  subscriptions BillingSubscription[]
+
+  @@map("products")
+  @@schema("billing")
+}
+
+model PriceBook {
+  id           String         @id @default(cuid()) @db.Text
+  marketCode   String         @map("market_code") @db.Text
+  currencyCode String         @map("currency_code") @db.Text
+  languageCode String         @map("language_code") @db.Text
+  taxMode      String         @default("exclusive") @map("tax_mode") @db.Text
+  isDefault    Boolean        @default(false) @map("is_default")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  prices       BillingPrice[]
+
+  @@map("price_books")
+  @@schema("billing")
+}
+
+model BillingPrice {
+  id               String           @id @default(cuid()) @db.Text
+  billingProductId String           @map("billing_product_id") @db.Text
+  providerId       String?          @map("provider_id") @db.Text
+  priceBookId      String?          @map("price_book_id") @db.Text
+  externalPriceId  String?          @map("external_price_id") @db.Text
+  amountMinor      Int              @map("amount_minor")
+  billingPeriod    String?          @map("billing_period") @db.Text
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  billingProduct   BillingProduct   @relation(fields: [billingProductId], references: [id], onDelete: Cascade)
+  provider         BillingProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  priceBook        PriceBook?       @relation(fields: [priceBookId], references: [id], onDelete: SetNull)
+  orders           BillingOrder[]
+
+  @@map("prices")
+  @@schema("billing")
+}
+
+model BillingOrder {
+  id               String             @id @default(cuid()) @db.Text
+  accountId        String             @map("account_id") @db.Text
+  providerId       String?            @map("provider_id") @db.Text
+  billingProductId String             @map("billing_product_id") @db.Text
+  priceId          String?            @map("price_id") @db.Text
+  status           BillingOrderStatus @default(PENDING)
+  currencyCode     String             @map("currency_code") @db.Text
+  totalMinor       Int                @map("total_minor")
+  externalOrderId  String?            @map("external_order_id") @db.Text
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account          Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  provider         BillingProvider?   @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  billingProduct   BillingProduct     @relation(fields: [billingProductId], references: [id], onDelete: Restrict)
+  price            BillingPrice?      @relation(fields: [priceId], references: [id], onDelete: SetNull)
+
+  @@map("orders")
+  @@schema("billing")
+}
+
+model BillingSubscription {
+  id                     String                    @id @default(cuid()) @db.Text
+  accountId              String                    @map("account_id") @db.Text
+  providerId             String?                   @map("provider_id") @db.Text
+  billingProductId       String                    @map("billing_product_id") @db.Text
+  externalSubscriptionId String?                   @map("external_subscription_id") @db.Text
+  status                 BillingSubscriptionStatus @default(TRIALING)
+  currentPeriodStart     DateTime?                 @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd       DateTime?                 @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd      Boolean                   @default(false) @map("cancel_at_period_end")
+  createdAt              DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account                Account                   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  provider               BillingProvider?          @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  billingProduct         BillingProduct            @relation(fields: [billingProductId], references: [id], onDelete: Restrict)
+
+  @@map("subscriptions")
+  @@schema("billing")
+}
+
+model BillingWebhookEvent {
+  id              String           @id @default(cuid()) @db.Text
+  providerId      String?          @map("provider_id") @db.Text
+  externalEventId String           @map("external_event_id") @db.Text
+  eventType       String           @map("event_type") @db.Text
+  payloadJson     Json             @map("payload_json")
+  idempotencyKey  String           @unique @map("idempotency_key") @db.Text
+  processedAt     DateTime?        @map("processed_at") @db.Timestamptz(6)
+  processingStatus String          @default("pending") @map("processing_status") @db.Text
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  provider        BillingProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@unique([providerId, externalEventId])
+  @@map("webhook_events")
+  @@schema("billing")
+}
+
+model ProviderRate {
+  id           String   @id @default(cuid()) @db.Text
+  providerCode String   @map("provider_code") @db.Text
+  modelCode    String?  @map("model_code") @db.Text
+  unitType     String   @map("unit_type") @db.Text
+  costPerUnit  Decimal  @map("cost_per_unit") @db.Decimal(18, 6)
+  currencyCode String   @map("currency_code") @db.Text
+  effectiveFrom DateTime @map("effective_from") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("provider_rates")
+  @@schema("economics")
+}
+
+model FeatureCostModel {
+  id              String   @id @default(cuid()) @db.Text
+  productId       String   @map("product_id") @db.Text
+  featureCode     String   @map("feature_code") @db.Text
+  costFormulaType String   @map("cost_formula_type") @db.Text
+  configJson      Json     @map("config_json")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("feature_cost_models")
+  @@schema("economics")
+}
+
+model EconomicsUsageEvent {
+  id                 String   @id @default(cuid()) @db.Text
+  accountId          String   @map("account_id") @db.Text
+  productId          String   @map("product_id") @db.Text
+  featureCode        String   @map("feature_code") @db.Text
+  providerCode       String   @map("provider_code") @db.Text
+  modelCode          String?  @map("model_code") @db.Text
+  rawUnitsJson       Json     @map("raw_units_json")
+  internalCostMinor  Int      @map("internal_cost_minor")
+  creditsCharged     Int      @map("credits_charged")
+  marginSnapshotMinor Int?    @map("margin_snapshot_minor")
+  operationKey       String?  @unique @map("operation_key") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account            Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("usage_events")
+  @@schema("economics")
+}
+
+model EconomicsRollupDaily {
+  id          String   @id @default(cuid()) @db.Text
+  date        DateTime @db.Date
+  productId   String   @map("product_id") @db.Text
+  featureCode String   @map("feature_code") @db.Text
+  revenueMinor Int     @map("revenue_minor")
+  costMinor   Int      @map("cost_minor")
+  marginMinor Int      @map("margin_minor")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([date, productId, featureCode])
+  @@map("rollups_daily")
+  @@schema("economics")
+}
+
+model AttributionProfile {
+  id                     String       @id @default(cuid()) @db.Text
+  accountId              String?      @map("account_id") @db.Text
+  userId                 String       @unique @map("user_id") @db.Text
+  firstTouchJson         Json?        @map("first_touch_json")
+  lastTouchJson          Json?        @map("last_touch_json")
+  normalizedClickIdsJson Json?        @map("normalized_click_ids_json")
+  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account                Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  user                   IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("attribution_profiles")
+  @@schema("analytics")
+}
+
+model AnalyticsEvent {
+  id               String       @id @default(cuid()) @db.Text
+  accountId        String?      @map("account_id") @db.Text
+  userId           String?      @map("user_id") @db.Text
+  productId        String?      @map("product_id") @db.Text
+  eventName        String       @map("event_name") @db.Text
+  eventPayloadJson Json         @map("event_payload_json")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  account          Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  user             IdentityUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product          Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("events")
+  @@schema("analytics")
+}
+
+model CommsUserPreference {
+  id                    String       @id @default(cuid()) @db.Text
+  userId                String       @map("user_id") @db.Text
+  realmCode             String       @map("realm_code") @db.Text
+  emailMarketingAllowed Boolean      @default(false) @map("email_marketing_allowed")
+  pushMarketingAllowed  Boolean      @default(false) @map("push_marketing_allowed")
+  productUpdatesAllowed Boolean      @default(true) @map("product_updates_allowed")
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                  IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, realmCode])
+  @@map("user_preferences")
+  @@schema("comms")
+}
+
+model PushSubscription {
+  id        String        @id @default(cuid()) @db.Text
+  userId    String        @map("user_id") @db.Text
+  productId String?       @map("product_id") @db.Text
+  endpoint  String        @db.Text
+  keysJson  Json          @map("keys_json")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      IdentityUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, endpoint])
+  @@map("push_subscriptions")
+  @@schema("comms")
+}
+
+model AuditLog {
+  id          String        @id @default(cuid()) @db.Text
+  accountId   String?       @map("account_id") @db.Text
+  userId      String?       @map("user_id") @db.Text
+  actionCode  String        @map("action_code") @db.Text
+  targetType  String        @map("target_type") @db.Text
+  targetId    String?       @map("target_id") @db.Text
+  payloadJson Json          @map("payload_json")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  account     Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  user        IdentityUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("logs")
+  @@schema("audit")
+}
+
+model MoTrendTemplate {
+  id                String      @id @default(cuid()) @db.Text
+  productId         String      @map("product_id") @db.Text
+  code              String      @db.Text
+  name              String      @db.Text
+  isActive          Boolean     @default(true) @map("is_active")
+  durationSec       Int         @default(10) @map("duration_sec")
+  referenceVideoUrl String?     @map("reference_video_url") @db.Text
+  metadataJson      Json?       @map("metadata_json")
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([productId, code])
+  @@map("templates")
+  @@schema("motrend")
+}
+
+model MoTrendJob {
+  id                    String                @id @default(cuid()) @db.Text
+  accountId             String                @map("account_id") @db.Text
+  userId                String                @map("user_id") @db.Text
+  templateId            String                @map("template_id") @db.Text
+  selectionKind         MotrendSelectionKind  @map("selection_kind")
+  status                MotrendJobStatus      @default(AWAITING_UPLOAD)
+  inputImagePath        String                @map("input_image_path") @db.Text
+  inputImageUrl         String?               @map("input_image_url") @db.Text
+  referenceVideoPath    String?               @map("reference_video_path") @db.Text
+  referenceVideoUrl     String?               @map("reference_video_url") @db.Text
+  debitedCredits        Int?                  @map("debited_credits")
+  finalCostCredits      Int?                  @map("final_cost_credits")
+  refundCredits         Int?                  @map("refund_credits")
+  providerTaskId        String?               @map("provider_task_id") @db.Text
+  providerState         String?               @map("provider_state") @db.Text
+  providerOutputUrl     String?               @map("provider_output_url") @db.Text
+  providerWatermarkUrl  String?               @map("provider_watermark_url") @db.Text
+  billingSource         String?               @map("billing_source") @db.Text
+  billingDurationSec    Int?                  @map("billing_duration_sec")
+  billingRawDurationSec Float?                @map("billing_raw_duration_sec")
+  outputDurationSec     Int?                  @map("output_duration_sec")
+  outputRawDurationSec  Float?                @map("output_raw_duration_sec")
+  reconciliationError   String?               @map("reconciliation_error") @db.Text
+  finalizedAt           DateTime?             @map("finalized_at") @db.Timestamptz(6)
+  lastStatusCheckAt     DateTime?             @map("last_status_check_at") @db.Timestamptz(6)
+  metadataJson          Json?                 @map("metadata_json")
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account               Account               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user                  IdentityUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobRequests           MoTrendJobRequest[]
+  downloadArtifacts     MoTrendDownloadArtifact[]
+  tasks                 MoTrendJobTask[]
+
+  @@index([accountId, status])
+  @@index([userId, createdAt])
+  @@map("jobs")
+  @@schema("motrend")
+}
+
+model MoTrendJobRequest {
+  id             String       @id @default(cuid()) @db.Text
+  jobId          String       @map("job_id") @db.Text
+  userId         String       @map("user_id") @db.Text
+  clientRequestId String      @map("client_request_id") @db.Text
+  idempotencyKey String       @unique @map("idempotency_key") @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  job            MoTrendJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user           IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("job_requests")
+  @@schema("motrend")
+}
+
+model MoTrendDownloadArtifact {
+  id            String                     @id @default(cuid()) @db.Text
+  jobId         String                     @map("job_id") @db.Text
+  artifactType  MotrendDownloadArtifactType @map("artifact_type")
+  storagePath   String                     @map("storage_path") @db.Text
+  downloadToken String                     @map("download_token") @db.Text
+  fileName      String?                    @map("file_name") @db.Text
+  contentType   String?                    @map("content_type") @db.Text
+  sizeBytes     Int?                       @map("size_bytes")
+  expiresAt     DateTime                   @map("expires_at") @db.Timestamptz(6)
+  metadataJson  Json?                      @map("metadata_json")
+  createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  job           MoTrendJob                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, artifactType])
+  @@map("download_artifacts")
+  @@schema("motrend")
+}
+
+model MoTrendJobTask {
+  id           String            @id @default(cuid()) @db.Text
+  jobId        String            @map("job_id") @db.Text
+  taskType     MotrendTaskType   @map("task_type")
+  status       MotrendTaskStatus @default(QUEUED)
+  providerCode String            @default("kling") @map("provider_code") @db.Text
+  operationKey String            @unique @map("operation_key") @db.Text
+  notBeforeAt  DateTime          @default(now()) @map("not_before_at") @db.Timestamptz(6)
+  claimedAt    DateTime?         @map("claimed_at") @db.Timestamptz(6)
+  leaseUntil   DateTime?         @map("lease_until") @db.Timestamptz(6)
+  processedAt  DateTime?         @map("processed_at") @db.Timestamptz(6)
+  attempts     Int               @default(0)
+  lastError    String?           @map("last_error") @db.Text
+  payloadJson  Json?             @map("payload_json")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  job          MoTrendJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([status, notBeforeAt])
+  @@index([jobId, taskType, status])
+  @@map("job_tasks")
+  @@schema("motrend")
+}
+
+model AeoScan {
+  id                 String        @id @default(cuid()) @db.Text
+  accountId          String?       @map("account_id") @db.Text
+  userId             String?       @map("user_id") @db.Text
+  anonymousSessionId String?       @map("anonymous_session_id") @db.Text
+  siteUrl            String        @map("site_url") @db.Text
+  status             String        @default("queued") @db.Text
+  publicScore        Int?          @map("public_score")
+  recommendationsLocked Boolean    @default(true) @map("recommendations_locked")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account            Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  user               IdentityUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reports            AeoScanReport[]
+  claims             AeoScanClaim[]
+
+  @@map("scans")
+  @@schema("aeo")
+}
+
+model AeoScanReport {
+  id                  String   @id @default(cuid()) @db.Text
+  scanId              String   @map("scan_id") @db.Text
+  rulesetVersion      String   @map("ruleset_version") @db.Text
+  promptVersion       String   @map("prompt_version") @db.Text
+  reportJson          Json     @map("report_json")
+  recommendationsJson Json?    @map("recommendations_json")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  scan                AeoScan  @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("scan_reports")
+  @@schema("aeo")
+}
+
+model AeoScanClaim {
+  id              String        @id @default(cuid()) @db.Text
+  scanId          String        @map("scan_id") @db.Text
+  claimToken      String        @map("claim_token") @db.Text
+  claimedByUserId String?       @map("claimed_by_user_id") @db.Text
+  claimedAt       DateTime?     @map("claimed_at") @db.Timestamptz(6)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  scan            AeoScan       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  claimedByUser   IdentityUser? @relation(fields: [claimedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([scanId, claimToken])
+  @@map("scan_claims")
+  @@schema("aeo")
+}
+
+model UgcProject {
+  id         String        @id @default(cuid()) @db.Text
+  accountId  String?       @map("account_id") @db.Text
+  userId     String?       @map("user_id") @db.Text
+  name       String        @db.Text
+  status     String        @default("draft") @db.Text
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  account    Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  user       IdentityUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("projects")
+  @@schema("ugc")
+}

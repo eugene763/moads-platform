@@ -1,0 +1,23 @@
+{
+  "name": "@moads/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/server.js",
+  "types": "dist/server.d.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.0.1",
+    "@google-cloud/tasks": "^6.2.1",
+    "@moads/db": "workspace:*",
+    "fastify": "^5.2.1",
+    "firebase-admin": "^13.4.0",
+    "google-auth-library": "^10.6.2"
+  }
+}

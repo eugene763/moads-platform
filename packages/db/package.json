@@ -1,0 +1,29 @@
+{
+  "name": "@moads/db",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:migrate:sql": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > ../../infra/sql/001_init.sql",
+    "prisma": "prisma"
+  },
+  "dependencies": {
+    "@moads/config": "workspace:*",
+    "@prisma/client": "^6.8.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.8.2"
+  }
+}

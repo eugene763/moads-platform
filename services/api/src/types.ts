@@ -1,0 +1,87 @@
+import type {DecodedIdToken} from "firebase-admin/auth";
+import type {PrismaClient} from "@moads/db";
+import type {Auth as FirebaseAuth} from "firebase-admin/auth";
+import type {Firestore as FirebaseFirestore} from "firebase-admin/firestore";
+import type {Storage as FirebaseStorage} from "firebase-admin/storage";
+import type {FastifyReply, FastifyRequest} from "fastify";
+
+export type RuntimeProfile = "local" | "dev-cloud" | "prod";
+export type MotrendProviderMode = "manual" | "stub" | "kling";
+export type TaskDispatchMode = "manual" | "internal-http" | "cloud-tasks";
+
+export interface ApiConfig {
+  runtimeProfile: RuntimeProfile;
+  nodeEnv: string;
+  port: number;
+  databaseUrl: string;
+  sessionCookieName: string;
+  sessionCookieDomain?: string | undefined;
+  sessionCookieMaxAgeMs: number;
+  sessionCookieSecret: string;
+  apiBaseUrl?: string | undefined;
+  defaultDevProductCode: string;
+  allowedOrigins: string[];
+  firebaseProjectId?: string | undefined;
+  firebaseStorageBucket?: string | undefined;
+  firebaseServiceAccountJson?: string | undefined;
+  firebaseAuthEmulatorHost?: string | undefined;
+  firebaseStorageEmulatorHost?: string | undefined;
+  firebaseUseEmulators: boolean;
+  internalApiKey?: string | undefined;
+  taskDispatchMode: TaskDispatchMode;
+  taskDispatchTimeoutMs: number;
+  cloudTasksProjectId?: string | undefined;
+  cloudTasksLocation?: string | undefined;
+  cloudTasksMotrendSubmitQueue?: string | undefined;
+  cloudTasksMotrendPollQueue?: string | undefined;
+  cloudTasksInvokerServiceAccountEmail?: string | undefined;
+  motrendProviderMode: MotrendProviderMode;
+  motrendProviderPollDelayMs: number;
+  motrendStubOutputUrl?: string | undefined;
+  klingAccessKey?: string | undefined;
+  klingSecretKey?: string | undefined;
+  klingBaseUrl?: string | undefined;
+  klingHttpTimeoutMs: number;
+}
+
+export interface FirebaseContext {
+  auth: FirebaseAuth;
+  firestore: FirebaseFirestore;
+  bucket: ReturnType<FirebaseStorage["bucket"]>;
+  bucketName: string;
+}
+
+export interface RequestAuthContext {
+  userId: string;
+  firebaseUid: string;
+  email: string | null;
+  claims: DecodedIdToken;
+}
+
+export interface RequestAccountContext {
+  accountId: string;
+  realmDefault: string;
+}
+
+export interface RequestProductContext {
+  productId: string;
+  productCode: string;
+  realmCode: string;
+  entryDomain: string;
+}
+
+declare module "fastify" {
+  interface FastifyInstance {
+    config: ApiConfig;
+    prisma: PrismaClient;
+    firebase: FirebaseContext;
+  }
+
+  interface FastifyRequest {
+    authContext?: RequestAuthContext;
+    accountContext?: RequestAccountContext;
+    productContext?: RequestProductContext;
+  }
+}
+
+export type RouteHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;

@@ -1,0 +1,14 @@
+node_modules
+.pnpm-store
+dist
+coverage
+.env
+.env.local
+.env.*.local
+.firebase
+infra/firebase/.emulator-data
+*.log
+.DS_Store
+packages/db/generated
+services/api/.turbo
+.git

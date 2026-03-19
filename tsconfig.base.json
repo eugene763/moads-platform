@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@moads/config": ["packages/config/src/index.ts"],
+      "@moads/db": ["packages/db/src/index.ts"],
+      "@moads/sdk": ["packages/sdk/src/index.ts"],
+      "@moads/ui": ["packages/ui/src/index.ts"]
+    },
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "types": ["node"]
+  }
+}
