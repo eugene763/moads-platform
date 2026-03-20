@@ -289,6 +289,44 @@ export async function requestMotrendJobRefresh(
       job.status === MotrendJobStatus.PROCESSING
     ) && !!job.providerTaskId;
 
+    if (job.status === MotrendJobStatus.QUEUED && !job.providerTaskId) {
+      const openSubmitTask = await getOpenMotrendTaskTx(tx, {
+        jobId: job.id,
+        taskType: MotrendTaskType.SUBMIT,
+        now,
+      });
+
+      if (openSubmitTask) {
+        return {
+          job,
+          queuedForRefresh: true,
+          retryAfterMs: buildRetryAfterMs(openSubmitTask, now),
+          dispatchTaskType: MotrendTaskType.SUBMIT,
+        };
+      }
+
+      const updatedJob = await tx.moTrendJob.update({
+        where: {id: job.id},
+        data: {
+          metadataJson: buildQueueMetadata(job.metadataJson, {
+            nextAction: "submit_requested",
+            requestedAt: now.toISOString(),
+          }),
+        },
+      });
+
+      await scheduleMotrendSubmitTaskTx(tx, {
+        jobId: job.id,
+      });
+
+      return {
+        job: updatedJob,
+        queuedForRefresh: true,
+        retryAfterMs: MOTREND_PROVIDER_POLL_DELAY_MS,
+        dispatchTaskType: MotrendTaskType.SUBMIT,
+      };
+    }
+
     if (!refreshable) {
       return {
         job,
@@ -307,6 +345,7 @@ export async function requestMotrendJobRefresh(
         job,
         queuedForRefresh: true,
         retryAfterMs: buildRetryAfterMs(openPollTask, now),
+        dispatchTaskType: MotrendTaskType.POLL,
       };
     }
 
@@ -321,6 +360,7 @@ export async function requestMotrendJobRefresh(
           1_000,
           MOTREND_PROVIDER_POLL_DELAY_MS - (now.getTime() - job.lastStatusCheckAt.getTime()),
         ),
+        dispatchTaskType: MotrendTaskType.POLL,
       };
     }
 
@@ -344,6 +384,7 @@ export async function requestMotrendJobRefresh(
       job: updatedJob,
       queuedForRefresh: true,
       retryAfterMs: MOTREND_PROVIDER_POLL_DELAY_MS,
+      dispatchTaskType: MotrendTaskType.POLL,
     };
   });
 }

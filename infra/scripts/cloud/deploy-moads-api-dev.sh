@@ -37,6 +37,7 @@ REGION="${REGION:-${CLOUD_TASKS_LOCATION:-us-central1}}"
 SERVICE_NAME="${SERVICE_NAME:-moads-api-dev}"
 INSTANCE_NAME="${INSTANCE_NAME:-moads-platform-dev}"
 INSTANCE_CONNECTION_NAME="${INSTANCE_CONNECTION_NAME:-$PROJECT_ID:$REGION:$INSTANCE_NAME}"
+RUNTIME_SERVICE_ACCOUNT_EMAIL="${RUNTIME_SERVICE_ACCOUNT_EMAIL:-moads-api-dev-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"
 SESSION_COOKIE_SECRET_NAME="${SESSION_COOKIE_SECRET_NAME:-SESSION_COOKIE_SECRET_DEV}"
 DATABASE_URL_SECRET_NAME="${DATABASE_URL_SECRET_NAME:-MOADS_API_DEV_DATABASE_URL}"
 
@@ -70,14 +71,15 @@ secret_flags=(
   "KLING_SECRET_KEY=KLING_SECRET_KEY:latest"
 )
 
-if gcloud secrets describe FIREBASE_SERVICE_ACCOUNT --project "$PROJECT_ID" >/dev/null 2>&1; then
+if [[ "${ATTACH_FIREBASE_SERVICE_ACCOUNT_SECRET:-false}" == "true" ]] && \
+  gcloud secrets describe FIREBASE_SERVICE_ACCOUNT --project "$PROJECT_ID" >/dev/null 2>&1; then
   secret_flags+=("FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT:latest")
 fi
 
 env_pairs=(
   "MOADS_ENV=dev-cloud"
   "NODE_ENV=production"
-  "SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-moads_session}"
+  "SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-moads_session_dev}"
   "SESSION_COOKIE_MAX_AGE_MS=${SESSION_COOKIE_MAX_AGE_MS:-432000000}"
   "DEFAULT_DEV_PRODUCT_CODE=${DEFAULT_DEV_PRODUCT_CODE:-motrend}"
   "API_ALLOWED_ORIGINS=${API_ALLOWED_ORIGINS:-}"
@@ -136,6 +138,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --concurrency 80 \
   --min-instances 0 \
   --max-instances 3 \
+  --service-account "$RUNTIME_SERVICE_ACCOUNT_EMAIL" \
   --set-cloudsql-instances "$INSTANCE_CONNECTION_NAME" \
   --env-vars-file "$env_file" \
   --set-secrets "$secret_string"

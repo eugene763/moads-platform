@@ -10,6 +10,7 @@ import {
   ensureGlobalCreditsWallet,
   getWalletSnapshot,
   grantMotrendBootstrapCredits,
+  MOTREND_TEST_BOOTSTRAP_CREDITS,
 } from "./wallet.js";
 import {ensureLegacyCompatibleSupportProfile} from "./support.js";
 
@@ -54,6 +55,7 @@ export interface SessionBootstrapResult {
   };
   createdMembership: boolean;
   grantedTestCredits: boolean;
+  grantedTestCreditsAmount: number | null;
 }
 
 export interface SessionSnapshot {
@@ -224,6 +226,9 @@ export async function bootstrapSessionLogin(
           productCode: product.code,
           createdMembership,
           grantedTestCredits,
+          grantedTestCreditsAmount: grantedTestCredits ?
+            MOTREND_TEST_BOOTSTRAP_CREDITS :
+            null,
         },
       },
     });
@@ -268,6 +273,9 @@ export async function bootstrapSessionLogin(
       wallet: walletSnapshot,
       createdMembership,
       grantedTestCredits,
+      grantedTestCreditsAmount: grantedTestCredits ?
+        MOTREND_TEST_BOOTSTRAP_CREDITS :
+        null,
     };
   });
 }

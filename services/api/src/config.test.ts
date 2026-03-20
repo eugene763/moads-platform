@@ -121,7 +121,7 @@ describe("loadConfig", () => {
       MOADS_ENV: "dev-cloud",
       NODE_ENV: "production",
       DATABASE_URL: "postgresql://moads_dev:moads_dev@10.0.0.15:5432/moads_dev?schema=public",
-      API_ALLOWED_ORIGINS: "http://localhost:3000,https://trend-dev.moads.agency",
+      API_ALLOWED_ORIGINS: "http://localhost:3000,https://trend.moads.agency",
       API_BASE_URL: "https://api-dev.moads.agency",
       FIREBASE_PROJECT_ID: "gen-lang-client-0651837818",
       FIREBASE_STORAGE_BUCKET: "gen-lang-client-0651837818.firebasestorage.app",

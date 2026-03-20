@@ -24,6 +24,7 @@
     "db:sync:managed:prod": "./infra/scripts/cloud/sync-prod-cloud-db.sh",
     "cloud-tasks:ensure:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/ensure-cloud-tasks-queue.ts",
     "cloud-tasks:ensure:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/ensure-cloud-tasks-queue.ts",
+    "env:render:dev-cloud": "./infra/scripts/cloud/render-dev-cloud-env.sh",
     "cloud-run:deploy:dev-cloud": "./infra/scripts/cloud/deploy-moads-api-dev.sh",
     "cloud-run:deploy:prod": "./infra/scripts/cloud/deploy-moads-api-prod.sh",
     "cloud-lb:bootstrap:prod": "./infra/scripts/cloud/bootstrap-moads-api-prod-lb.sh",

@@ -6,7 +6,6 @@ import {
   PlatformError,
 } from "@moads/db";
 
-import {readLegacySupportCode} from "../lib/legacy-support.js";
 import {requireAuth, resolveAccount} from "../middleware/auth.js";
 import {resolveCookieDomain, resolveRequestProduct} from "../lib/product-context.js";
 
@@ -42,12 +41,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const sessionCookie = await app.firebase.auth.createSessionCookie(body.idToken, {
       expiresIn: app.config.sessionCookieMaxAgeMs,
     });
-    const legacySupportCode = app.config.runtimeProfile === "local" ?
-      null :
-      await readLegacySupportCode(
-        app.firebase.firestore,
-        decoded.uid,
-      ).catch(() => null);
 
     const bootstrap = await bootstrapSessionLogin(app.prisma, {
       firebaseUid: decoded.uid,
@@ -57,7 +50,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       displayName: decoded.name ?? null,
       photoUrl: decoded.picture ?? null,
       signInProvider: typeof decoded.firebase?.sign_in_provider === "string" ? decoded.firebase.sign_in_provider : null,
-      legacySupportCode,
+      legacySupportCode: null,
     });
 
     reply.setCookie(app.config.sessionCookieName, sessionCookie, {

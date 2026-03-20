@@ -2,7 +2,6 @@ import {FastifyInstance} from "fastify";
 
 import {
   finalizePreparedMotrendJob,
-  getActiveMotrendDownloadArtifacts,
   getMotrendProfile,
   getOwnedMotrendJob,
   listActiveMotrendTemplates,
@@ -12,7 +11,6 @@ import {
   PlatformError,
   prepareMotrendJob,
   reconcileReferenceJobBilling,
-  upsertMotrendDownloadArtifacts,
 } from "@moads/db";
 
 import {requireProductMembership} from "../middleware/access.js";
@@ -21,11 +19,20 @@ import {
   assertUploadedPhotoIsValid,
   assertUploadedReferenceVideoIsValid,
   ensureStorageDownloadUrl,
-  prepareDownloadArtifacts,
   probeRemoteVideoDurationSeconds,
   storageObjectExists,
 } from "../lib/media.js";
-import {dispatchMotrendTaskKick} from "../lib/task-dispatch.js";
+import {
+  DOWNLOAD_PREPARE_RETRY_MS,
+  getMotrendPreparedDownloadResponse,
+  markMotrendDownloadPreparationFailed,
+  requestMotrendDownloadPreparation,
+  runMotrendDownloadPreparation,
+} from "../lib/motrend-downloads.js";
+import {
+  dispatchMotrendDownloadPrepare,
+  dispatchMotrendTaskKick,
+} from "../lib/task-dispatch.js";
 
 function normalizeJobStatus(status: string): string {
   return status.toLowerCase();
@@ -163,16 +170,23 @@ export async function registerMotrendRoutes(app: FastifyInstance): Promise<void>
       uploadedReferenceDurationSec,
     });
 
-    void dispatchMotrendTaskKick(app, {
-      taskType: MotrendTaskType.SUBMIT,
-      limit: 1,
-    }).catch((error) => {
+    let dispatchDeferred = false;
+    try {
+      const dispatchResult = await dispatchMotrendTaskKick(app, {
+        taskType: MotrendTaskType.SUBMIT,
+        limit: 1,
+      });
+      dispatchDeferred = dispatchResult.dispatched !== true;
+    } catch (error) {
+      dispatchDeferred = true;
       request.log.warn({err: error, jobId: body.jobId}, "motrend submit dispatch failed");
-    });
+    }
 
     reply.send({
       ...finalized,
       status: normalizeJobStatus(finalized.status),
+      dispatchDeferred,
+      retryAfterMs: dispatchDeferred ? 2_000 : null,
     });
   });
 
@@ -213,6 +227,20 @@ export async function registerMotrendRoutes(app: FastifyInstance): Promise<void>
       });
     }
 
+    let dispatchDeferred = false;
+    if (refresh.queuedForRefresh) {
+      try {
+        const dispatchResult = await dispatchMotrendTaskKick(app, {
+          taskType: refresh.dispatchTaskType ?? MotrendTaskType.POLL,
+          limit: 1,
+        });
+        dispatchDeferred = dispatchResult.dispatched !== true;
+      } catch (error) {
+        dispatchDeferred = true;
+        request.log.warn({err: error, jobId: params.id}, "motrend poll dispatch failed");
+      }
+    }
+
     reply.send({
       jobId: latest.id,
       status: normalizeJobStatus(latest.status),
@@ -220,16 +248,8 @@ export async function registerMotrendRoutes(app: FastifyInstance): Promise<void>
       providerOutputUrl: latest.providerOutputUrl,
       queuedForRefresh: refresh.queuedForRefresh,
       retryAfterMs: refresh.retryAfterMs,
+      dispatchDeferred,
     });
-
-    if (refresh.queuedForRefresh) {
-      void dispatchMotrendTaskKick(app, {
-        taskType: MotrendTaskType.POLL,
-        limit: 1,
-      }).catch((error) => {
-        request.log.warn({err: error, jobId: params.id}, "motrend poll dispatch failed");
-      });
-    }
   });
 
   app.post("/motrend/jobs/:id/prepare-download", {preHandler: authGuards}, async (request, reply) => {
@@ -242,85 +262,47 @@ export async function registerMotrendRoutes(app: FastifyInstance): Promise<void>
       throw new PlatformError(400, "job_id_required", "job id is required.");
     }
 
-    const job = await getOwnedMotrendJob(app.prisma, {
+    const jobId = params.id.trim();
+    const requested = await requestMotrendDownloadPreparation(app, {
       accountId: request.accountContext.accountId,
       userId: request.authContext.userId,
-      jobId: params.id.trim(),
+      jobId,
     });
 
-    if (job.status !== "DONE") {
-      throw new PlatformError(409, "job_not_ready", "Trend is not ready yet.");
-    }
-
-    if (!job.providerOutputUrl) {
-      throw new PlatformError(409, "download_source_missing", "Generated output is not available.");
-    }
-
-    if (
-      job.selectionKind === "REFERENCE" &&
-      job.finalCostCredits == null
-    ) {
-      const duration = await probeRemoteVideoDurationSeconds(job.providerOutputUrl);
-      await reconcileReferenceJobBilling(app.prisma, {
-        accountId: request.accountContext.accountId,
-        userId: request.authContext.userId,
-        jobId: job.id,
-        outputRawDurationSec: duration,
-      });
-    }
-
-    const cachedArtifacts = await getActiveMotrendDownloadArtifacts(app.prisma, {
-      accountId: request.accountContext.accountId,
-      userId: request.authContext.userId,
-      jobId: job.id,
-    });
-
-    if (cachedArtifacts) {
-      reply.send({
-        cached: true,
-        inlineUrl: `https://firebasestorage.googleapis.com/v0/b/${app.firebase.bucketName}/o/${encodeURIComponent(cachedArtifacts.inline.storagePath)}?alt=media&token=${encodeURIComponent(cachedArtifacts.inline.downloadToken)}`,
-        downloadUrl: `https://firebasestorage.googleapis.com/v0/b/${app.firebase.bucketName}/o/${encodeURIComponent(cachedArtifacts.download.storagePath)}?alt=media&token=${encodeURIComponent(cachedArtifacts.download.downloadToken)}`,
-        expiresAtMs: cachedArtifacts.inline.expiresAt.getTime(),
-      });
+    if (requested.state === "ready") {
+      reply.send(requested.response);
       return;
     }
 
-    const prepared = await prepareDownloadArtifacts({
-      bucket: app.firebase.bucket,
-      bucketName: app.firebase.bucketName,
-      sourceUrl: job.providerOutputUrl,
-      uidSegment: request.authContext.firebaseUid,
-      jobId: job.id,
-      fileName: `${job.id}.mp4`,
-    });
+    if (requested.state === "pending") {
+      reply.send(requested.response);
+      return;
+    }
 
-    await upsertMotrendDownloadArtifacts(app.prisma, {
-      accountId: request.accountContext.accountId,
-      userId: request.authContext.userId,
-      jobId: job.id,
-      inlineArtifact: {
-        storagePath: prepared.inline.storagePath,
-        downloadToken: prepared.inline.downloadToken,
-        fileName: prepared.inline.fileName,
-        contentType: prepared.inline.contentType,
-        sizeBytes: prepared.inline.sizeBytes,
-        expiresAt: prepared.inline.expiresAt,
-      },
-      downloadArtifact: {
-        storagePath: prepared.download.storagePath,
-        downloadToken: prepared.download.downloadToken,
-        fileName: prepared.download.fileName,
-        contentType: prepared.download.contentType,
-        sizeBytes: prepared.download.sizeBytes,
-        expiresAt: prepared.download.expiresAt,
-      },
-    });
+    try {
+      const dispatchResult = await dispatchMotrendDownloadPrepare(app, {
+        jobId,
+      });
 
-    reply.send({
-      cached: false,
-      inlineUrl: prepared.inline.downloadUrl,
-      downloadUrl: prepared.download.downloadUrl,
-      expiresAtMs: prepared.inline.expiresAt.getTime(),
-    });
+      if (dispatchResult.dispatched === false) {
+        const prepared = await runMotrendDownloadPreparation(app, {jobId});
+        reply.send(prepared);
+        return;
+      }
+
+      reply.send(requested.response);
+    } catch (error) {
+      request.log.warn({err: error, jobId}, "motrend download prepare dispatch failed");
+      await markMotrendDownloadPreparationFailed(
+        app,
+        jobId,
+        error instanceof Error ? error.message : "Download preparation dispatch failed."
+      );
+      reply.send({
+        pending: true,
+        retryAfterMs: DOWNLOAD_PREPARE_RETRY_MS,
+        dispatchDeferred: true,
+      });
+    }
   });
 }

@@ -19,12 +19,10 @@ export function sendError(
 
   request.log.error({err: error}, "unhandled error");
 
-  const message = error instanceof Error ? error.message : "Internal server error.";
-
   reply.status(500).send({
     error: {
       code: "internal_error",
-      message,
+      message: "Internal server error.",
     },
   });
 }

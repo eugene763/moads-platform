@@ -58,6 +58,9 @@ Current canonical MoTrend cloud verification target:
 - region: `us-central1`
 - runtime target: `api-dev.moads.agency`
 - service: `moads-api-dev`
+- Cloud SQL: `moads-platform-dev`
+- queues: `motrend-submit`, `motrend-poll`
+- cookie: `moads_session_dev`
 
 This does not replace the local-first workflow. It only fixes the current cloud verification target for deploy-shaped checks.
 

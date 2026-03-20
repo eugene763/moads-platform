@@ -1,7 +1,6 @@
 import type {DecodedIdToken} from "firebase-admin/auth";
 import type {PrismaClient} from "@moads/db";
 import type {Auth as FirebaseAuth} from "firebase-admin/auth";
-import type {Firestore as FirebaseFirestore} from "firebase-admin/firestore";
 import type {Storage as FirebaseStorage} from "firebase-admin/storage";
 import type {FastifyReply, FastifyRequest} from "fastify";
 
@@ -46,7 +45,6 @@ export interface ApiConfig {
 
 export interface FirebaseContext {
   auth: FirebaseAuth;
-  firestore: FirebaseFirestore;
   bucket: ReturnType<FirebaseStorage["bucket"]>;
   bucketName: string;
 }

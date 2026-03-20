@@ -38,7 +38,11 @@ vi.mock("@google-cloud/tasks", () => ({
   },
 }));
 
-import {dispatchMotrendTaskKick, resetCloudTasksClientForTest} from "./task-dispatch.js";
+import {
+  dispatchMotrendDownloadPrepare,
+  dispatchMotrendTaskKick,
+  resetCloudTasksClientForTest,
+} from "./task-dispatch.js";
 
 function buildApp(taskDispatchMode: "cloud-tasks" | "internal-http" | "manual" = "cloud-tasks") {
   return {
@@ -118,5 +122,43 @@ describe("dispatchMotrendTaskKick", () => {
       statusCode: 500,
       code: "dispatch_task_type_required",
     });
+  });
+
+  it("dispatches download preparation into the poll queue", async () => {
+    const result = await dispatchMotrendDownloadPrepare(buildApp() as never, {
+      jobId: "job_123",
+    });
+
+    expect(result).toMatchObject({
+      dispatched: true,
+      mode: "cloud-tasks",
+      taskName: "task-123",
+    });
+    expect(cloudTasksMocks.queuePathMock).toHaveBeenCalledWith(
+      "gen-lang-client-0651837818",
+      "us-central1",
+      "motrend-poll",
+    );
+    expect(cloudTasksMocks.createTaskMock).toHaveBeenCalledWith(expect.objectContaining({
+      parent: "projects/gen-lang-client-0651837818/locations/us-central1/queues/motrend-poll",
+      task: expect.objectContaining({
+        httpRequest: expect.objectContaining({
+          url: "https://api-dev.moads.agency/internal/motrend/jobs/job_123/prepare-download",
+          oidcToken: {
+            serviceAccountEmail: "399776789069-compute@developer.gserviceaccount.com",
+            audience: "https://api-dev.moads.agency",
+          },
+        }),
+      }),
+    }));
+    const createTaskCalls = cloudTasksMocks.createTaskMock.mock.calls as unknown as Array<[unknown]>;
+    const createTaskArgs = createTaskCalls.at(-1)?.[0] as {
+      task?: {
+        httpRequest?: {
+          headers?: Record<string, string>;
+        };
+      };
+    } | undefined;
+    expect(createTaskArgs?.task?.httpRequest?.headers).toBeUndefined();
   });
 });

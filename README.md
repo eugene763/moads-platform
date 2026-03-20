@@ -83,6 +83,7 @@ The default local stack is:
 - `pnpm motrend:sweep:run:dev-cloud`
 - `pnpm motrend:downloads:cleanup`
 - `pnpm motrend:downloads:cleanup:dev-cloud`
+- `pnpm env:render:dev-cloud`
 
 ## Environment Profiles
 
@@ -106,7 +107,7 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - The dev Cloud Run deploy path is source-based from the repo root `Dockerfile`; the runtime intentionally starts `tsx services/api/src/server.ts` so workspace packages stay usable before a dedicated production bundling pass.
 - `pnpm db:sync:managed:dev-cloud` uses Cloud SQL Auth Proxy plus the `MOADS_PLATFORM_DEV_APP_PASSWORD` secret to run `prisma db push`, seed, and legacy template sync against managed Postgres.
 - `pnpm cloud-run:deploy:dev-cloud` expects `SESSION_COOKIE_SECRET`, `MOADS_API_DEV_DATABASE_URL`, `KLING_ACCESS_KEY`, and `KLING_SECRET_KEY` in Secret Manager; `FIREBASE_SERVICE_ACCOUNT` is optional because Cloud Run ADC can be used when the runtime service account has the required Firebase roles.
-- `dev-cloud` should use a separate cookie name such as `moads_session_dev` so browser sessions do not collide with `prod`.
+- `dev-cloud` currently uses `moads_session_dev` so browser sessions do not collide with `prod`.
 - `pnpm cloud-run:deploy:prod` deploys `moads-api` with ingress `internal-and-cloud-load-balancing`; prod traffic must enter through the HTTPS Load Balancer path, not directly through `run.app`.
 - `pnpm cloud-lb:bootstrap:prod` creates or updates the HTTPS LB resources for `api.moads.agency` and prints the IPv4/IPv6 records that must exist in DNS.
 - `pnpm db:sync:managed:prod` uses Cloud SQL Auth Proxy plus the `MOADS_PLATFORM_PROD_APP_PASSWORD` secret to run `prisma db push`, seed, legacy support-code backfill, and legacy template sync against prod Postgres.
@@ -119,3 +120,5 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - Required APIs for the prod HTTPS Load Balancer path: `compute.googleapis.com`, plus the Cloud Run / Cloud SQL / Cloud Tasks APIs already listed above.
 - `pnpm db:sync:legacy-templates:*` is cloud-only by design and is intentionally excluded from local bootstrap.
 - Prisma Dev remains available through `pnpm db:dev:start`, but only as a fallback when Docker Postgres is unavailable.
+- Runtime topology and safe `prod -> dev-cloud` sync rules live in `docs/runtime-topology.md`.
+- `pnpm env:render:dev-cloud` reads the live `moads-api` Cloud Run config plus Secret Manager values and rewrites them into a local `.env.dev-cloud.local` for testing. It keeps `MOTREND_PROVIDER_MODE=manual` by default so secrets are present but real Kling generation does not start accidentally.

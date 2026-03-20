@@ -8,7 +8,6 @@ const firebaseAdminMocks = vi.hoisted(() => ({
   bucketMock: vi.fn((name?: string) => ({name: name ?? "default-bucket"})),
   getStorageMock: vi.fn(),
   getAuthMock: vi.fn(() => ({kind: "auth"})),
-  getFirestoreMock: vi.fn(() => ({kind: "firestore"})),
 }));
 
 firebaseAdminMocks.getStorageMock.mockImplementation(() => ({
@@ -24,10 +23,6 @@ vi.mock("firebase-admin/app", () => ({
 
 vi.mock("firebase-admin/auth", () => ({
   getAuth: firebaseAdminMocks.getAuthMock,
-}));
-
-vi.mock("firebase-admin/firestore", () => ({
-  getFirestore: firebaseAdminMocks.getFirestoreMock,
 }));
 
 vi.mock("firebase-admin/storage", () => ({
@@ -49,7 +44,6 @@ describe("getFirebaseContext", () => {
       bucket: firebaseAdminMocks.bucketMock,
     }));
     firebaseAdminMocks.getAuthMock.mockClear();
-    firebaseAdminMocks.getFirestoreMock.mockClear();
     delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
     delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
     delete process.env.GCLOUD_PROJECT;
@@ -98,7 +92,6 @@ describe("getFirebaseContext", () => {
       projectId: "demo-moads-local",
       storageBucket: "demo-moads-local.firebasestorage.app",
     });
-    expect(firebaseAdminMocks.getFirestoreMock).toHaveBeenCalled();
     expect(context.bucketName).toBe("demo-moads-local.firebasestorage.app");
   });
 });

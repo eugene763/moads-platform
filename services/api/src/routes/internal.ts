@@ -1,6 +1,7 @@
 import {simulateMotrendProviderResult, MotrendTaskType, PlatformError, sweepStaleMotrendJobs} from "@moads/db";
 import {FastifyInstance} from "fastify";
 
+import {runMotrendDownloadPreparation} from "../lib/motrend-downloads.js";
 import {cleanupExpiredMotrendDownloads} from "../lib/motrend-download-cleanup.js";
 import {processDueMotrendTasks} from "../lib/motrend-task-runner.js";
 import {requireInternalAccess} from "../middleware/internal.js";
@@ -115,6 +116,21 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
 
     const result = await cleanupExpiredMotrendDownloads(app, {
       limit,
+    });
+
+    reply.send(result);
+  });
+
+  app.post("/internal/motrend/jobs/:id/prepare-download", {
+    preHandler: [requireInternalAccess],
+  }, async (request, reply) => {
+    const params = request.params as {id?: string};
+    if (typeof params.id !== "string" || !params.id.trim()) {
+      throw new PlatformError(400, "job_id_required", "job id is required.");
+    }
+
+    const result = await runMotrendDownloadPreparation(app, {
+      jobId: params.id.trim(),
     });
 
     reply.send(result);
