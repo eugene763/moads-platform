@@ -3,14 +3,12 @@ import {FastifyInstance} from "fastify";
 import {
   finalizePreparedMotrendJob,
   getMotrendProfile,
-  getOwnedMotrendJob,
   listActiveMotrendTemplates,
   listMotrendJobs,
   MotrendTaskType,
   requestMotrendJobRefresh,
   PlatformError,
   prepareMotrendJob,
-  reconcileReferenceJobBilling,
 } from "@moads/db";
 
 import {requireProductMembership} from "../middleware/access.js";
@@ -19,7 +17,6 @@ import {
   assertUploadedPhotoIsValid,
   assertUploadedReferenceVideoIsValid,
   ensureStorageDownloadUrl,
-  probeRemoteVideoDurationSeconds,
   storageObjectExists,
 } from "../lib/media.js";
 import {
@@ -206,26 +203,7 @@ export async function registerMotrendRoutes(app: FastifyInstance): Promise<void>
       jobId: params.id.trim(),
     });
 
-    let latest = refresh.job;
-    if (
-      latest.status === "DONE" &&
-      latest.selectionKind === "REFERENCE" &&
-      latest.providerOutputUrl &&
-      latest.finalCostCredits == null
-    ) {
-      const duration = await probeRemoteVideoDurationSeconds(latest.providerOutputUrl);
-      await reconcileReferenceJobBilling(app.prisma, {
-        accountId: request.accountContext.accountId,
-        userId: request.authContext.userId,
-        jobId: latest.id,
-        outputRawDurationSec: duration,
-      });
-      latest = await getOwnedMotrendJob(app.prisma, {
-        accountId: request.accountContext.accountId,
-        userId: request.authContext.userId,
-        jobId: latest.id,
-      });
-    }
+    const latest = refresh.job;
 
     let dispatchDeferred = false;
     if (refresh.queuedForRefresh) {

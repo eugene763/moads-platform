@@ -222,7 +222,7 @@ export async function dispatchMotrendDownloadPrepare(
 
   const taskName = await dispatchViaCloudTasks(app, {
     pathname,
-    queue: app.config.cloudTasksMotrendPollQueue ?? "",
+    queue: app.config.cloudTasksMotrendDownloadQueue ?? "",
   });
   return {
     dispatched: true,

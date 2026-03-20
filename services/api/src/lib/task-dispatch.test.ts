@@ -53,6 +53,7 @@ function buildApp(taskDispatchMode: "cloud-tasks" | "internal-http" | "manual" =
       cloudTasksLocation: "us-central1",
       cloudTasksMotrendSubmitQueue: "motrend-submit",
       cloudTasksMotrendPollQueue: "motrend-poll",
+      cloudTasksMotrendDownloadQueue: "motrend-download",
       cloudTasksInvokerServiceAccountEmail: "399776789069-compute@developer.gserviceaccount.com",
       taskDispatchMode,
       taskDispatchTimeoutMs: 5000,
@@ -124,7 +125,7 @@ describe("dispatchMotrendTaskKick", () => {
     });
   });
 
-  it("dispatches download preparation into the poll queue", async () => {
+  it("dispatches download preparation into the download queue", async () => {
     const result = await dispatchMotrendDownloadPrepare(buildApp() as never, {
       jobId: "job_123",
     });
@@ -137,10 +138,10 @@ describe("dispatchMotrendTaskKick", () => {
     expect(cloudTasksMocks.queuePathMock).toHaveBeenCalledWith(
       "gen-lang-client-0651837818",
       "us-central1",
-      "motrend-poll",
+      "motrend-download",
     );
     expect(cloudTasksMocks.createTaskMock).toHaveBeenCalledWith(expect.objectContaining({
-      parent: "projects/gen-lang-client-0651837818/locations/us-central1/queues/motrend-poll",
+      parent: "projects/gen-lang-client-0651837818/locations/us-central1/queues/motrend-download",
       task: expect.objectContaining({
         httpRequest: expect.objectContaining({
           url: "https://api-dev.moads.agency/internal/motrend/jobs/job_123/prepare-download",

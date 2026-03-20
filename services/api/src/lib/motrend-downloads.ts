@@ -148,16 +148,6 @@ export async function requestMotrendDownloadPreparation(
     throw new PlatformError(409, "download_source_missing", "Generated output is not available.");
   }
 
-  if (job.selectionKind === "REFERENCE" && job.finalCostCredits == null) {
-    const duration = await probeRemoteVideoDurationSeconds(job.providerOutputUrl);
-    await reconcileReferenceJobBilling(app.prisma, {
-      accountId: input.accountId,
-      userId: input.userId,
-      jobId: job.id,
-      outputRawDurationSec: duration,
-    });
-  }
-
   const cached = await getMotrendPreparedDownloadResponse(app, input);
   if (cached) {
     return {

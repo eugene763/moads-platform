@@ -76,6 +76,7 @@ describe("getFirebaseContext", () => {
       cloudTasksLocation: "us-central1",
       cloudTasksMotrendSubmitQueue: "motrend-submit",
       cloudTasksMotrendPollQueue: "motrend-poll",
+      cloudTasksMotrendDownloadQueue: "motrend-download",
       cloudTasksInvokerServiceAccountEmail: "demo-compute@developer.gserviceaccount.com",
       motrendProviderMode: "manual",
       motrendProviderPollDelayMs: 2000,

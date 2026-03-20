@@ -33,6 +33,7 @@ export interface ApiConfig {
   cloudTasksLocation?: string | undefined;
   cloudTasksMotrendSubmitQueue?: string | undefined;
   cloudTasksMotrendPollQueue?: string | undefined;
+  cloudTasksMotrendDownloadQueue?: string | undefined;
   cloudTasksInvokerServiceAccountEmail?: string | undefined;
   motrendProviderMode: MotrendProviderMode;
   motrendProviderPollDelayMs: number;

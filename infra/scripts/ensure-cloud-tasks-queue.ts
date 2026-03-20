@@ -101,10 +101,11 @@ async function main(): Promise<void> {
     !config.cloudTasksProjectId ||
     !config.cloudTasksLocation ||
     !config.cloudTasksMotrendSubmitQueue ||
-    !config.cloudTasksMotrendPollQueue
+    !config.cloudTasksMotrendPollQueue ||
+    !config.cloudTasksMotrendDownloadQueue
   ) {
     throw new Error(
-      "CLOUD_TASKS_PROJECT_ID, CLOUD_TASKS_LOCATION, CLOUD_TASKS_MOTREND_SUBMIT_QUEUE, and CLOUD_TASKS_MOTREND_POLL_QUEUE are required.",
+      "CLOUD_TASKS_PROJECT_ID, CLOUD_TASKS_LOCATION, CLOUD_TASKS_MOTREND_SUBMIT_QUEUE, CLOUD_TASKS_MOTREND_POLL_QUEUE, and CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE are required.",
     );
   }
 
@@ -123,6 +124,13 @@ async function main(): Promise<void> {
       queueId: config.cloudTasksMotrendPollQueue,
       maxDispatchesPerSecond: 10,
       maxConcurrentDispatches: 10,
+    }),
+    ensureQueue(client, {
+      projectId: config.cloudTasksProjectId,
+      location: config.cloudTasksLocation,
+      queueId: config.cloudTasksMotrendDownloadQueue,
+      maxDispatchesPerSecond: 4,
+      maxConcurrentDispatches: 4,
     }),
   ]);
 

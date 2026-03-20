@@ -133,12 +133,14 @@ describe("loadConfig", () => {
       CLOUD_TASKS_LOCATION: "us-central1",
       CLOUD_TASKS_MOTREND_SUBMIT_QUEUE: "motrend-submit",
       CLOUD_TASKS_MOTREND_POLL_QUEUE: "motrend-poll",
+      CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE: "motrend-download",
       CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL: "399776789069-compute@developer.gserviceaccount.com",
     });
 
     expect(config.taskDispatchMode).toBe("cloud-tasks");
     expect(config.cloudTasksMotrendSubmitQueue).toBe("motrend-submit");
     expect(config.cloudTasksMotrendPollQueue).toBe("motrend-poll");
+    expect(config.cloudTasksMotrendDownloadQueue).toBe("motrend-download");
     expect(config.cloudTasksInvokerServiceAccountEmail).toBe("399776789069-compute@developer.gserviceaccount.com");
   });
 });

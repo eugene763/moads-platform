@@ -129,6 +129,7 @@ export function loadConfig(env = process.env): ApiConfig {
   const cloudTasksLocation = pickTrimmed(env.CLOUD_TASKS_LOCATION);
   const cloudTasksMotrendSubmitQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_SUBMIT_QUEUE);
   const cloudTasksMotrendPollQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_POLL_QUEUE);
+  const cloudTasksMotrendDownloadQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE);
   const cloudTasksInvokerServiceAccountEmail = pickTrimmed(env.CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL);
   const motrendProviderMode = parseMotrendProviderMode(env.MOTREND_PROVIDER_MODE);
   const motrendStubOutputUrl = pickTrimmed(env.MOTREND_STUB_OUTPUT_URL);
@@ -222,10 +223,11 @@ export function loadConfig(env = process.env): ApiConfig {
       !cloudTasksLocation ||
       !cloudTasksMotrendSubmitQueue ||
       !cloudTasksMotrendPollQueue ||
+      !cloudTasksMotrendDownloadQueue ||
       !cloudTasksInvokerServiceAccountEmail
     ) {
       throw new Error(
-        "TASK_DISPATCH_MODE=cloud-tasks requires API_BASE_URL, CLOUD_TASKS_PROJECT_ID, CLOUD_TASKS_LOCATION, CLOUD_TASKS_MOTREND_SUBMIT_QUEUE, CLOUD_TASKS_MOTREND_POLL_QUEUE, and CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL.",
+        "TASK_DISPATCH_MODE=cloud-tasks requires API_BASE_URL, CLOUD_TASKS_PROJECT_ID, CLOUD_TASKS_LOCATION, CLOUD_TASKS_MOTREND_SUBMIT_QUEUE, CLOUD_TASKS_MOTREND_POLL_QUEUE, CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE, and CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL.",
       );
     }
   }
@@ -263,6 +265,7 @@ export function loadConfig(env = process.env): ApiConfig {
     ...(cloudTasksLocation ? {cloudTasksLocation} : {}),
     ...(cloudTasksMotrendSubmitQueue ? {cloudTasksMotrendSubmitQueue} : {}),
     ...(cloudTasksMotrendPollQueue ? {cloudTasksMotrendPollQueue} : {}),
+    ...(cloudTasksMotrendDownloadQueue ? {cloudTasksMotrendDownloadQueue} : {}),
     ...(cloudTasksInvokerServiceAccountEmail ? {cloudTasksInvokerServiceAccountEmail} : {}),
     motrendProviderMode,
     motrendProviderPollDelayMs: parseNumber(env.MOTREND_PROVIDER_POLL_DELAY_MS, 2_000),
