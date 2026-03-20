@@ -2,8 +2,7 @@ import {PrismaClient} from "@prisma/client";
 
 const prisma = new PrismaClient();
 const localReferenceVideoUrl = "http://127.0.0.1:5000/reference/dev-template-001-reference.mp4";
-const cloudReferenceVideoUrl = "https://storage.googleapis.com/gen-lang-client-0651837818.firebasestorage.app/template/dev-template-001-reference.mp4";
-const seedReferenceVideoUrl = process.env.MOADS_ENV === "local" ? localReferenceVideoUrl : cloudReferenceVideoUrl;
+const isLocalSeed = process.env.MOADS_ENV === "local";
 
 async function main(): Promise<void> {
   const consumerRealm = await prisma.realm.upsert({
@@ -111,38 +110,47 @@ async function main(): Promise<void> {
 
   const motrendProduct = seededProducts.find((product) => product.code === "motrend");
   if (motrendProduct) {
-    await prisma.moTrendTemplate.upsert({
-      where: {
-        productId_code: {
+    if (isLocalSeed) {
+      await prisma.moTrendTemplate.upsert({
+        where: {
+          productId_code: {
+            productId: motrendProduct.id,
+            code: "dev-template-001",
+          },
+        },
+        update: {
+          name: "Dev Template 001",
+          isActive: true,
+          durationSec: 10,
+          referenceVideoUrl: localReferenceVideoUrl,
+          metadataJson: {
+            seeded: true,
+            purpose: "local-smoke-test",
+            referenceVideoMode: "local-placeholder",
+          },
+        },
+        create: {
+          productId: motrendProduct.id,
+          code: "dev-template-001",
+          name: "Dev Template 001",
+          isActive: true,
+          durationSec: 10,
+          referenceVideoUrl: localReferenceVideoUrl,
+          metadataJson: {
+            seeded: true,
+            purpose: "local-smoke-test",
+            referenceVideoMode: "local-placeholder",
+          },
+        },
+      });
+    } else {
+      await prisma.moTrendTemplate.deleteMany({
+        where: {
           productId: motrendProduct.id,
           code: "dev-template-001",
         },
-      },
-      update: {
-        name: "Dev Template 001",
-        isActive: true,
-        durationSec: 10,
-        referenceVideoUrl: seedReferenceVideoUrl,
-        metadataJson: {
-          seeded: true,
-          purpose: "local-smoke-test",
-          referenceVideoMode: process.env.MOADS_ENV === "local" ? "local-placeholder" : "cloud-default",
-        },
-      },
-      create: {
-        productId: motrendProduct.id,
-        code: "dev-template-001",
-        name: "Dev Template 001",
-        isActive: true,
-        durationSec: 10,
-        referenceVideoUrl: seedReferenceVideoUrl,
-        metadataJson: {
-          seeded: true,
-          purpose: "local-smoke-test",
-          referenceVideoMode: process.env.MOADS_ENV === "local" ? "local-placeholder" : "cloud-default",
-        },
-      },
-    });
+      });
+    }
   }
 }
 
