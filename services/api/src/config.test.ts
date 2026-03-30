@@ -143,4 +143,18 @@ describe("loadConfig", () => {
     expect(config.cloudTasksMotrendDownloadQueue).toBe("motrend-download");
     expect(config.cloudTasksInvokerServiceAccountEmail).toBe("399776789069-compute@developer.gserviceaccount.com");
   });
+
+  it("defaults AEO adapters to mock mode", () => {
+    const config = loadConfig(baseEnv());
+    expect(config.aeoAiTipsMode).toBe("mock");
+    expect(config.aeoGa4Mode).toBe("mock");
+    expect(config.aeoRealtimeMode).toBe("mock");
+  });
+
+  it("requires an OpenAI key when live AEO AI tips mode is enabled", () => {
+    expect(() => loadConfig({
+      ...baseEnv(),
+      AEO_AI_TIPS_MODE: "live",
+    })).toThrow("AEO_AI_TIPS_MODE=live requires OPENAI_API_KEY");
+  });
 });
