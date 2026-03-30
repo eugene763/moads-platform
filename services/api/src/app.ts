@@ -10,9 +10,14 @@ import {sendError} from "./lib/http-error.js";
 import {registerAdminRoutes} from "./routes/admin.js";
 import {registerAnalyticsRoutes} from "./routes/analytics.js";
 import {registerAuthRoutes} from "./routes/auth.js";
+import {registerAeoRoutes} from "./routes/aeo.js";
+import {registerBillingRoutes} from "./routes/billing.js";
 import {registerHealthRoutes} from "./routes/health.js";
 import {registerInternalRoutes} from "./routes/internal.js";
+import {registerLabRoutes} from "./routes/lab.js";
+import {registerMeRoutes} from "./routes/me.js";
 import {registerMotrendRoutes} from "./routes/motrend.js";
+import {registerPublicRoutes} from "./routes/public.js";
 import {ApiConfig, FirebaseContext} from "./types.js";
 
 export interface BuildAppOptions {
@@ -64,9 +69,21 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerHealthRoutes(app);
   await registerInternalRoutes(app);
   await registerAuthRoutes(app);
+  await registerBillingRoutes(app);
   await registerAdminRoutes(app);
   await registerAnalyticsRoutes(app);
   await registerMotrendRoutes(app);
+  await registerPublicRoutes(app);
+
+  await app.register(async (v1) => {
+    await registerAuthRoutes(v1);
+    await registerMeRoutes(v1);
+    await registerBillingRoutes(v1);
+    await registerAeoRoutes(v1);
+    await registerLabRoutes(v1);
+  }, {
+    prefix: "/v1",
+  });
 
   return app;
 }

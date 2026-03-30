@@ -101,12 +101,12 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - Gift notices must key off `session-login` bootstrap metadata, not Firebase `isNewUser`.
 - `finalize` now enqueues SQL-backed MoTrend provider tasks; use `pnpm motrend:tasks:run` or `POST /internal/motrend/tasks/run-due` to process them outside local request/response flow.
 - `TASK_DISPATCH_MODE=internal-http` lets the API auto-kick `/internal/motrend/tasks/run-due` after `finalize` / `refresh`; `TASK_DISPATCH_MODE=cloud-tasks` uses split queues with the same internal route contract.
-- `TASK_DISPATCH_MODE=cloud-tasks` requires `CLOUD_TASKS_MOTREND_SUBMIT_QUEUE`, `CLOUD_TASKS_MOTREND_POLL_QUEUE`, and `CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL`.
+- `TASK_DISPATCH_MODE=cloud-tasks` requires `CLOUD_TASKS_MOTREND_SUBMIT_QUEUE`, `CLOUD_TASKS_MOTREND_POLL_QUEUE`, `CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE`, and `CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL`.
 - `pnpm cloud-tasks:ensure:*` is idempotent: it creates missing queues and updates existing queue rate/retry parameters to repo-owned defaults.
 - Cloud Tasks calls Cloud Run internal routes through Google OIDC; `x-moads-internal-key` remains only for local/internal-http flows.
 - The dev Cloud Run deploy path is source-based from the repo root `Dockerfile`; the runtime intentionally starts `tsx services/api/src/server.ts` so workspace packages stay usable before a dedicated production bundling pass.
 - `pnpm db:sync:managed:dev-cloud` uses Cloud SQL Auth Proxy plus the `MOADS_PLATFORM_DEV_APP_PASSWORD` secret to run `prisma db push`, seed, and legacy template sync against managed Postgres.
-- `pnpm cloud-run:deploy:dev-cloud` expects `SESSION_COOKIE_SECRET`, `MOADS_API_DEV_DATABASE_URL`, `KLING_ACCESS_KEY`, and `KLING_SECRET_KEY` in Secret Manager; `FIREBASE_SERVICE_ACCOUNT` is optional because Cloud Run ADC can be used when the runtime service account has the required Firebase roles.
+- `pnpm cloud-run:deploy:dev-cloud` expects `SESSION_COOKIE_SECRET_DEV` when available, plus `MOADS_API_DEV_DATABASE_URL`, `KLING_ACCESS_KEY`, and `KLING_SECRET_KEY` in Secret Manager; it falls back to the shared `SESSION_COOKIE_SECRET` only when the dev-specific cookie secret does not exist. `FIREBASE_SERVICE_ACCOUNT` is optional because Cloud Run ADC can be used when the runtime service account has the required Firebase roles.
 - `dev-cloud` currently uses `moads_session_dev` so browser sessions do not collide with `prod`.
 - `pnpm cloud-run:deploy:prod` deploys `moads-api` with ingress `internal-and-cloud-load-balancing`; prod traffic must enter through the HTTPS Load Balancer path, not directly through `run.app`.
 - `pnpm cloud-lb:bootstrap:prod` creates or updates the HTTPS LB resources for `api.moads.agency` and prints the IPv4/IPv6 records that must exist in DNS.
@@ -121,4 +121,4 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - `pnpm db:sync:legacy-templates:*` is cloud-only by design and is intentionally excluded from local bootstrap.
 - Prisma Dev remains available through `pnpm db:dev:start`, but only as a fallback when Docker Postgres is unavailable.
 - Runtime topology and safe `prod -> dev-cloud` sync rules live in `docs/runtime-topology.md`.
-- `pnpm env:render:dev-cloud` reads the live `moads-api` Cloud Run config plus Secret Manager values and rewrites them into a local `.env.dev-cloud.local` for testing. It keeps `MOTREND_PROVIDER_MODE=manual` by default so secrets are present but real Kling generation does not start accidentally.
+- `pnpm env:render:dev-cloud` is read-only against cloud resources: it reads the live `moads-api` Cloud Run config plus Secret Manager values and rewrites them into a local `.env.dev-cloud.local` for testing. It keeps `MOTREND_PROVIDER_MODE=manual` by default so secrets are present but real Kling generation does not start accidentally.

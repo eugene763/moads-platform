@@ -31,12 +31,24 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   };
 
   app.post("/auth/session-login", async (request, reply) => {
-    const body = request.body as {idToken?: unknown} | undefined;
+    const body = request.body as {idToken?: unknown; productCode?: unknown} | undefined;
     if (typeof body?.idToken !== "string" || !body.idToken.trim()) {
       throw new PlatformError(400, "invalid_id_token", "idToken is required.");
     }
 
-    const product = await resolveRequestProduct(request);
+    const requestedProductCode = typeof body.productCode === "string" ? body.productCode.trim().toLowerCase() : "";
+    const supportedProductCodes = new Set(["motrend", "aeo", "lab", "ugc"]);
+    if (requestedProductCode && !supportedProductCodes.has(requestedProductCode)) {
+      throw new PlatformError(400, "invalid_product_code", "productCode must be one of: motrend, aeo, lab, ugc.");
+    }
+
+    const product = requestedProductCode ?
+      {
+        productCode: requestedProductCode,
+      } :
+      await resolveRequestProduct(request).catch(() => ({
+        productCode: "aeo",
+      }));
     const decoded = await app.firebase.auth.verifyIdToken(body.idToken);
     const sessionCookie = await app.firebase.auth.createSessionCookie(body.idToken, {
       expiresIn: app.config.sessionCookieMaxAgeMs,

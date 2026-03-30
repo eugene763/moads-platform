@@ -1,5 +1,12 @@
 import {PrismaClient} from "@prisma/client";
 
+import {
+  BILLING_CREDIT_PACK_PRODUCT_TYPE,
+  buildCreditPackScopeRef,
+} from "../src/billing.js";
+import {DEFAULT_MOTREND_CREDIT_PACKS} from "../src/motrend-billing.js";
+import {DEFAULT_AEO_CREDIT_PACKS} from "../src/aeo-billing.js";
+
 const prisma = new PrismaClient();
 const localReferenceVideoUrl = "http://127.0.0.1:5000/reference/dev-template-001-reference.mp4";
 const isLocalSeed = process.env.MOADS_ENV === "local";
@@ -22,6 +29,105 @@ async function main(): Promise<void> {
       name: "Pro",
     },
   });
+
+  const checkoutLinkProvider = await prisma.billingProvider.upsert({
+    where: {code: "checkout_link"},
+    update: {
+      name: "Checkout Link",
+      status: "active",
+    },
+    create: {
+      code: "checkout_link",
+      name: "Checkout Link",
+      status: "active",
+    },
+  });
+
+  const existingDefaultPriceBook = await prisma.priceBook.findFirst({
+    where: {
+      marketCode: "global",
+      currencyCode: "USD",
+      languageCode: "en",
+    },
+  });
+
+  const defaultPriceBook = existingDefaultPriceBook ?? await prisma.priceBook.create({
+    data: {
+      marketCode: "global",
+      currencyCode: "USD",
+      languageCode: "en",
+      taxMode: "exclusive",
+      isDefault: true,
+    },
+  });
+
+  const creditPackGroups = [
+    {
+      productCode: "motrend",
+      packs: DEFAULT_MOTREND_CREDIT_PACKS,
+    },
+    {
+      productCode: "aeo",
+      packs: DEFAULT_AEO_CREDIT_PACKS,
+    },
+  ] as const;
+
+  for (const group of creditPackGroups) {
+    for (const pack of group.packs) {
+      const billingProduct = await prisma.billingProduct.upsert({
+        where: {code: pack.code},
+        update: {
+          name: pack.name,
+          status: "active",
+          productType: BILLING_CREDIT_PACK_PRODUCT_TYPE,
+          scopeType: "product_credits",
+          scopeRef: buildCreditPackScopeRef(group.productCode, pack.creditsAmount),
+        },
+        create: {
+          code: pack.code,
+          name: pack.name,
+          status: "active",
+          productType: BILLING_CREDIT_PACK_PRODUCT_TYPE,
+          scopeType: "product_credits",
+          scopeRef: buildCreditPackScopeRef(group.productCode, pack.creditsAmount),
+        },
+      });
+
+      const existingPrice = await prisma.billingPrice.findFirst({
+        where: {
+          billingProductId: billingProduct.id,
+          providerId: checkoutLinkProvider.id,
+          priceBookId: defaultPriceBook.id,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
+
+      if (existingPrice) {
+        await prisma.billingPrice.update({
+          where: {id: existingPrice.id},
+          data: {
+            amountMinor: pack.amountMinor,
+            isActive: true,
+            externalPriceId: `https://checkout.moads.agency/${group.productCode}/${pack.code}`,
+          },
+        });
+        continue;
+      }
+
+      await prisma.billingPrice.create({
+        data: {
+          billingProductId: billingProduct.id,
+          providerId: checkoutLinkProvider.id,
+          priceBookId: defaultPriceBook.id,
+          externalPriceId: `https://checkout.moads.agency/${group.productCode}/${pack.code}`,
+          amountMinor: pack.amountMinor,
+          isActive: true,
+        },
+      });
+    }
+  }
 
   const products = [
     {
@@ -76,11 +182,15 @@ async function main(): Promise<void> {
       {code: "generate", name: "Generate trend video"},
       {code: "download", name: "Download generated trend"},
     ],
-    lab: [
-      {code: "account_center", name: "Account center"},
-    ],
     aeo: [
       {code: "scan", name: "Site scan"},
+      {code: "public_scan", name: "Public deterministic scan"},
+      {code: "unlock_scan", name: "Unlock deterministic report"},
+      {code: "generate_ai_tips", name: "Generate AI tips"},
+    ],
+    lab: [
+      {code: "account_center", name: "Account center"},
+      {code: "starter_billing", name: "Starter billing and fulfillment"},
     ],
     ugc: [
       {code: "render", name: "UGC render"},

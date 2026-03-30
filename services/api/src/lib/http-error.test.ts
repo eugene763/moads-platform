@@ -16,6 +16,7 @@ describe("sendError", () => {
     const request = {
       log: {
         error: vi.fn(),
+        warn: vi.fn(),
       },
     };
     const reply = buildReply();
@@ -34,12 +35,18 @@ describe("sendError", () => {
         details: null,
       },
     });
+    expect(request.log.warn).toHaveBeenCalledWith({
+      platformErrorCode: "boom",
+      platformErrorStatus: 409,
+      details: null,
+    }, "platform error");
   });
 
   it("returns a stable generic 500 message for unexpected errors", () => {
     const request = {
       log: {
         error: vi.fn(),
+        warn: vi.fn(),
       },
     };
     const reply = buildReply();

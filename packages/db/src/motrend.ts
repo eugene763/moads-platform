@@ -442,7 +442,7 @@ export async function finalizePreparedMotrendJob(
 }
 
 export async function getOwnedMotrendJob(
-  prisma: Prisma.DefaultPrismaClient,
+  prisma: DbClient,
   input: {
     accountId: string;
     userId: string;

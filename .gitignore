@@ -5,6 +5,7 @@ coverage
 .env
 .env.local
 .env.*.local
+.env*.bak
 .firebase
 infra/firebase/.emulator-data
 *.log

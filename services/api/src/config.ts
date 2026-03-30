@@ -64,6 +64,18 @@ function parseTaskDispatchMode(value: string | undefined): TaskDispatchMode {
   throw new Error("TASK_DISPATCH_MODE must be one of: manual, internal-http, cloud-tasks.");
 }
 
+function parseAeoAdapterMode(value: string | undefined, envName: string): "mock" | "live" {
+  if (!value || value === "mock") {
+    return "mock";
+  }
+
+  if (value === "live") {
+    return "live";
+  }
+
+  throw new Error(`${envName} must be one of: mock, live.`);
+}
+
 function normalizeHost(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -136,6 +148,11 @@ export function loadConfig(env = process.env): ApiConfig {
   const klingAccessKey = pickTrimmed(env.KLING_ACCESS_KEY);
   const klingSecretKey = pickTrimmed(env.KLING_SECRET_KEY);
   const klingBaseUrl = pickTrimmed(env.KLING_BASE_URL) ?? "https://api-singapore.klingai.com";
+  const aeoAiTipsMode = parseAeoAdapterMode(env.AEO_AI_TIPS_MODE, "AEO_AI_TIPS_MODE");
+  const aeoGa4Mode = parseAeoAdapterMode(env.AEO_GA4_MODE, "AEO_GA4_MODE");
+  const aeoRealtimeMode = parseAeoAdapterMode(env.AEO_REALTIME_MODE, "AEO_REALTIME_MODE");
+  const aeoOpenAiApiKey = pickTrimmed(env.OPENAI_API_KEY) ?? pickTrimmed(env.AEO_OPENAI_API_KEY);
+  const aeoAiTipsModel = pickTrimmed(env.AEO_AI_TIPS_MODEL) ?? "gpt-5-mini";
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required.");
@@ -240,13 +257,17 @@ export function loadConfig(env = process.env): ApiConfig {
     throw new Error("MOTREND_PROVIDER_MODE=kling requires KLING_ACCESS_KEY and KLING_SECRET_KEY.");
   }
 
+  if (aeoAiTipsMode === "live" && !aeoOpenAiApiKey) {
+    throw new Error("AEO_AI_TIPS_MODE=live requires OPENAI_API_KEY (or AEO_OPENAI_API_KEY).");
+  }
+
   return {
     runtimeProfile,
     nodeEnv,
     port: parseNumber(env.PORT, 8080),
     databaseUrl,
     sessionCookieName: env.SESSION_COOKIE_NAME ?? "moads_session",
-    sessionCookieMaxAgeMs: parseNumber(env.SESSION_COOKIE_MAX_AGE_MS, 5 * 24 * 60 * 60 * 1000),
+    sessionCookieMaxAgeMs: parseNumber(env.SESSION_COOKIE_MAX_AGE_MS, 30 * 24 * 60 * 60 * 1000),
     sessionCookieSecret,
     ...(apiBaseUrl ? {apiBaseUrl} : {}),
     defaultDevProductCode: env.DEFAULT_DEV_PRODUCT_CODE ?? "motrend",
@@ -274,5 +295,13 @@ export function loadConfig(env = process.env): ApiConfig {
     ...(klingSecretKey ? {klingSecretKey} : {}),
     klingBaseUrl,
     klingHttpTimeoutMs: parseNumber(env.KLING_HTTP_TIMEOUT_MS, 20_000),
+    aeoPublicScanRateLimitPerHour: parseNumber(env.AEO_PUBLIC_SCAN_RATE_LIMIT_PER_HOUR, 20),
+    aeoPublicScanCacheTtlMs: parseNumber(env.AEO_PUBLIC_SCAN_CACHE_TTL_MS, 24 * 60 * 60 * 1000),
+    aeoAiTipsMode,
+    aeoGa4Mode,
+    aeoRealtimeMode,
+    aeoRealtimeIntervalMs: parseNumber(env.AEO_REALTIME_INTERVAL_MS, 5_000),
+    ...(aeoOpenAiApiKey ? {aeoOpenAiApiKey} : {}),
+    aeoAiTipsModel,
   };
 }

@@ -9,6 +9,7 @@ INSTANCE_NAME="${INSTANCE_NAME:-moads-platform-dev}"
 INSTANCE_CONNECTION_NAME="${INSTANCE_CONNECTION_NAME:-$PROJECT_ID:$REGION:$INSTANCE_NAME}"
 PROXY_BIN="${PROXY_BIN:-/tmp/cloud-sql-proxy}"
 PROXY_PORT="${PROXY_PORT:-55432}"
+PROXY_AUTH_FLAG="${PROXY_AUTH_FLAG:---gcloud-auth}"
 APP_PASSWORD_SECRET="${APP_PASSWORD_SECRET:-MOADS_PLATFORM_DEV_APP_PASSWORD}"
 DB_USER="${DB_USER:-moads_app}"
 DB_NAME="${DB_NAME:-moads_platform}"
@@ -37,7 +38,7 @@ fi
 APP_PASSWORD="$(gcloud secrets versions access latest --secret "$APP_PASSWORD_SECRET" --project "$PROJECT_ID")"
 DATABASE_URL="postgresql://${DB_USER}:${APP_PASSWORD}@127.0.0.1:${PROXY_PORT}/${DB_NAME}?schema=public"
 
-"$PROXY_BIN" "$INSTANCE_CONNECTION_NAME" --port "$PROXY_PORT" >/tmp/moads-cloud-sql-proxy.log 2>&1 &
+"$PROXY_BIN" "$INSTANCE_CONNECTION_NAME" "$PROXY_AUTH_FLAG" --port "$PROXY_PORT" >/tmp/moads-cloud-sql-proxy.log 2>&1 &
 PROXY_PID=$!
 
 cleanup() {

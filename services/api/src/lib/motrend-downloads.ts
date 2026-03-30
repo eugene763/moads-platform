@@ -14,7 +14,7 @@ import {
 } from "./media.js";
 
 export const DOWNLOAD_PREPARE_RETRY_MS = 2_000;
-const DOWNLOAD_PREPARE_STALE_MS = 2 * 60 * 1000;
+export const DOWNLOAD_PREPARE_STALE_MS = 2 * 60 * 1000;
 
 type DownloadPrepareStatus = "pending" | "processing" | "failed" | "ready";
 
@@ -32,7 +32,7 @@ function readJsonObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function readDownloadPrepareState(metadataJson: Prisma.JsonValue | null): DownloadPrepareState {
+export function readDownloadPrepareState(metadataJson: Prisma.JsonValue | null): DownloadPrepareState {
   const root = readJsonObject(metadataJson);
   const downloadPrepare = readJsonObject(root.downloadPrepare);
   const requestedAtMs = Number(downloadPrepare.requestedAtMs);

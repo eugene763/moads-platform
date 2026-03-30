@@ -43,6 +43,7 @@ Use `dev-cloud` only when you need to verify:
 Cloud verification must be explicit:
 
 ```bash
+pnpm env:render:dev-cloud
 pnpm db:validate:dev-cloud
 pnpm db:sync:managed:dev-cloud
 pnpm cloud-run:deploy:dev-cloud
@@ -59,10 +60,18 @@ Current canonical MoTrend cloud verification target:
 - runtime target: `api-dev.moads.agency`
 - service: `moads-api-dev`
 - Cloud SQL: `moads-platform-dev`
-- queues: `motrend-submit`, `motrend-poll`
+- queues: `motrend-submit`, `motrend-poll`, `motrend-download`
 - cookie: `moads_session_dev`
 
 This does not replace the local-first workflow. It only fixes the current cloud verification target for deploy-shaped checks.
+
+For config parity without deploying anything, render a fresh local dev-cloud env from the live cloud contour:
+
+```bash
+pnpm env:render:dev-cloud
+```
+
+That command is read-only against Cloud Run and Secret Manager. It rebuilds `.env.dev-cloud.local`, swaps in dev-cloud endpoints and queue names, and leaves `MOTREND_PROVIDER_MODE=manual` unless you explicitly override it.
 
 ## Production
 

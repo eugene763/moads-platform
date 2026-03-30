@@ -7,6 +7,16 @@ export function sendError(
   reply: FastifyReply,
 ): void {
   if (error instanceof PlatformError) {
+    const logPayload = {
+      platformErrorCode: error.code,
+      platformErrorStatus: error.statusCode,
+      details: error.details ?? null,
+    };
+    if (error.statusCode >= 500) {
+      request.log.error(logPayload, "platform error");
+    } else {
+      request.log.warn(logPayload, "platform error");
+    }
     reply.status(error.statusCode).send({
       error: {
         code: error.code,

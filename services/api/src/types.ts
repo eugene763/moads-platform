@@ -7,6 +7,7 @@ import type {FastifyReply, FastifyRequest} from "fastify";
 export type RuntimeProfile = "local" | "dev-cloud" | "prod";
 export type MotrendProviderMode = "manual" | "stub" | "kling";
 export type TaskDispatchMode = "manual" | "internal-http" | "cloud-tasks";
+export type AeoAdapterMode = "mock" | "live";
 
 export interface ApiConfig {
   runtimeProfile: RuntimeProfile;
@@ -42,6 +43,14 @@ export interface ApiConfig {
   klingSecretKey?: string | undefined;
   klingBaseUrl?: string | undefined;
   klingHttpTimeoutMs: number;
+  aeoPublicScanRateLimitPerHour: number;
+  aeoPublicScanCacheTtlMs: number;
+  aeoAiTipsMode: AeoAdapterMode;
+  aeoGa4Mode: AeoAdapterMode;
+  aeoRealtimeMode: AeoAdapterMode;
+  aeoRealtimeIntervalMs: number;
+  aeoOpenAiApiKey?: string | undefined;
+  aeoAiTipsModel: string;
 }
 
 export interface FirebaseContext {
