@@ -247,6 +247,8 @@ export async function prepareMotrendJob(
   input: MotrendPrepareJobInput,
 ) {
   return await prisma.$transaction(async (tx) => {
+    const requestedSelectionKind = normalizeSelectionKind(input.selectionKind);
+
     if (input.clientRequestId) {
       const existingRequest = await tx.moTrendJobRequest.findUnique({
         where: {
@@ -283,6 +285,30 @@ export async function prepareMotrendJob(
       },
     });
 
+    let template = null;
+    if (activeJob?.status === MotrendJobStatus.AWAITING_UPLOAD) {
+      template = await tx.moTrendTemplate.findFirst({
+        where: {
+          OR: [
+            {id: input.templateId},
+            {code: input.templateId},
+          ],
+        },
+      });
+
+      if (
+        template?.isActive &&
+        activeJob.templateId === template.id &&
+        activeJob.selectionKind === requestedSelectionKind
+      ) {
+        return {
+          jobId: activeJob.id,
+          uploadPath: activeJob.inputImagePath,
+          reused: true,
+        };
+      }
+    }
+
     assertOrThrow(
       !activeJob,
       409,
@@ -291,14 +317,16 @@ export async function prepareMotrendJob(
       activeJob ? {activeJobId: activeJob.id, activeStatus: activeJob.status} : undefined,
     );
 
-    const template = await tx.moTrendTemplate.findFirst({
-      where: {
-        OR: [
-          {id: input.templateId},
-          {code: input.templateId},
-        ],
-      },
-    });
+    if (!template) {
+      template = await tx.moTrendTemplate.findFirst({
+        where: {
+          OR: [
+            {id: input.templateId},
+            {code: input.templateId},
+          ],
+        },
+      });
+    }
     assertOrThrow(template?.isActive, 400, "template_inactive", "Template is not active.");
 
     const job = await tx.moTrendJob.create({
@@ -306,7 +334,7 @@ export async function prepareMotrendJob(
         accountId: input.accountId,
         userId: input.userId,
         templateId: template.id,
-        selectionKind: normalizeSelectionKind(input.selectionKind),
+        selectionKind: requestedSelectionKind,
         status: MotrendJobStatus.AWAITING_UPLOAD,
         inputImagePath: `user_uploads/${input.firebaseUid}/${crypto.randomUUID()}/photo.jpg`,
       },
