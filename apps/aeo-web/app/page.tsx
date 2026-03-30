@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import {ScanForm} from "../components/scan-form";
@@ -6,7 +7,9 @@ export default function HomePage() {
   return (
     <main className="page-shell">
       <header className="top-nav">
-        <div className="brand">MO ADS</div>
+        <Link href="/" className="brand brand-logo">
+          <Image src="/logo-moads.svg" alt="MO ADS" width={122} height={44} className="brand-logo-image" priority />
+        </Link>
         <nav>
           <a href="#how-it-works">How It Works</a>
           <a href="#dimensions">Dimensions</a>
@@ -16,7 +19,7 @@ export default function HomePage() {
       </header>
 
       <section className="hero">
-        <p className="eyebrow">AI Engine Optimization for E-Commerce</p>
+        <p className="eyebrow">AI Engine Optimization</p>
         <h1>AI is the new search. Is your brand visible?</h1>
         <p className="hero-copy">
           See how your brand shows up in ChatGPT, Perplexity, Gemini and more.
@@ -30,7 +33,7 @@ export default function HomePage() {
         <div className="cards three">
           <article>
             <h3>Step 01</h3>
-            <p>Enter your store URL. Everything else is optional.</p>
+            <p>Enter your store URL and run a free deterministic scan.</p>
           </article>
           <article>
             <h3>Step 02</h3>
@@ -69,10 +72,18 @@ export default function HomePage() {
             <p>Expanded data, higher precision, GA4 widgets and realtime stream.</p>
           </article>
           <article>
-            <h3>Pro+</h3>
-            <p>Automation, competitor intelligence and implementation support.</p>
+            <h3>Pro (Soon)</h3>
+            <p>Advanced monitoring and automation. Join waitlist for early access.</p>
           </article>
         </div>
+      </section>
+
+      <section className="section-block lead-footer">
+        <h2>Need hands-on implementation?</h2>
+        <p>Leave a request on the main MO ADS site and we will plan your AEO rollout.</p>
+        <a className="cta-primary" href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">
+          Open Agency Lead Form
+        </a>
       </section>
     </main>
   );

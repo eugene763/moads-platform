@@ -1,10 +1,13 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function LabHome() {
   return (
     <main className="page-shell">
       <header className="top-nav">
-        <div className="brand">MO ADS LAB</div>
+        <Link href="/" className="brand brand-logo">
+          <Image src="/logo-moads.svg" alt="MO ADS" width={122} height={44} className="brand-logo-image" priority />
+        </Link>
         <nav>
           <Link href="/center">Open Center</Link>
           <a href="https://aeo.moads.agency">Go to AEO</a>
@@ -19,6 +22,14 @@ export default function LabHome() {
           and manual-safe fulfillment flow.
         </p>
         <Link className="cta-primary" href="/center">Open Center</Link>
+      </section>
+
+      <section className="lead-footer">
+        <h2>Need agency onboarding?</h2>
+        <p>Use the main MO ADS form and we will help you configure starter and rollout.</p>
+        <a className="cta-primary" href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">
+          Open Agency Lead Form
+        </a>
       </section>
     </main>
   );
