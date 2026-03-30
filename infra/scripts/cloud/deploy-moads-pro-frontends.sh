@@ -190,13 +190,18 @@ print_domain_status() {
   fi
 
   local ownership_state
-  ownership_state="$(grep -o '"ownershipState":[[:space:]]*"[^"]*"' "$tmp_file" | head -n1 | sed 's/.*"ownershipState":[[:space:]]*"\([^"]*\)"/\1/')"
+  ownership_state="$(grep -o '"ownershipState":[[:space:]]*"[^"]*"' "$tmp_file" | head -n1 | sed 's/.*"ownershipState":[[:space:]]*"\([^"]*\)"/\1/' || true)"
   local host_state
-  host_state="$(grep -o '"hostState":[[:space:]]*"[^"]*"' "$tmp_file" | head -n1 | sed 's/.*"hostState":[[:space:]]*"\([^"]*\)"/\1/')"
+  host_state="$(grep -o '"hostState":[[:space:]]*"[^"]*"' "$tmp_file" | head -n1 | sed 's/.*"hostState":[[:space:]]*"\([^"]*\)"/\1/' || true)"
   local cert_state
-  cert_state="$(grep -o '"state":[[:space:]]*"CERT_[^"]*"' "$tmp_file" | head -n1 | sed 's/.*"state":[[:space:]]*"\([^"]*\)"/\1/')"
+  cert_state="$(grep -o '"state":[[:space:]]*"CERT_[^"]*"' "$tmp_file" | head -n1 | sed 's/.*"state":[[:space:]]*"\([^"]*\)"/\1/' || true)"
   local desired_cname
-  desired_cname="$(grep -o '"rdata":[[:space:]]*"[^"]*"' "$tmp_file" | tail -n1 | sed 's/.*"rdata":[[:space:]]*"\([^"]*\)"/\1/')"
+  desired_cname="$(grep -o '"rdata":[[:space:]]*"[^"]*"' "$tmp_file" | tail -n1 | sed 's/.*"rdata":[[:space:]]*"\([^"]*\)"/\1/' || true)"
+
+  ownership_state="${ownership_state:-unknown}"
+  host_state="${host_state:-unknown}"
+  cert_state="${cert_state:-unknown}"
+  desired_cname="${desired_cname:-unknown}"
 
   echo "custom_domain_status domain=$domain site=$site_id ownership=$ownership_state host=$host_state cert=$cert_state desired_cname=$desired_cname"
   rm -f "$tmp_file"
