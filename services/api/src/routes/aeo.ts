@@ -5,7 +5,6 @@ import {
   createAeoPublicScan,
   createAeoSite,
   createAeoWaitlistRequest,
-  createBillingCheckoutOrder,
   fulfillBillingOrderManually,
   getAeoPublicScanByToken,
   getAeoScanById,
@@ -25,6 +24,8 @@ import {
   createAeoGaAdapter,
   createAeoRealtimeAdapter,
 } from "../lib/aeo-adapters.js";
+import {createBillingCheckoutResponse, normalizeCheckoutAttribution} from "../lib/billing-checkout.js";
+import {maskUnavailableCheckoutOffers} from "../lib/billing-offers.js";
 import {
   normalizeSiteUrl,
   runAeoDeterministicScan,
@@ -430,9 +431,9 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/aeo/pricing/credit-packs", {preHandler: authGuards}, async (_request, reply) => {
-    const packs = await listBillingCreditPackOffers(app.prisma, {
+    const packs = maskUnavailableCheckoutOffers(app.config, await listBillingCreditPackOffers(app.prisma, {
       productCode: "aeo",
-    });
+    })).map(({providerCode: _providerCode, ...pack}) => pack);
 
     reply.send({packs});
   });
@@ -458,16 +459,21 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
 
     const body = request.body as {
       priceId?: unknown;
+      attribution?: unknown;
     } | undefined;
 
     if (typeof body?.priceId !== "string" || !body.priceId.trim()) {
       throw new PlatformError(400, "billing_price_required", "priceId is required.");
     }
 
-    const order = await createBillingCheckoutOrder(app.prisma, {
+    const order = await createBillingCheckoutResponse(app, {
       accountId: request.accountContext.accountId,
       productCode: "aeo",
       priceId: body.priceId.trim(),
+      userId: request.authContext?.userId ?? null,
+      firebaseUid: request.authContext?.firebaseUid ?? null,
+      email: request.authContext?.email ?? null,
+      attribution: normalizeCheckoutAttribution(body?.attribution),
     });
 
     reply.status(201).send(order);

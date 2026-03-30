@@ -149,6 +149,9 @@ export function loadConfig(env = process.env): ApiConfig {
   const cloudTasksMotrendPollQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_POLL_QUEUE);
   const cloudTasksMotrendDownloadQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE);
   const cloudTasksInvokerServiceAccountEmail = pickTrimmed(env.CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL);
+  const fsApiUsername = pickTrimmed(env.FS_API_USERNAME);
+  const fsApiPassword = pickTrimmed(env.FS_API_PASSWORD);
+  const fsStoreHost = pickTrimmed(env.FS_STORE_HOST);
   const motrendProviderMode = parseMotrendProviderMode(env.MOTREND_PROVIDER_MODE);
   const motrendStubOutputUrl = pickTrimmed(env.MOTREND_STUB_OUTPUT_URL);
   const klingAccessKey = pickTrimmed(env.KLING_ACCESS_KEY);
@@ -303,6 +306,9 @@ export function loadConfig(env = process.env): ApiConfig {
     ...(cloudTasksMotrendPollQueue ? {cloudTasksMotrendPollQueue} : {}),
     ...(cloudTasksMotrendDownloadQueue ? {cloudTasksMotrendDownloadQueue} : {}),
     ...(cloudTasksInvokerServiceAccountEmail ? {cloudTasksInvokerServiceAccountEmail} : {}),
+    ...(fsApiUsername ? {fsApiUsername} : {}),
+    ...(fsApiPassword ? {fsApiPassword} : {}),
+    ...(fsStoreHost ? {fsStoreHost} : {}),
     motrendProviderMode,
     motrendProviderPollDelayMs: parseNumber(env.MOTREND_PROVIDER_POLL_DELAY_MS, 2_000),
     ...(motrendStubOutputUrl ? {motrendStubOutputUrl} : {}),

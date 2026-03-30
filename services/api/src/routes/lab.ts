@@ -1,7 +1,6 @@
 import {FastifyInstance} from "fastify";
 
 import {
-  createBillingCheckoutOrder,
   fulfillBillingOrderManually,
   getOrCreateAeoStarterOfferState,
   getWalletSnapshot,
@@ -10,6 +9,8 @@ import {
   PlatformError,
 } from "@moads/db";
 
+import {createBillingCheckoutResponse, normalizeCheckoutAttribution} from "../lib/billing-checkout.js";
+import {maskUnavailableCheckoutOffers} from "../lib/billing-offers.js";
 import {requireProductMembership} from "../middleware/access.js";
 import {requireAdminClaim} from "../middleware/admin.js";
 import {requireAuth, resolveAccount} from "../middleware/auth.js";
@@ -60,7 +61,7 @@ export async function registerLabRoutes(app: FastifyInstance): Promise<void> {
         status: membership.status.toLowerCase(),
       })),
       orders,
-      creditPacks: packs,
+      creditPacks: maskUnavailableCheckoutOffers(app.config, packs).map(({providerCode: _providerCode, ...pack}) => pack),
       crossSell: {
         aeoDashboardUrl: "https://aeo.moads.agency/dashboard",
       },
@@ -88,16 +89,21 @@ export async function registerLabRoutes(app: FastifyInstance): Promise<void> {
 
     const body = request.body as {
       priceId?: unknown;
+      attribution?: unknown;
     } | undefined;
 
     if (typeof body?.priceId !== "string" || !body.priceId.trim()) {
       throw new PlatformError(400, "billing_price_required", "priceId is required.");
     }
 
-    const order = await createBillingCheckoutOrder(app.prisma, {
+    const order = await createBillingCheckoutResponse(app, {
       accountId: request.accountContext.accountId,
       productCode: "aeo",
       priceId: body.priceId.trim(),
+      userId: request.authContext?.userId ?? null,
+      firebaseUid: request.authContext?.firebaseUid ?? null,
+      email: request.authContext?.email ?? null,
+      attribution: normalizeCheckoutAttribution(body?.attribution),
     });
 
     reply.status(201).send(order);

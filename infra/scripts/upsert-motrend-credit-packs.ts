@@ -1,7 +1,7 @@
 import {PrismaClient} from "@prisma/client";
 
 import {
-  BILLING_CHECKOUT_LINK_PROVIDER_CODE,
+  BILLING_FASTSPRING_PROVIDER_CODE,
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
   buildCreditPackScopeRef,
 } from "../../packages/db/src/billing.js";
@@ -13,6 +13,7 @@ interface CreditPackSeedInput {
   creditsAmount: number;
   amountMinor: number;
   checkoutUrl?: string;
+  fastspringProductPath?: string;
   currencyCode?: string;
   marketCode?: string;
   languageCode?: string;
@@ -25,6 +26,7 @@ function readPackInputs(): CreditPackSeedInput[] {
   if (!raw) {
     return DEFAULT_MOTREND_CREDIT_PACKS.map((pack) => ({
       ...pack,
+      checkoutUrl: pack.fastspringProductPath,
       currencyCode: "USD",
       marketCode: "global",
       languageCode: "en",
@@ -48,6 +50,9 @@ function readPackInputs(): CreditPackSeedInput[] {
     const checkoutUrl = typeof (item as {checkoutUrl?: unknown}).checkoutUrl === "string" ?
       (item as {checkoutUrl?: string}).checkoutUrl?.trim() :
       "";
+    const fastspringProductPath = typeof (item as {fastspringProductPath?: unknown}).fastspringProductPath === "string" ?
+      (item as {fastspringProductPath?: string}).fastspringProductPath?.trim() :
+      "";
     const currencyCode = typeof (item as {currencyCode?: unknown}).currencyCode === "string" ?
       (item as {currencyCode?: string}).currencyCode?.trim().toUpperCase() :
       "USD";
@@ -67,7 +72,8 @@ function readPackInputs(): CreditPackSeedInput[] {
       name,
       creditsAmount,
       amountMinor,
-      ...(checkoutUrl ? {checkoutUrl} : {}),
+      ...((fastspringProductPath || checkoutUrl) ? {checkoutUrl: fastspringProductPath || checkoutUrl} : {}),
+      ...(fastspringProductPath ? {fastspringProductPath} : {}),
       currencyCode,
       marketCode,
       languageCode,
@@ -75,16 +81,16 @@ function readPackInputs(): CreditPackSeedInput[] {
   });
 }
 
-async function ensureCheckoutLinkProvider() {
+async function ensureFastSpringProvider() {
   return await prisma.billingProvider.upsert({
-    where: {code: BILLING_CHECKOUT_LINK_PROVIDER_CODE},
+    where: {code: BILLING_FASTSPRING_PROVIDER_CODE},
     update: {
-      name: "Checkout Link",
+      name: "FastSpring",
       status: "active",
     },
     create: {
-      code: BILLING_CHECKOUT_LINK_PROVIDER_CODE,
-      name: "Checkout Link",
+      code: BILLING_FASTSPRING_PROVIDER_CODE,
+      name: "FastSpring",
       status: "active",
     },
   });
@@ -119,7 +125,7 @@ async function ensurePriceBook(input: Required<Pick<CreditPackSeedInput, "curren
 
 async function main(): Promise<void> {
   const packs = readPackInputs();
-  const provider = await ensureCheckoutLinkProvider();
+  const provider = await ensureFastSpringProvider();
 
   for (const pack of packs) {
     const priceBook = await ensurePriceBook({
@@ -150,7 +156,6 @@ async function main(): Promise<void> {
     const existingPrice = await prisma.billingPrice.findFirst({
       where: {
         billingProductId: billingProduct.id,
-        providerId: provider.id,
         priceBookId: priceBook.id,
       },
       orderBy: {
@@ -162,6 +167,7 @@ async function main(): Promise<void> {
       await prisma.billingPrice.update({
         where: {id: existingPrice.id},
         data: {
+          providerId: provider.id,
           amountMinor: pack.amountMinor,
           isActive: true,
           ...("checkoutUrl" in pack ? {externalPriceId: pack.checkoutUrl ?? null} : {}),

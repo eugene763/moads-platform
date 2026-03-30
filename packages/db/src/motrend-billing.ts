@@ -3,6 +3,7 @@ export interface MotrendCreditPackDefinition {
   name: string;
   creditsAmount: number;
   amountMinor: number;
+  fastspringProductPath?: string;
 }
 
 export const DEFAULT_MOTREND_CREDIT_PACKS: MotrendCreditPackDefinition[] = [
@@ -11,17 +12,20 @@ export const DEFAULT_MOTREND_CREDIT_PACKS: MotrendCreditPackDefinition[] = [
     name: "Starter",
     creditsAmount: 30,
     amountMinor: 499,
+    fastspringProductPath: "motrend-credits-30",
   },
   {
     code: "motrend_credits_creator",
     name: "Creator",
     creditsAmount: 80,
     amountMinor: 999,
+    fastspringProductPath: "motrend-credits-80",
   },
   {
     code: "motrend_credits_pro",
     name: "Pro",
     creditsAmount: 200,
     amountMinor: 1999,
+    fastspringProductPath: "motrend-credits-200",
   },
 ];
