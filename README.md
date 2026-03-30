@@ -74,8 +74,13 @@ The default local stack is:
 - `pnpm cloud-tasks:ensure:prod`
 - `pnpm cloud-run:deploy:dev-cloud`
 - `pnpm cloud-run:deploy:prod`
+- `pnpm cloud-run:deploy:pro`
+- `pnpm cloud-frontends:deploy:pro`
 - `pnpm cloud-lb:bootstrap:prod`
+- `pnpm cloud-lb:bootstrap:pro-gateway`
 - `pnpm db:sync:managed:prod`
+- `pnpm db:sync:managed:pro`
+- `pnpm cloud-sql:bootstrap:pro`
 - `pnpm db:sync:legacy-templates:dev-cloud`
 - `pnpm motrend:tasks:run`
 - `pnpm motrend:tasks:run:dev-cloud`
@@ -109,8 +114,12 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - `pnpm cloud-run:deploy:dev-cloud` expects `SESSION_COOKIE_SECRET_DEV` when available, plus `MOADS_API_DEV_DATABASE_URL`, `KLING_ACCESS_KEY`, and `KLING_SECRET_KEY` in Secret Manager; it falls back to the shared `SESSION_COOKIE_SECRET` only when the dev-specific cookie secret does not exist. `FIREBASE_SERVICE_ACCOUNT` is optional because Cloud Run ADC can be used when the runtime service account has the required Firebase roles.
 - `dev-cloud` currently uses `moads_session_dev` so browser sessions do not collide with `prod`.
 - `pnpm cloud-run:deploy:prod` deploys `moads-api` with ingress `internal-and-cloud-load-balancing`; prod traffic must enter through the HTTPS Load Balancer path, not directly through `run.app`.
+- `pnpm cloud-run:deploy:pro` deploys the pro contour API service `moads-api-pro` in a separate project/runtime and defaults all AEO external connectors to `mock` mode.
+- `pnpm cloud-frontends:deploy:pro` deploys `apps/aeo-web` and `apps/lab-web` to dedicated Cloud Run services, creates/updates Firebase Hosting pro sites, and maps `aeo.moads.agency` / `lab.moads.agency` to the correct frontend sites.
+- `pnpm cloud-lb:bootstrap:pro-gateway` configures path routing on `api.moads.agency` so `/v1/aeo/*`, `/v1/lab/*`, `/v1/auth/*`, `/v1/wallet/*`, and `/v1/me/*` target the pro backend while legacy consumer paths remain on the consumer backend.
 - `pnpm cloud-lb:bootstrap:prod` creates or updates the HTTPS LB resources for `api.moads.agency` and prints the IPv4/IPv6 records that must exist in DNS.
 - `pnpm db:sync:managed:prod` uses Cloud SQL Auth Proxy plus the `MOADS_PLATFORM_PROD_APP_PASSWORD` secret to run `prisma db push`, seed, legacy support-code backfill, and legacy template sync against prod Postgres.
+- `pnpm db:sync:managed:pro` uses Cloud SQL Auth Proxy plus `MOADS_PLATFORM_PRO_APP_PASSWORD` and applies schema + seed in the isolated pro database.
 - Full browser-level smoke from `trend.moads.agency` still requires `api-dev.moads.agency` to be mapped and resolvable; until that DNS step is complete, only API/runtime smoke can run against the default `run.app` URL.
 - stale `awaiting_upload`, pre-submit `queued`, and long-running `processing` jobs can be cleaned up via `pnpm motrend:sweep:run` or `POST /internal/motrend/jobs/run-sweep`.
 - expired cached download artifacts can be cleaned up via `pnpm motrend:downloads:cleanup` or `POST /internal/motrend/downloads/run-cleanup`.

@@ -710,7 +710,6 @@ export async function runAeoDeterministicScan(input: {
   } catch (error) {
     clearTimeout(timeout);
     const responseMs = Date.now() - startedAt;
-    const timeoutError = error instanceof Error && error.name === "AbortError";
 
     return evaluateAeoHtml({
       requestedUrl,

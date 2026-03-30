@@ -51,6 +51,17 @@ pnpm db:sync:legacy-templates:dev-cloud
 pnpm dev:dev-cloud
 ```
 
+For the isolated pro contour (AEO/LAB):
+
+```bash
+cp .env.pro.example .env.pro.local
+pnpm cloud-sql:bootstrap:pro
+pnpm db:sync:managed:pro
+pnpm cloud-run:deploy:pro
+pnpm cloud-frontends:deploy:pro
+pnpm cloud-lb:bootstrap:pro-gateway
+```
+
 `dev-cloud` is not the default shared environment and should not be left running for convenience.
 
 Current canonical MoTrend cloud verification target:

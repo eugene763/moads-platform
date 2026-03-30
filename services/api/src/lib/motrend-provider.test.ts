@@ -32,6 +32,13 @@ function baseConfig(motrendProviderMode: MotrendProviderMode): ApiConfig {
     klingSecretKey: "kling-secret",
     klingBaseUrl: "https://api-singapore.klingai.com",
     klingHttpTimeoutMs: 20_000,
+    aeoPublicScanRateLimitPerHour: 20,
+    aeoPublicScanCacheTtlMs: 86_400_000,
+    aeoAiTipsMode: "mock",
+    aeoGa4Mode: "mock",
+    aeoRealtimeMode: "mock",
+    aeoRealtimeIntervalMs: 5_000,
+    aeoAiTipsModel: "gpt-5-mini",
   };
 }
 

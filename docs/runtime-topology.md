@@ -5,7 +5,11 @@
 | Domain / entrypoint | Runtime role | Cloud Run service | Cloud SQL | Queues | Repo |
 | --- | --- | --- | --- | --- | --- |
 | `trend.moads.agency` | prod frontend (`MoTrend`) | n/a | n/a | n/a | `motrend` |
-| `api.moads.agency` | prod backend API | `moads-api` | `moads-platform-prod` | `motrend-submit-prod`, `motrend-poll-prod`, `motrend-download-prod` | `moads-platform` |
+| `api.moads.agency` | gateway API domain | LB path routing | n/a | n/a | `moads-platform` |
+| `api.moads.agency` (`legacy paths`) | consumer backend API | `moads-api` | `moads-platform-prod` | `motrend-submit-prod`, `motrend-poll-prod`, `motrend-download-prod` | `moads-platform` |
+| `api.moads.agency` (`/v1/*` pro paths) | pro backend API | `moads-api-pro` | `moads-platform-pro` | optional | `moads-platform` |
+| `aeo.moads.agency` | pro frontend (`AEO`) | Firebase Hosting site -> Cloud Run `moads-aeo-web` | n/a | n/a | `moads-platform` |
+| `lab.moads.agency` | pro frontend (`LAB`) | Firebase Hosting site -> Cloud Run `moads-lab-web` | n/a | n/a | `moads-platform` |
 | `api-dev.moads.agency` | dev-cloud verification API | `moads-api-dev` | `moads-platform-dev` | `motrend-submit`, `motrend-poll`, `motrend-download` | `moads-platform` |
 | `localhost:8080` | default local API | local `tsx` process | Docker Postgres (`moads_local`) | local/internal task loop by default | `moads-platform` |
 | `localhost:3000` | default local frontend | local frontend dev server | n/a | n/a | `motrend` |
@@ -16,6 +20,7 @@
 - region: `us-central1`
 - prod ingress: HTTPS Load Balancer -> `moads-api`
 - dev-cloud ingress: direct `api-dev.moads.agency` -> `moads-api-dev`
+- pro contour: isolated GCP project with `moads-api-pro` + `moads-platform-pro`
 
 ## Session and runtime separation
 

@@ -2,10 +2,21 @@
   "name": "@moads/lab-web",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "dev": "next dev -p 3002",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3002}",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "firebase": "^11.6.1",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.6"
   }
 }

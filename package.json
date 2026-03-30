@@ -27,8 +27,12 @@
     "env:render:dev-cloud": "./infra/scripts/cloud/render-dev-cloud-env.sh",
     "cloud-run:deploy:dev-cloud": "./infra/scripts/cloud/deploy-moads-api-dev.sh",
     "cloud-run:deploy:prod": "./infra/scripts/cloud/deploy-moads-api-prod.sh",
+    "cloud-run:deploy:pro": "./infra/scripts/cloud/deploy-moads-api-pro.sh",
+    "cloud-frontends:deploy:pro": "./infra/scripts/cloud/deploy-moads-pro-frontends.sh",
     "cloud-lb:bootstrap:prod": "./infra/scripts/cloud/bootstrap-moads-api-prod-lb.sh",
+    "cloud-lb:bootstrap:pro-gateway": "./infra/scripts/cloud/bootstrap-moads-api-pro-gateway-lb.sh",
     "cloud-sql:bootstrap:prod": "./infra/scripts/cloud/bootstrap-moads-platform-prod-sql.sh",
+    "cloud-sql:bootstrap:pro": "./infra/scripts/cloud/bootstrap-moads-platform-pro-sql.sh",
     "db:backfill:legacy-support-codes:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/backfill-legacy-support-codes.ts",
     "db:backfill:legacy-support-codes:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/backfill-legacy-support-codes.ts",
     "db:sync:legacy-templates:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/sync-legacy-motrend-templates.ts",
@@ -45,7 +49,8 @@
     "db:migrate:sql": "dotenv -e .env.local -- pnpm --filter @moads/db db:migrate:sql",
     "db:validate": "dotenv -e .env.local -- pnpm --filter @moads/db prisma validate",
     "db:validate:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/db prisma validate",
-    "db:validate:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/db prisma validate"
+    "db:validate:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/db prisma validate",
+    "db:sync:managed:pro": "./infra/scripts/cloud/sync-pro-cloud-db.sh"
   },
   "devDependencies": {
     "@types/node": "^24.0.13",

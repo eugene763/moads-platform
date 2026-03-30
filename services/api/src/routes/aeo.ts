@@ -1,4 +1,5 @@
 import {
+  Prisma,
   claimAeoScan,
   consumeAeoStarterOfferState,
   createAeoPublicScan,
@@ -39,6 +40,10 @@ interface RateBucket {
 
 const PUBLIC_SCAN_WINDOW_MS = 60 * 60 * 1000;
 const publicScanRateBuckets = new Map<string, RateBucket>();
+
+function toInputJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
 
 function assertRateLimit(ipKey: string, limitPerHour: number): void {
   const now = Date.now();
@@ -183,19 +188,19 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       publicScore: scan.publicScore,
       confidenceLevel: scan.confidenceLevel,
       scoreVersion: "aeo_score_v1",
-      reportJson: scan.reportJson,
-      recommendationsJson: scan.recommendationsJson,
-      extractedFactsJson: scan.extractedFactsJson,
-      issuesJson: scan.issuesJson,
-      signalBlocksJson: scan.signalBlocksJson,
-      rawFetchMetaJson: {
+      reportJson: toInputJson(scan.reportJson),
+      recommendationsJson: toInputJson(scan.recommendationsJson),
+      extractedFactsJson: toInputJson(scan.extractedFactsJson),
+      issuesJson: toInputJson(scan.issuesJson),
+      signalBlocksJson: toInputJson(scan.signalBlocksJson),
+      rawFetchMetaJson: toInputJson({
         ...scan.rawFetchMetaJson,
         lead: {
           brandName: typeof body.brandName === "string" ? body.brandName.trim() : null,
           category: typeof body.category === "string" ? body.category.trim() : null,
           workEmail: typeof body.workEmail === "string" ? body.workEmail.trim().toLowerCase() : null,
         },
-      },
+      }),
       rulesetVersion: scan.rulesetVersion,
       promptVersion: scan.promptVersion,
     });
@@ -345,7 +350,7 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
         mode: app.config.aeoAiTipsMode,
         generatedAt: new Date().toISOString(),
         tips: generated.tips,
-      },
+      } as unknown as Prisma.InputJsonValue,
       providerCode: generated.providerCode,
       modelCode: generated.modelCode,
       creditsCharged: 1,
@@ -510,7 +515,7 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       accountId: request.accountContext.accountId,
       siteId,
       sourceCode: "ga4",
-      dataJson: snapshot,
+      dataJson: toInputJson(snapshot),
     });
 
     reply.send({snapshot});
@@ -552,14 +557,14 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
         accountId: request.accountContext!.accountId,
         siteId,
         sourceCode: "realtime",
-        dataJson: realtime,
+        dataJson: toInputJson(realtime),
       });
 
       await upsertAeoMonitoringSnapshot(app.prisma, {
         accountId: request.accountContext!.accountId,
         siteId,
         sourceCode: "ga4",
-        dataJson: ga,
+        dataJson: toInputJson(ga),
       });
 
       sendEvent("snapshot", {
