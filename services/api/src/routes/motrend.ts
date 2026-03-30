@@ -26,6 +26,7 @@ import {
   requestMotrendDownloadPreparation,
   runMotrendDownloadPreparation,
 } from "../lib/motrend-downloads.js";
+import {hasCurrentAdminClaim} from "../middleware/admin.js";
 import {
   dispatchMotrendDownloadPrepare,
   dispatchMotrendTaskKick,
@@ -57,10 +58,11 @@ export async function registerMotrendRoutes(app: FastifyInstance): Promise<void>
       request.accountContext.accountId,
       request.authContext.userId,
     );
+    const isAdmin = await hasCurrentAdminClaim(request);
 
     reply.send({
       ...profile,
-      isAdmin: request.authContext.claims.admin === true,
+      isAdmin,
     });
   });
 
