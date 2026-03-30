@@ -1,6 +1,8 @@
 import {ApiConfig, MotrendProviderMode, RuntimeProfile, TaskDispatchMode} from "./types.js";
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
+const MIN_FIREBASE_SESSION_COOKIE_AGE_MS = 5 * 60 * 1000;
+const MAX_FIREBASE_SESSION_COOKIE_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const PROFILE_NODE_ENV: Record<RuntimeProfile, string> = {
   local: "development",
   "dev-cloud": "production",
@@ -126,6 +128,10 @@ export function loadConfig(env = process.env): ApiConfig {
   const nodeEnv = env.NODE_ENV ?? PROFILE_NODE_ENV[runtimeProfile];
   const databaseUrl = env.DATABASE_URL;
   const sessionCookieSecret = env.SESSION_COOKIE_SECRET;
+  const sessionCookieMaxAgeMs = parseNumber(
+    env.SESSION_COOKIE_MAX_AGE_MS,
+    MAX_FIREBASE_SESSION_COOKIE_AGE_MS,
+  );
   const sessionCookieDomain = pickTrimmed(env.SESSION_COOKIE_DOMAIN);
   const allowedOrigins = parseAllowedOrigins(env.API_ALLOWED_ORIGINS);
   const apiBaseUrl = pickTrimmed(env.API_BASE_URL);
@@ -160,6 +166,15 @@ export function loadConfig(env = process.env): ApiConfig {
 
   if (!sessionCookieSecret) {
     throw new Error("SESSION_COOKIE_SECRET is required.");
+  }
+
+  if (
+    sessionCookieMaxAgeMs < MIN_FIREBASE_SESSION_COOKIE_AGE_MS ||
+    sessionCookieMaxAgeMs > MAX_FIREBASE_SESSION_COOKIE_AGE_MS
+  ) {
+    throw new Error(
+      `SESSION_COOKIE_MAX_AGE_MS must be between ${MIN_FIREBASE_SESSION_COOKIE_AGE_MS} and ${MAX_FIREBASE_SESSION_COOKIE_AGE_MS}.`,
+    );
   }
 
   if (!firebaseProjectId) {
@@ -267,7 +282,7 @@ export function loadConfig(env = process.env): ApiConfig {
     port: parseNumber(env.PORT, 8080),
     databaseUrl,
     sessionCookieName: env.SESSION_COOKIE_NAME ?? "moads_session",
-    sessionCookieMaxAgeMs: parseNumber(env.SESSION_COOKIE_MAX_AGE_MS, 30 * 24 * 60 * 60 * 1000),
+    sessionCookieMaxAgeMs,
     sessionCookieSecret,
     ...(apiBaseUrl ? {apiBaseUrl} : {}),
     defaultDevProductCode: env.DEFAULT_DEV_PRODUCT_CODE ?? "motrend",

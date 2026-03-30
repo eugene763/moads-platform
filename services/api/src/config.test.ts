@@ -88,6 +88,13 @@ describe("loadConfig", () => {
     })).toThrow("MOTREND_PROVIDER_MODE=kling requires");
   });
 
+  it("rejects a session cookie max age longer than Firebase allows", () => {
+    expect(() => loadConfig({
+      ...baseEnv(),
+      SESSION_COOKIE_MAX_AGE_MS: "2592000000",
+    })).toThrow("SESSION_COOKIE_MAX_AGE_MS must be between");
+  });
+
   it("accepts internal-http dispatch when api base url and internal key are set", () => {
     const config = loadConfig({
       ...baseEnv(),
