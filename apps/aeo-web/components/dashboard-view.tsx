@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest} from "../lib/api";
@@ -120,7 +121,7 @@ export function DashboardView() {
     try {
       await apiRequest(`/v1/aeo/scans/${selectedScan.scanId}/generate-ai-tips`, {
         method: "POST",
-        body: JSON.stringify({planCode: "starter"}),
+        body: JSON.stringify({planCode: "free"}),
       });
       const wallet = await apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary");
       setWalletBalance(wallet.wallet.balance);
@@ -139,8 +140,8 @@ export function DashboardView() {
   if (!session) {
     return (
       <div className="state-card">
-        <h2>Starter Dashboard</h2>
-        <p>Sign in to unlock history, wallet, GA4 and realtime widgets.</p>
+        <h2>AEO Dashboard</h2>
+        <p>Sign in to unlock history, wallet, connected evidence, and AI tips.</p>
         <button type="button" className="cta-primary" onClick={signIn} disabled={signInBusy}>
           {signInBusy ? "Signing in..." : "Sign In with Google"}
         </button>
@@ -156,10 +157,14 @@ export function DashboardView() {
         <p>Email: {session.user.email ?? "unknown"}</p>
         <p>Account: {session.account.id}</p>
         <p>Credits: <strong>{walletBalance ?? "--"}</strong></p>
+        <Link className="cta-primary" href="https://lab.moads.agency/center">
+          Open Billing Center
+        </Link>
       </section>
 
       <section className="panel">
-        <h2>Realtime Evidence</h2>
+        <h2>Connected Evidence</h2>
+        <p className="tiny">These widgets help tracking, but they do not change the AI Discovery Score.</p>
         <p>Mentions: {streamState?.mentionCount ?? "--"}</p>
         <p>Citations: {streamState?.citationCount ?? "--"}</p>
         <p>GA Sessions: {streamState?.gaSessions ?? "--"}</p>
@@ -183,6 +188,7 @@ export function DashboardView() {
         <button type="button" className="cta-primary" onClick={generateTips} disabled={!selectedScan}>
           Generate AI Tips for Selected Scan (1 Credit)
         </button>
+        <p className="tiny">Need more credits? Buy Pack S, Pack M, or Pack L in LAB.</p>
       </section>
 
       {error ? <p className="error-text">{error}</p> : null}

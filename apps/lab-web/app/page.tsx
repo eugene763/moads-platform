@@ -16,17 +16,17 @@ export default function LabHome() {
 
       <section className="hero">
         <p className="eyebrow">Account + Billing Center</p>
-        <h1>Manage starter plan, credits, and launch offers</h1>
+        <h1>Manage credits, orders, and launch access</h1>
         <p>
-          LAB is the commerce center for AEO in the pro contour: checkout, wallet, offer timers,
-          and manual-safe fulfillment flow.
+          LAB is the commerce center for AEO: wallet, pack checkout, order history,
+          and the next-wave access list for Starter, Pro, and Store.
         </p>
         <Link className="cta-primary" href="/center">Open Center</Link>
       </section>
 
       <section className="lead-footer">
         <h2>Need agency onboarding?</h2>
-        <p>Use the main MO ADS form and we will help you configure starter and rollout.</p>
+        <p>Use the main MO ADS form and we will help you configure rollout, tracking, and implementation.</p>
         <a className="cta-primary" href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">
           Open Agency Lead Form
         </a>

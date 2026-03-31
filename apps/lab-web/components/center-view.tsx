@@ -102,7 +102,7 @@ export function CenterView() {
     return (
       <div className="state-card">
         <h2>LAB Center</h2>
-        <p>Sign in to view wallet, offers and starter billing.</p>
+        <p>Sign in to view wallet, credit packs, launch offers, and AEO order history.</p>
         <button className="cta-primary" type="button" onClick={signIn} disabled={signInBusy}>
           {signInBusy ? "Signing in..." : "Sign In"}
         </button>
@@ -114,13 +114,14 @@ export function CenterView() {
   return (
     <div className="center-grid">
       <section className="panel">
-        <h2>Plan State</h2>
+        <h2>Launch State</h2>
         <p>Account: {center.accountId}</p>
         <p>Wallet credits: <strong>{center.wallet.balance}</strong></p>
-        <p>Starter offer: <strong>{center.starterOffer.status}</strong></p>
+        <p>Starter launch offer: <strong>{center.starterOffer.status}</strong></p>
         <p>
           Offer timer: {remainingOfferMs != null ? `${Math.max(0, Math.floor(remainingOfferMs / 60000))} min` : "--"}
         </p>
+        <p className="tiny">Starter, Pro, and Store subscriptions stay in coming soon during this launch phase.</p>
       </section>
 
       <section className="panel">
@@ -139,7 +140,7 @@ export function CenterView() {
       </section>
 
       <section className="panel full">
-        <h2>Starter Credit Packs</h2>
+        <h2>AEO Credit Packs</h2>
         <div className="cards three">
           {center.creditPacks.map((pack) => (
             <article key={pack.priceId}>
@@ -152,11 +153,12 @@ export function CenterView() {
                 onClick={() => checkout(pack.priceId)}
                 disabled={checkoutBusyPriceId === pack.priceId}
               >
-                {checkoutBusyPriceId === pack.priceId ? "Opening..." : "Start Starter"}
+                {checkoutBusyPriceId === pack.priceId ? "Opening..." : `Buy ${pack.name}`}
               </button>
             </article>
           ))}
         </div>
+        <p className="tiny">Packs are the only live purchase flow in this phase. Starter, Pro, and Store remain lead-based.</p>
       </section>
 
       <section className="panel full">

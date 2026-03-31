@@ -26,8 +26,9 @@ There are two separate economic entities:
 
 1. Product plans (subscription access):
 - `Free`
-- `Starter` (monthly access)
+- `Starter` (coming soon, monthly access)
 - `Pro` (coming soon, lead capture only now)
+- `Store` (coming soon, monitored store layer)
 - `Deep Audit` (agency lead flow only now)
 
 2. Credit packs (prepaid usage bundles):
@@ -43,6 +44,7 @@ Rules:
 ### 2.2 Launch model
 
 - Launch mode is `Free + Credits` (not strict-free).
+- FastSpring Phase 1 billing is `packs only`.
 - Public deterministic scan is always free.
 - Auth unlock opens detailed report and paid AI tips action.
 - Share/print is in MVP.
@@ -109,8 +111,9 @@ Required CTA for growth instrumentation:
 
 In AEO/LAB UX:
 - `Free` is active.
-- `Starter` is available as monthly access.
-- `Pro` and `Deep Audit` use waitlist/lead forms (no fake activation).
+- `Pack S / M / L` are the only live purchase flow.
+- `Starter`, `Pro`, and `Store` stay coming soon / lead-based.
+- `Deep Audit` uses lead form flow.
 - Always separate plans from credit packs in copy and UI blocks.
 
 ### 3.6 Unsupported/problematic targets
@@ -203,6 +206,7 @@ Contracted behaviors:
 - `public scan` is free.
 - `generate-ai-tips` is explicit action and charges exactly `1 credit`.
 - plan and pack semantics never mixed in responses/copy.
+- FastSpring webhook endpoint remains `POST /v1/billing/webhooks/fastspring`.
 
 ## 7) Performance and platform constraints
 
@@ -215,6 +219,6 @@ Contracted behaviors:
 
 - Global opt-in public ranking board.
 - Full marketplace-specific deep parsers.
+- Recurring FastSpring subscriptions for `Starter / Pro / Store`.
 - Full dedicated `moads-pro` contour activation (after secrets/access completion).
 - Advanced monitored query intelligence in core product.
-

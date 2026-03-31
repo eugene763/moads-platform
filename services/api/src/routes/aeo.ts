@@ -227,11 +227,17 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
         free: {
           scoreVisible: true,
           recommendationsUnlocked: 3,
+          deterministicScanPrice: "free",
         },
-        starter: {
-          recommendationsUnlocked: "all",
-          includesGa4: true,
-          includesRealtime: true,
+        packs: {
+          availableCodes: ["aeo_pack_s", "aeo_pack_m", "aeo_pack_l"],
+          aiTipsCreditCost: 1,
+          checkoutSurface: "lab_center",
+        },
+        futurePlans: {
+          starter: "coming_soon",
+          pro: "coming_soon",
+          store: "coming_soon",
         },
       },
     });

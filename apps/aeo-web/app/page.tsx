@@ -62,18 +62,23 @@ export default function HomePage() {
 
       <section id="pricing" className="section-block">
         <h2>Simple pricing</h2>
-        <div className="cards three">
+        <div className="cards four">
           <article>
             <h3>Free</h3>
             <p>Score + top evidence. Full breakdown after auth.</p>
           </article>
           <article>
-            <h3>Starter</h3>
-            <p>Expanded data, higher precision, GA4 widgets and realtime stream.</p>
+            <h3>Credit Packs</h3>
+            <p>Buy Pack S, Pack M, or Pack L when you want more AI tips.</p>
+            <p><Link href="https://lab.moads.agency/center">Open billing center</Link></p>
           </article>
           <article>
-            <h3>Pro (Soon)</h3>
-            <p>Advanced monitoring and automation. Join waitlist for early access.</p>
+            <h3>Starter (Soon)</h3>
+            <p>Monthly access for connected evidence, monitoring, and richer tracking.</p>
+          </article>
+          <article>
+            <h3>Pro + Store (Soon)</h3>
+            <p>Advanced monitoring, automation, and ongoing site oversight are coming next.</p>
           </article>
         </div>
       </section>

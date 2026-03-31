@@ -43,6 +43,19 @@ async function main(): Promise<void> {
     },
   });
 
+  const fastSpringProvider = await prisma.billingProvider.upsert({
+    where: {code: "fastspring"},
+    update: {
+      name: "FastSpring",
+      status: "active",
+    },
+    create: {
+      code: "fastspring",
+      name: "FastSpring",
+      status: "active",
+    },
+  });
+
   const existingDefaultPriceBook = await prisma.priceBook.findFirst({
     where: {
       marketCode: "global",
@@ -65,10 +78,14 @@ async function main(): Promise<void> {
     {
       productCode: "motrend",
       packs: DEFAULT_MOTREND_CREDIT_PACKS,
+      providerId: checkoutLinkProvider.id,
+      getExternalPriceId: (pack: {code: string}) => `https://checkout.moads.agency/motrend/${pack.code}`,
     },
     {
       productCode: "aeo",
       packs: DEFAULT_AEO_CREDIT_PACKS,
+      providerId: fastSpringProvider.id,
+      getExternalPriceId: (pack: {code: string; fastspringProductPath?: string}) => pack.fastspringProductPath ?? pack.code,
     },
   ] as const;
 
@@ -96,7 +113,7 @@ async function main(): Promise<void> {
       const existingPrice = await prisma.billingPrice.findFirst({
         where: {
           billingProductId: billingProduct.id,
-          providerId: checkoutLinkProvider.id,
+          providerId: group.providerId,
           priceBookId: defaultPriceBook.id,
         },
         orderBy: {
@@ -110,7 +127,7 @@ async function main(): Promise<void> {
           data: {
             amountMinor: pack.amountMinor,
             isActive: true,
-            externalPriceId: `https://checkout.moads.agency/${group.productCode}/${pack.code}`,
+            externalPriceId: group.getExternalPriceId(pack),
           },
         });
         continue;
@@ -119,9 +136,9 @@ async function main(): Promise<void> {
       await prisma.billingPrice.create({
         data: {
           billingProductId: billingProduct.id,
-          providerId: checkoutLinkProvider.id,
+          providerId: group.providerId,
           priceBookId: defaultPriceBook.id,
-          externalPriceId: `https://checkout.moads.agency/${group.productCode}/${pack.code}`,
+          externalPriceId: group.getExternalPriceId(pack),
           amountMinor: pack.amountMinor,
           isActive: true,
         },

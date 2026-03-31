@@ -210,6 +210,9 @@ export function ReportView({publicToken}: {publicToken: string}) {
             <button type="button" className="cta-primary" onClick={handleGenerateTips} disabled={tipsBusy}>
               {tipsBusy ? "Generating..." : "Generate AI Tips (1 Credit)"}
             </button>
+            <p className="tiny">
+              Need more credits? <Link href="https://lab.moads.agency/center">Open the billing center</Link>.
+            </p>
           </div>
         )}
       </section>
