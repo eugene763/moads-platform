@@ -6,6 +6,17 @@ import {FormEvent, useMemo, useState} from "react";
 import {apiRequest, PublicScanResponse} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
 
+function GlobeIcon() {
+  return (
+    <svg className="globe-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3a15 15 0 0 1 0 18" />
+      <path d="M12 3a15 15 0 0 0 0 18" />
+    </svg>
+  );
+}
+
 export function ScanForm() {
   const router = useRouter();
   const [siteUrl, setSiteUrl] = useState("");
@@ -16,6 +27,7 @@ export function ScanForm() {
     if (!siteUrl.trim()) {
       return "No credit card. Deterministic score in under 60 seconds.";
     }
+
     return "Score is free. Full breakdown unlocks after sign-in.";
   }, [siteUrl]);
 
@@ -29,9 +41,7 @@ export function ScanForm() {
 
       const result = await apiRequest<PublicScanResponse>("/v1/aeo/public-scans", {
         method: "POST",
-        body: JSON.stringify({
-          siteUrl,
-        }),
+        body: JSON.stringify({siteUrl}),
       });
 
       router.push(`/r/${result.publicToken}`);
@@ -44,19 +54,26 @@ export function ScanForm() {
 
   return (
     <form className="scan-form" onSubmit={onSubmit}>
-      <label>
-        Store URL *
+      <label className="sr-only" htmlFor="site-url-input">Store URL</label>
+      <div className="scan-pill-row">
+        <GlobeIcon />
         <input
+          id="site-url-input"
           required
           type="url"
-          placeholder="https://yourstore.com"
+          placeholder="Enter your store URL"
           value={siteUrl}
           onChange={(event) => setSiteUrl(event.target.value)}
         />
-      </label>
-      <button className="cta-primary" type="submit" disabled={loading}>
-        {loading ? "Scanning..." : "Get My AI Discovery Score"}
-      </button>
+        <button className="cta-primary" type="submit" disabled={loading}>
+          {loading ? "Scanning..." : "Get Score"}
+        </button>
+      </div>
+      <div className="hero-trust" aria-label="Trust signals">
+        <span>No credit card</span>
+        <span>Results in 60 seconds</span>
+        <span>51+ checks</span>
+      </div>
       <p className="form-hint">{formHint}</p>
       {error ? <p className="error-text">{error}</p> : null}
     </form>

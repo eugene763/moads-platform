@@ -1,18 +1,25 @@
-import Script from "next/script";
 import type {Metadata} from "next";
+import {Inter} from "next/font/google";
+import Script from "next/script";
 
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 const measurementId = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
   title: "MO Ads AEO Checker",
-  description: "AI discovery readiness checker with deterministic scoring.",
+  description: "AI discovery readiness checker with deterministic scoring and usage-based AEO credit packs.",
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body>
         {measurementId ? (
           <>

@@ -134,7 +134,11 @@ export function DashboardView() {
   }
 
   if (loading) {
-    return <div className="state-card">Loading dashboard...</div>;
+    return (
+      <div className="panel">
+        <div className="skeleton-pulse" />
+      </div>
+    );
   }
 
   if (!session) {
@@ -153,38 +157,83 @@ export function DashboardView() {
   return (
     <div className="dashboard-grid">
       <section className="panel">
-        <h2>Account</h2>
-        <p>Email: {session.user.email ?? "unknown"}</p>
-        <p>Account: {session.account.id}</p>
-        <p>Credits: <strong>{walletBalance ?? "--"}</strong></p>
-        <Link className="cta-primary" href="https://lab.moads.agency/center">
+        <div className="panel-header">
+          <h2>Account</h2>
+          <span className="badge badge-score">{walletBalance ?? "--"} credits</span>
+        </div>
+        <div className="summary-stack">
+          <p>Email: {session.user.email ?? "unknown"}</p>
+          <p>Account: {session.account.id}</p>
+          <p className="tiny">Credits are the only live paid action in this launch phase.</p>
+        </div>
+        <a className="cta-primary" href="https://lab.moads.agency/center" target="_blank" rel="noreferrer">
           Open Billing Center
-        </Link>
+        </a>
       </section>
 
       <section className="panel">
-        <h2>Connected Evidence</h2>
+        <div className="panel-header">
+          <h2>Connected Evidence</h2>
+          <span className="badge badge-score">Not in score</span>
+        </div>
+        <div className="stat-grid">
+          <div className="stat-panel tone-brand">
+            <span className="stat-label">Mentions</span>
+            <strong>{streamState?.mentionCount ?? "--"}</strong>
+          </div>
+          <div className="stat-panel tone-accent">
+            <span className="stat-label">Citations</span>
+            <strong>{streamState?.citationCount ?? "--"}</strong>
+          </div>
+          <div className="stat-panel tone-warning">
+            <span className="stat-label">GA Sessions</span>
+            <strong>{streamState?.gaSessions ?? "--"}</strong>
+          </div>
+          <div className="stat-panel tone-brand-soft">
+            <span className="stat-label">AI Sessions</span>
+            <strong>{streamState?.gaAiSessions ?? "--"}</strong>
+          </div>
+        </div>
         <p className="tiny">These widgets help tracking, but they do not change the AI Discovery Score.</p>
-        <p>Mentions: {streamState?.mentionCount ?? "--"}</p>
-        <p>Citations: {streamState?.citationCount ?? "--"}</p>
-        <p>GA Sessions: {streamState?.gaSessions ?? "--"}</p>
-        <p>AI-attributed Sessions: {streamState?.gaAiSessions ?? "--"}</p>
       </section>
 
       <section className="panel full">
-        <h2>Scan History</h2>
-        <ul className="list">
+        <div className="panel-header">
+          <h2>Scan History</h2>
+          <span className="badge badge-score">{scans.length} scans</span>
+        </div>
+        <ul className="list scan-list">
           {scans.map((scan) => (
             <li key={scan.scanId}>
-              <button type="button" className="scan-item" onClick={() => setSelectedScanId(scan.scanId)}>
-                <span>
-                  <strong>{scan.publicScore ?? "--"}</strong> • {scan.siteUrl}
+              <button
+                type="button"
+                className={`scan-item${selectedScan?.scanId === scan.scanId ? " active" : ""}`}
+                onClick={() => setSelectedScanId(scan.scanId)}
+              >
+                <span className="scan-item-title">
+                  <strong>{scan.publicScore ?? "--"}</strong>
+                  {" "}
+                  {scan.siteUrl}
                 </span>
                 <span className="tiny">{new Date(scan.createdAt).toLocaleString()}</span>
               </button>
             </li>
           ))}
         </ul>
+
+        {selectedScan ? (
+          <div className="surface-card selected-scan-card">
+            <p className="list-title">Selected scan</p>
+            <p className="tiny">
+              {selectedScan.siteUrl}
+              {" "}
+              ·
+              {" "}
+              {selectedScan.status}
+            </p>
+          </div>
+        ) : null}
+
         <button type="button" className="cta-primary" onClick={generateTips} disabled={!selectedScan}>
           Generate AI Tips for Selected Scan (1 Credit)
         </button>
