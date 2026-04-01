@@ -16,7 +16,7 @@ Goal: run implementation in autonomous blocks with minimal user interruption.
   - packs = credit bundles (`Pack S/M/L`)
 - Secrets and paid integrations remain server-side only.
 - Default connector mode: `mock`, unless live secrets are explicitly provided.
-- FastSpring launch phase is `Free + Packs only`; recurring subscriptions are deferred.
+- Creem launch phase is `Free + Packs only`; recurring subscriptions are deferred.
 
 ---
 
@@ -101,7 +101,7 @@ Align backend behavior with final free-first contract:
 - grant one-time AEO welcome credit idempotently on first AEO activation,
 - enforce plan vs pack semantic separation in API responses and UI-facing labels,
 - preserve waitlist flows for Starter, Pro, Store, and Deep Audit,
-- keep FastSpring limited to one-time AEO credit packs in this phase.
+- keep Creem limited to one-time AEO credit packs in this phase.
 Do not add new API families unless strictly required.
 ```
 
@@ -131,7 +131,7 @@ Do not add new API families unless strictly required.
 
 ### Prompt
 ```text
-Harden integration scaffolding for OpenAI, GA4, realtime evidence, and FastSpring pack billing.
+Harden integration scaffolding for OpenAI, GA4, realtime evidence, and Creem pack billing.
 Default to mock mode, keep live mode behind secrets and explicit flags.
 Implement queue-safe, resource-efficient behavior for paid actions and avoid blocking request paths.
 Ensure all key integration calls are server-side only.
@@ -139,7 +139,7 @@ Ensure all key integration calls are server-side only.
 
 ### Steps
 1. Verify mock/live switching and fallback behavior.
-2. Enforce secret-gated live connectors and FastSpring credentials.
+2. Enforce secret-gated live connectors and Creem credentials.
 3. Add timeout/retry/queue safety for AI tips generation path.
 4. Keep GA4/realtime in evidence layer only (not score layer).
 5. Add operational logging for cost and failure analysis.

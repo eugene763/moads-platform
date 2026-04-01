@@ -46,6 +46,7 @@ INSTANCE_CONNECTION_NAME="${INSTANCE_CONNECTION_NAME:-$PROJECT_ID:$REGION:$INSTA
 RUNTIME_SERVICE_ACCOUNT_EMAIL="${RUNTIME_SERVICE_ACCOUNT_EMAIL:-moads-api-prod-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"
 SESSION_COOKIE_SECRET_NAME="${SESSION_COOKIE_SECRET_NAME:-SESSION_COOKIE_SECRET_PROD}"
 DATABASE_URL_SECRET_NAME="${DATABASE_URL_SECRET_NAME:-MOADS_API_PROD_DATABASE_URL}"
+OPENAI_API_KEY_SECRET_NAME="${OPENAI_API_KEY_SECRET_NAME:-OPENAI_API_KEY}"
 
 if [[ -z "${PROJECT_ID}" ]]; then
   echo "FIREBASE_PROJECT_ID or PROJECT_ID is required." >&2
@@ -97,6 +98,32 @@ else
   echo "FastSpring secrets are not fully configured; checkout session creation will remain unavailable." >&2
 fi
 
+creem_secret_names=(
+  "CREEM_API_KEY"
+  "CREEM_WEBHOOK_SECRET"
+)
+creem_ready=true
+
+for secret_name in "${creem_secret_names[@]}"; do
+  if ! gcloud secrets describe "$secret_name" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    creem_ready=false
+    break
+  fi
+done
+
+if [[ "$creem_ready" == "true" ]]; then
+  secret_flags+=(
+    "CREEM_API_KEY=CREEM_API_KEY:latest"
+    "CREEM_WEBHOOK_SECRET=CREEM_WEBHOOK_SECRET:latest"
+  )
+else
+  echo "Creem secrets are not fully configured; Creem checkout/webhooks will remain unavailable." >&2
+fi
+
+if gcloud secrets describe "$OPENAI_API_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("OPENAI_API_KEY=${OPENAI_API_KEY_SECRET_NAME}:latest")
+fi
+
 if [[ "${ATTACH_FIREBASE_SERVICE_ACCOUNT_SECRET:-false}" == "true" ]] && \
   gcloud secrets describe FIREBASE_SERVICE_ACCOUNT --project "$PROJECT_ID" >/dev/null 2>&1; then
   secret_flags+=("FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT:latest")
@@ -124,7 +151,18 @@ env_pairs=(
   "MOTREND_PROVIDER_POLL_DELAY_MS=${MOTREND_PROVIDER_POLL_DELAY_MS:-2000}"
   "KLING_BASE_URL=${KLING_BASE_URL:-https://api-singapore.klingai.com}"
   "KLING_HTTP_TIMEOUT_MS=${KLING_HTTP_TIMEOUT_MS:-20000}"
+  "AEO_PUBLIC_SCAN_RATE_LIMIT_PER_HOUR=${AEO_PUBLIC_SCAN_RATE_LIMIT_PER_HOUR:-60}"
+  "AEO_PUBLIC_SCAN_CACHE_TTL_MS=${AEO_PUBLIC_SCAN_CACHE_TTL_MS:-86400000}"
+  "AEO_AI_TIPS_MODE=${AEO_AI_TIPS_MODE:-mock}"
+  "AEO_GA4_MODE=${AEO_GA4_MODE:-mock}"
+  "AEO_REALTIME_MODE=${AEO_REALTIME_MODE:-mock}"
+  "AEO_REALTIME_INTERVAL_MS=${AEO_REALTIME_INTERVAL_MS:-5000}"
+  "AEO_AI_TIPS_MODEL=${AEO_AI_TIPS_MODEL:-gpt-5-mini}"
 )
+
+if [[ -n "${CREEM_API_BASE_URL:-}" ]]; then
+  env_pairs+=("CREEM_API_BASE_URL=${CREEM_API_BASE_URL}")
+fi
 
 if [[ -n "${runtime_session_cookie_domain}" ]]; then
   env_pairs+=("SESSION_COOKIE_DOMAIN=${runtime_session_cookie_domain}")

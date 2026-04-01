@@ -62,6 +62,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
     },
   });
 
+  app.addContentTypeParser(/^application\/(.+\+)?json(;.*)?$/i, {parseAs: "string"}, (request, body, done) => {
+    const rawBody = typeof body === "string" ? body : body.toString("utf8");
+    request.rawBody = rawBody;
+
+    if (!rawBody || !rawBody.trim()) {
+      done(null, {});
+      return;
+    }
+
+    try {
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
   app.setErrorHandler((error, request, reply) => {
     sendError(error, request, reply);
   });

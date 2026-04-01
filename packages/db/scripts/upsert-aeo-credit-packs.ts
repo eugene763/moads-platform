@@ -1,6 +1,8 @@
 import {PrismaClient} from "@prisma/client";
 
 import {
+  BILLING_CHECKOUT_LINK_PROVIDER_CODE,
+  BILLING_CREEM_PROVIDER_CODE,
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
   BILLING_FASTSPRING_PROVIDER_CODE,
   buildCreditPackScopeRef,
@@ -12,7 +14,9 @@ interface CreditPackSeedInput {
   name: string;
   creditsAmount: number;
   amountMinor: number;
+  providerCode?: string;
   checkoutUrl?: string;
+  creemProductId?: string;
   fastspringProductPath?: string;
   currencyCode?: string;
   marketCode?: string;
@@ -26,7 +30,17 @@ function readPackInputs(): CreditPackSeedInput[] {
   if (!raw) {
     return DEFAULT_AEO_CREDIT_PACKS.map((pack) => ({
       ...pack,
-      checkoutUrl: pack.fastspringProductPath,
+      ...(pack.creemProductId ? {
+        providerCode: BILLING_CREEM_PROVIDER_CODE,
+        creemProductId: pack.creemProductId,
+      } : {}),
+      ...(pack.fastspringProductPath ? {
+        providerCode: BILLING_FASTSPRING_PROVIDER_CODE,
+        fastspringProductPath: pack.fastspringProductPath,
+      } : {}),
+      ...((pack.creemProductId || pack.fastspringProductPath) ? {
+        checkoutUrl: pack.creemProductId || pack.fastspringProductPath,
+      } : {}),
       currencyCode: "USD",
       marketCode: "global",
       languageCode: "en",
@@ -47,8 +61,14 @@ function readPackInputs(): CreditPackSeedInput[] {
     const name = typeof item.name === "string" ? item.name.trim() : "";
     const creditsAmount = Number((item as {creditsAmount?: unknown}).creditsAmount);
     const amountMinor = Number((item as {amountMinor?: unknown}).amountMinor);
+    const providerCode = typeof (item as {providerCode?: unknown}).providerCode === "string" ?
+      (item as {providerCode?: string}).providerCode?.trim().toLowerCase() :
+      "";
     const checkoutUrl = typeof (item as {checkoutUrl?: unknown}).checkoutUrl === "string" ?
       (item as {checkoutUrl?: string}).checkoutUrl?.trim() :
+      "";
+    const creemProductId = typeof (item as {creemProductId?: unknown}).creemProductId === "string" ?
+      (item as {creemProductId?: string}).creemProductId?.trim() :
       "";
     const fastspringProductPath = typeof (item as {fastspringProductPath?: unknown}).fastspringProductPath === "string" ?
       (item as {fastspringProductPath?: string}).fastspringProductPath?.trim() :
@@ -72,7 +92,9 @@ function readPackInputs(): CreditPackSeedInput[] {
       name,
       creditsAmount,
       amountMinor,
+      ...(providerCode ? {providerCode} : {}),
       ...((fastspringProductPath || checkoutUrl) ? {checkoutUrl: fastspringProductPath || checkoutUrl} : {}),
+      ...(creemProductId ? {creemProductId} : {}),
       ...(fastspringProductPath ? {fastspringProductPath} : {}),
       currencyCode,
       marketCode,
@@ -81,19 +103,81 @@ function readPackInputs(): CreditPackSeedInput[] {
   });
 }
 
-async function ensureFastSpringProvider() {
-  return await prisma.billingProvider.upsert({
-    where: {code: BILLING_FASTSPRING_PROVIDER_CODE},
-    update: {
+async function ensureProvider(providerCode: string) {
+  const definition = {
+    [BILLING_CHECKOUT_LINK_PROVIDER_CODE]: {
+      name: "Checkout Link",
+    },
+    [BILLING_FASTSPRING_PROVIDER_CODE]: {
       name: "FastSpring",
+    },
+    [BILLING_CREEM_PROVIDER_CODE]: {
+      name: "Creem",
+    },
+  } as const;
+
+  const provider = definition[providerCode as keyof typeof definition];
+  if (!provider) {
+    throw new Error(`Unsupported billing provider: ${providerCode}`);
+  }
+
+  return await prisma.billingProvider.upsert({
+    where: {code: providerCode},
+    update: {
+      name: provider.name,
       status: "active",
     },
     create: {
-      code: BILLING_FASTSPRING_PROVIDER_CODE,
-      name: "FastSpring",
+      code: providerCode,
+      name: provider.name,
       status: "active",
     },
   });
+}
+
+function resolveProviderConfig(pack: CreditPackSeedInput, index: number): {
+  providerCode: string;
+  externalPriceId: string;
+} {
+  const explicitProviderCode = typeof pack.providerCode === "string" ? pack.providerCode.trim().toLowerCase() : "";
+
+  const providerCode = explicitProviderCode ||
+    (pack.creemProductId ? BILLING_CREEM_PROVIDER_CODE : "") ||
+    (pack.fastspringProductPath ? BILLING_FASTSPRING_PROVIDER_CODE : "") ||
+    (pack.checkoutUrl ? BILLING_CHECKOUT_LINK_PROVIDER_CODE : "");
+
+  if (!providerCode) {
+    throw new Error(
+      `Credit pack at index ${index} is missing providerCode/checkout configuration. ` +
+      "Set providerCode plus creemProductId, fastspringProductPath, or checkoutUrl.",
+    );
+  }
+
+  if (providerCode === BILLING_CREEM_PROVIDER_CODE) {
+    const externalPriceId = pack.creemProductId?.trim() || pack.checkoutUrl?.trim() || "";
+    if (!externalPriceId) {
+      throw new Error(`Creem credit pack at index ${index} requires creemProductId.`);
+    }
+    return {providerCode, externalPriceId};
+  }
+
+  if (providerCode === BILLING_FASTSPRING_PROVIDER_CODE) {
+    const externalPriceId = pack.fastspringProductPath?.trim() || pack.checkoutUrl?.trim() || "";
+    if (!externalPriceId) {
+      throw new Error(`FastSpring credit pack at index ${index} requires fastspringProductPath.`);
+    }
+    return {providerCode, externalPriceId};
+  }
+
+  if (providerCode === BILLING_CHECKOUT_LINK_PROVIDER_CODE) {
+    const externalPriceId = pack.checkoutUrl?.trim() || "";
+    if (!externalPriceId) {
+      throw new Error(`Checkout-link credit pack at index ${index} requires checkoutUrl.`);
+    }
+    return {providerCode, externalPriceId};
+  }
+
+  throw new Error(`Unsupported providerCode at index ${index}: ${providerCode}`);
 }
 
 async function ensurePriceBook(input: Required<Pick<CreditPackSeedInput, "currencyCode" | "marketCode" | "languageCode">>) {
@@ -125,9 +209,14 @@ async function ensurePriceBook(input: Required<Pick<CreditPackSeedInput, "curren
 
 async function main(): Promise<void> {
   const packs = readPackInputs();
-  const provider = await ensureFastSpringProvider();
+  const providerIds = new Map<string, string>();
 
-  for (const pack of packs) {
+  for (const [index, pack] of packs.entries()) {
+    const providerConfig = resolveProviderConfig(pack, index);
+    const providerId = providerIds.get(providerConfig.providerCode) ??
+      (await ensureProvider(providerConfig.providerCode)).id;
+    providerIds.set(providerConfig.providerCode, providerId);
+
     const priceBook = await ensurePriceBook({
       currencyCode: pack.currencyCode ?? "USD",
       marketCode: pack.marketCode ?? "global",
@@ -167,10 +256,10 @@ async function main(): Promise<void> {
       await prisma.billingPrice.update({
         where: {id: existingPrice.id},
         data: {
-          providerId: provider.id,
+          providerId,
           amountMinor: pack.amountMinor,
           isActive: true,
-          ...("checkoutUrl" in pack ? {externalPriceId: pack.checkoutUrl ?? null} : {}),
+          externalPriceId: providerConfig.externalPriceId,
         },
       });
       continue;
@@ -179,11 +268,11 @@ async function main(): Promise<void> {
     await prisma.billingPrice.create({
       data: {
         billingProductId: billingProduct.id,
-        providerId: provider.id,
+        providerId,
         priceBookId: priceBook.id,
         amountMinor: pack.amountMinor,
         isActive: true,
-        ...("checkoutUrl" in pack ? {externalPriceId: pack.checkoutUrl ?? null} : {}),
+        externalPriceId: providerConfig.externalPriceId,
       },
     });
   }

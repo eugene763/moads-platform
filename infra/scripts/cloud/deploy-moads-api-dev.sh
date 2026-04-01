@@ -95,6 +95,28 @@ else
   echo "FastSpring secrets are not fully configured; checkout session creation will remain unavailable." >&2
 fi
 
+creem_secret_names=(
+  "CREEM_API_KEY"
+  "CREEM_WEBHOOK_SECRET"
+)
+creem_ready=true
+
+for secret_name in "${creem_secret_names[@]}"; do
+  if ! gcloud secrets describe "$secret_name" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    creem_ready=false
+    break
+  fi
+done
+
+if [[ "$creem_ready" == "true" ]]; then
+  secret_flags+=(
+    "CREEM_API_KEY=CREEM_API_KEY:latest"
+    "CREEM_WEBHOOK_SECRET=CREEM_WEBHOOK_SECRET:latest"
+  )
+else
+  echo "Creem secrets are not fully configured; Creem checkout/webhooks will remain unavailable." >&2
+fi
+
 if [[ "${ATTACH_FIREBASE_SERVICE_ACCOUNT_SECRET:-false}" == "true" ]] && \
   gcloud secrets describe FIREBASE_SERVICE_ACCOUNT --project "$PROJECT_ID" >/dev/null 2>&1; then
   secret_flags+=("FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT:latest")
@@ -123,6 +145,10 @@ env_pairs=(
   "KLING_BASE_URL=${KLING_BASE_URL:-https://api-singapore.klingai.com}"
   "KLING_HTTP_TIMEOUT_MS=${KLING_HTTP_TIMEOUT_MS:-20000}"
 )
+
+if [[ -n "${CREEM_API_BASE_URL:-}" ]]; then
+  env_pairs+=("CREEM_API_BASE_URL=${CREEM_API_BASE_URL}")
+fi
 
 if [[ -n "${runtime_session_cookie_domain}" ]]; then
   env_pairs+=("SESSION_COOKIE_DOMAIN=${runtime_session_cookie_domain}")

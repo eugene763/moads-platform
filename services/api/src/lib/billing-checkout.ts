@@ -1,4 +1,6 @@
 import {
+  BILLING_CREEM_PROVIDER_CODE,
+  BILLING_FASTSPRING_PROVIDER_CODE,
   BillingOrderStatus,
   PlatformError,
   Prisma,
@@ -6,6 +8,11 @@ import {
 } from "@moads/db";
 import {FastifyInstance} from "fastify";
 
+import {
+  createCreemCheckoutSession,
+  extractCreemProductId,
+  isCreemConfigured,
+} from "./creem.js";
 import {
   createFastSpringCheckoutSession,
   extractFastSpringProductPath,
@@ -84,7 +91,7 @@ export function normalizeCheckoutAttribution(value: unknown): Prisma.InputJsonVa
   return Object.keys(payload).length > 0 ? payload as Prisma.InputJsonValue : undefined;
 }
 
-function buildFastSpringTags(input: {
+function buildCheckoutTrackingFields(input: {
   orderId: string;
   accountId: string;
   productCode: string;
@@ -209,6 +216,7 @@ export async function createBillingCheckoutResponse(
     email?: string | null;
     countryCode?: string | null;
     languageCode?: string | null;
+    successUrl?: string | null;
     attribution: Prisma.InputJsonValue | undefined;
   },
 ) {
@@ -220,23 +228,53 @@ export async function createBillingCheckoutResponse(
   });
 
   try {
+    const providerCode = draft.providerCode?.trim().toLowerCase() ?? "";
+    const checkoutTrackingFields = buildCheckoutTrackingFields({
+      orderId: draft.orderId,
+      accountId: input.accountId,
+      productCode: input.productCode,
+      priceId: input.priceId,
+      userId: input.userId ?? null,
+      firebaseUid: input.firebaseUid ?? null,
+      email: input.email ?? null,
+      attribution: input.attribution,
+    });
+
+    const hasCreemProduct = extractCreemProductId(draft.externalPriceId) != null;
+    if (
+      (providerCode === BILLING_CREEM_PROVIDER_CODE || (!providerCode && hasCreemProduct)) &&
+      isCreemConfigured(app.config)
+    ) {
+      const session = await createCreemCheckoutSession(app.config, {
+        productReference: draft.externalPriceId ?? "",
+        requestId: draft.orderId,
+        customerEmail: input.email ?? null,
+        successUrl: input.successUrl ?? null,
+        metadata: checkoutTrackingFields,
+      });
+
+      return {
+        orderId: draft.orderId,
+        status: draft.status,
+        redirectUrl: session.redirectUrl,
+        billingProductCode: draft.billingProductCode,
+        creditsAmount: draft.creditsAmount,
+        amountMinor: draft.amountMinor,
+        currencyCode: draft.currencyCode,
+      };
+    }
+
     const hasFastSpringProduct = extractFastSpringProductPath(draft.externalPriceId) != null;
-    if (hasFastSpringProduct && isFastSpringConfigured(app.config)) {
+    if (
+      (providerCode === BILLING_FASTSPRING_PROVIDER_CODE || (!providerCode && hasFastSpringProduct)) &&
+      isFastSpringConfigured(app.config)
+    ) {
       const session = await createFastSpringCheckoutSession(app.config, {
         priceReference: draft.externalPriceId ?? "",
         customerEmail: input.email ?? null,
         countryCode: input.countryCode ?? null,
         languageCode: input.languageCode ?? null,
-        tags: buildFastSpringTags({
-          orderId: draft.orderId,
-          accountId: input.accountId,
-          productCode: input.productCode,
-          priceId: input.priceId,
-          userId: input.userId ?? null,
-          firebaseUid: input.firebaseUid ?? null,
-          email: input.email ?? null,
-          attribution: input.attribution,
-        }),
+        tags: checkoutTrackingFields,
       });
 
       return {
