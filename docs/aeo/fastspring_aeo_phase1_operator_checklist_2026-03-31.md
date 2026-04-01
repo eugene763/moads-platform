@@ -1,7 +1,5 @@
 # FastSpring AEO Phase 1 Operator Checklist
 
-> Historical note: this checklist is superseded by `docs/billing/aeo-creem-cutover.md` for the current AEO billing rollout. Keep it only as a legacy fallback reference.
-
 Date: 2026-03-31  
 Scope: `Free + Pack S / Pack M / Pack L` only  
 Subscriptions: deferred (`Starter / Pro / Store` are not live billing in this phase)

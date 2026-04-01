@@ -66,7 +66,7 @@ const pricingCards = [
       "Pack M · 80 credits",
       "Pack L · 200 credits",
       "1 credit = 1 AI tips run",
-      "Creem checkout via LAB",
+      "FastSpring checkout via LAB",
     ],
     href: "https://lab.moads.agency/center",
     cta: "Open Billing Center",

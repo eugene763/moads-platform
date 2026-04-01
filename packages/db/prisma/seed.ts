@@ -1,7 +1,6 @@
 import {PrismaClient} from "@prisma/client";
 
 import {
-  BILLING_CREEM_PROVIDER_CODE,
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
   buildCreditPackScopeRef,
 } from "../src/billing.js";
@@ -57,19 +56,6 @@ async function main(): Promise<void> {
     },
   });
 
-  const creemProvider = await prisma.billingProvider.upsert({
-    where: {code: BILLING_CREEM_PROVIDER_CODE},
-    update: {
-      name: "Creem",
-      status: "active",
-    },
-    create: {
-      code: BILLING_CREEM_PROVIDER_CODE,
-      name: "Creem",
-      status: "active",
-    },
-  });
-
   const existingDefaultPriceBook = await prisma.priceBook.findFirst({
     where: {
       marketCode: "global",
@@ -98,17 +84,13 @@ async function main(): Promise<void> {
     {
       productCode: "aeo",
       packs: DEFAULT_AEO_CREDIT_PACKS,
-      getProviderId: (pack: {creemProductId?: string; fastspringProductPath?: string}) => {
-        return pack.creemProductId ? creemProvider.id : fastSpringProvider.id;
-      },
-      getExternalPriceId: (pack: {code: string; creemProductId?: string; fastspringProductPath?: string}) =>
-        pack.creemProductId ?? pack.fastspringProductPath ?? pack.code,
+      providerId: fastSpringProvider.id,
+      getExternalPriceId: (pack: {code: string; fastspringProductPath?: string}) => pack.fastspringProductPath ?? pack.code,
     },
   ] as const;
 
   for (const group of creditPackGroups) {
     for (const pack of group.packs) {
-      const providerId = "getProviderId" in group ? group.getProviderId(pack) : group.providerId;
       const billingProduct = await prisma.billingProduct.upsert({
         where: {code: pack.code},
         update: {
@@ -131,7 +113,7 @@ async function main(): Promise<void> {
       const existingPrice = await prisma.billingPrice.findFirst({
         where: {
           billingProductId: billingProduct.id,
-          providerId,
+          providerId: group.providerId,
           priceBookId: defaultPriceBook.id,
         },
         orderBy: {
@@ -154,7 +136,7 @@ async function main(): Promise<void> {
       await prisma.billingPrice.create({
         data: {
           billingProductId: billingProduct.id,
-          providerId,
+          providerId: group.providerId,
           priceBookId: defaultPriceBook.id,
           externalPriceId: group.getExternalPriceId(pack),
           amountMinor: pack.amountMinor,

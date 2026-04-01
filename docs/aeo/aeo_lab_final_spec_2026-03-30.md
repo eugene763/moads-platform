@@ -39,9 +39,9 @@ Rules:
 - public scan is always free,
 - AI tips are always explicit user action and paid by credit.
 
-### 2.3 Creem launch phase
+### 2.3 FastSpring launch phase
 - current live billing mode: `Free + Packs only`,
-- `Pack S / M / L` are one-time Creem purchases,
+- `Pack S / M / L` are one-time FastSpring purchases,
 - `Starter / Pro / Store` are not purchasable in this launch phase,
 - recurring subscriptions are intentionally deferred.
 
@@ -141,16 +141,16 @@ Critical LAB routes in scope:
 - manual fulfill admin route.
 
 Billing provider:
-- Creem is the target active provider for AEO credit packs in this phase.
-- Canonical webhook endpoint: `POST /v1/billing/webhooks/creem`
+- FastSpring is the active provider for AEO credit packs in this phase.
+- Canonical webhook endpoint: `POST /v1/billing/webhooks/fastspring`
 
 ## 6) Security and data rules
 
 - secrets only server-side (Secret Manager / env, not frontend),
-- Creem credentials live only in:
-  - `CREEM_API_KEY`
-  - `CREEM_WEBHOOK_SECRET`
-  - `CREEM_API_BASE_URL` (optional override)
+- FastSpring credentials live only in:
+  - `FS_API_USERNAME`
+  - `FS_API_PASSWORD`
+  - `FS_STORE_HOST`
 - session cookie scoped to `.moads.agency`,
 - wallet ledger is source of truth,
 - frontend wallet values are display cache only,
@@ -186,13 +186,13 @@ MVP is acceptable when all are true:
 5. Lead CTA to `https://moads.agency/footer#form` exists on AEO and LAB key pages.
 6. Domains `aeo.moads.agency` and `lab.moads.agency` serve updated UI.
 7. API remains stable under `/v1` contract above.
-8. Creem packs can be wired without enabling Starter subscriptions.
+8. FastSpring packs can be wired without enabling Starter subscriptions.
 
 ## 9) Deferred scope (next iteration)
 
 - global public ranking board (opt-in),
 - deeper marketplace-specific parsing adapters,
-- recurring subscriptions for `Starter / Pro / Store`,
+- recurring FastSpring subscriptions for `Starter / Pro / Store`,
 - full isolated `moads-pro` infra rollout after secrets/access completion,
 - advanced monitored query intelligence as separate evidence modules.
 
@@ -200,6 +200,6 @@ MVP is acceptable when all are true:
 
 - `docs/aeo/aeo_final_ux_arch_backend_spec_2026-03-30.md`
 - `docs/aeo/aeo_codex_block_prompts_final_2026-03-30.md`
-- `docs/billing/aeo-creem-cutover.md`
+- `docs/aeo/fastspring_aeo_phase1_operator_checklist_2026-03-31.md`
 - `docs/status/aeo_lab_service_status_final_git_2026-03-30.md`
 - `docs/status/prod-rollout-status-2026-03-30.md`

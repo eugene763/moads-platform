@@ -44,7 +44,7 @@ Rules:
 ### 2.2 Launch model
 
 - Launch mode is `Free + Credits` (not strict-free).
-- Creem Phase 1 billing is `packs only`.
+- FastSpring Phase 1 billing is `packs only`.
 - Public deterministic scan is always free.
 - Auth unlock opens detailed report and paid AI tips action.
 - Share/print is in MVP.
@@ -206,7 +206,7 @@ Contracted behaviors:
 - `public scan` is free.
 - `generate-ai-tips` is explicit action and charges exactly `1 credit`.
 - plan and pack semantics never mixed in responses/copy.
-- Creem webhook endpoint remains `POST /v1/billing/webhooks/creem`.
+- FastSpring webhook endpoint remains `POST /v1/billing/webhooks/fastspring`.
 
 ## 7) Performance and platform constraints
 
@@ -219,6 +219,6 @@ Contracted behaviors:
 
 - Global opt-in public ranking board.
 - Full marketplace-specific deep parsers.
-- Recurring subscriptions for `Starter / Pro / Store`.
+- Recurring FastSpring subscriptions for `Starter / Pro / Store`.
 - Full dedicated `moads-pro` contour activation (after secrets/access completion).
 - Advanced monitored query intelligence in core product.

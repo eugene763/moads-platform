@@ -3,7 +3,6 @@ import {ApiConfig, MotrendProviderMode, RuntimeProfile, TaskDispatchMode} from "
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 const MIN_FIREBASE_SESSION_COOKIE_AGE_MS = 5 * 60 * 1000;
 const MAX_FIREBASE_SESSION_COOKIE_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-const CREEM_ALLOWED_API_HOSTS = new Set(["api.creem.io", "test-api.creem.io"]);
 const PROFILE_NODE_ENV: Record<RuntimeProfile, string> = {
   local: "development",
   "dev-cloud": "production",
@@ -37,33 +36,6 @@ function parseRuntimeProfile(value: string | undefined): RuntimeProfile {
 function pickTrimmed(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function parseCreemApiBaseUrl(
-  value: string | undefined,
-  runtimeProfile: RuntimeProfile,
-): string {
-  const fallback = runtimeProfile === "prod" ?
-    "https://api.creem.io" :
-    "https://test-api.creem.io";
-  const candidate = pickTrimmed(value) ?? fallback;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    throw new Error("CREEM_API_BASE_URL must be a valid absolute URL.");
-  }
-
-  if (parsed.protocol !== "https:") {
-    throw new Error("CREEM_API_BASE_URL must use https.");
-  }
-
-  if (!CREEM_ALLOWED_API_HOSTS.has(parsed.hostname.toLowerCase())) {
-    throw new Error("CREEM_API_BASE_URL must point to api.creem.io or test-api.creem.io.");
-  }
-
-  return parsed.origin;
 }
 
 function parseMotrendProviderMode(value: string | undefined): MotrendProviderMode {
@@ -180,9 +152,6 @@ export function loadConfig(env = process.env): ApiConfig {
   const fsApiUsername = pickTrimmed(env.FS_API_USERNAME);
   const fsApiPassword = pickTrimmed(env.FS_API_PASSWORD);
   const fsStoreHost = pickTrimmed(env.FS_STORE_HOST);
-  const creemApiKey = pickTrimmed(env.CREEM_API_KEY);
-  const creemWebhookSecret = pickTrimmed(env.CREEM_WEBHOOK_SECRET);
-  const creemApiBaseUrl = parseCreemApiBaseUrl(env.CREEM_API_BASE_URL, runtimeProfile);
   const motrendProviderMode = parseMotrendProviderMode(env.MOTREND_PROVIDER_MODE);
   const motrendStubOutputUrl = pickTrimmed(env.MOTREND_STUB_OUTPUT_URL);
   const klingAccessKey = pickTrimmed(env.KLING_ACCESS_KEY);
@@ -340,9 +309,6 @@ export function loadConfig(env = process.env): ApiConfig {
     ...(fsApiUsername ? {fsApiUsername} : {}),
     ...(fsApiPassword ? {fsApiPassword} : {}),
     ...(fsStoreHost ? {fsStoreHost} : {}),
-    ...(creemApiKey ? {creemApiKey} : {}),
-    ...(creemWebhookSecret ? {creemWebhookSecret} : {}),
-    creemApiBaseUrl,
     motrendProviderMode,
     motrendProviderPollDelayMs: parseNumber(env.MOTREND_PROVIDER_POLL_DELAY_MS, 2_000),
     ...(motrendStubOutputUrl ? {motrendStubOutputUrl} : {}),

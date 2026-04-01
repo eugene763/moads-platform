@@ -78,7 +78,6 @@ describe("getFirebaseContext", () => {
       cloudTasksMotrendPollQueue: "motrend-poll",
       cloudTasksMotrendDownloadQueue: "motrend-download",
       cloudTasksInvokerServiceAccountEmail: "demo-compute@developer.gserviceaccount.com",
-      creemApiBaseUrl: "https://test-api.creem.io",
       motrendProviderMode: "manual",
       motrendProviderPollDelayMs: 2000,
       klingBaseUrl: "https://api-singapore.klingai.com",

@@ -3,7 +3,6 @@ export interface MotrendCreditPackDefinition {
   name: string;
   creditsAmount: number;
   amountMinor: number;
-  creemProductId?: string;
   fastspringProductPath?: string;
 }
 

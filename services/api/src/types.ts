@@ -39,9 +39,6 @@ export interface ApiConfig {
   fsApiUsername?: string | undefined;
   fsApiPassword?: string | undefined;
   fsStoreHost?: string | undefined;
-  creemApiKey?: string | undefined;
-  creemWebhookSecret?: string | undefined;
-  creemApiBaseUrl: string;
   motrendProviderMode: MotrendProviderMode;
   motrendProviderPollDelayMs: number;
   motrendStubOutputUrl?: string | undefined;
@@ -95,7 +92,6 @@ declare module "fastify" {
     authContext?: RequestAuthContext;
     accountContext?: RequestAccountContext;
     productContext?: RequestProductContext;
-    rawBody?: string;
   }
 }
 

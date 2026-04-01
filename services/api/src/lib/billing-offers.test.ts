@@ -8,9 +8,6 @@ describe("maskUnavailableCheckoutOffers", () => {
       fsApiUsername: undefined,
       fsApiPassword: undefined,
       fsStoreHost: undefined,
-      creemApiKey: undefined,
-      creemWebhookSecret: undefined,
-      creemApiBaseUrl: "https://test-api.creem.io",
     }, [
       {
         billingProductId: "prod_1",
@@ -57,9 +54,6 @@ describe("maskUnavailableCheckoutOffers", () => {
       fsApiUsername: "user",
       fsApiPassword: "pass",
       fsStoreHost: "moads.onfastspring.com",
-      creemApiKey: undefined,
-      creemWebhookSecret: undefined,
-      creemApiBaseUrl: "https://test-api.creem.io",
     }, [
       {
         billingProductId: "prod_1",
@@ -78,66 +72,6 @@ describe("maskUnavailableCheckoutOffers", () => {
 
     expect(masked[0]).toEqual(expect.objectContaining({
       billingProductCode: "motrend_credits_pro",
-      checkoutConfigured: true,
-    }));
-  });
-
-  it("disables Creem packs when runtime config is incomplete", () => {
-    const masked = maskUnavailableCheckoutOffers({
-      fsApiUsername: undefined,
-      fsApiPassword: undefined,
-      fsStoreHost: undefined,
-      creemApiKey: "creem_test_key",
-      creemWebhookSecret: undefined,
-      creemApiBaseUrl: "https://test-api.creem.io",
-    }, [
-      {
-        billingProductId: "prod_1",
-        billingProductCode: "motrend_credits_creator",
-        priceId: "price_1",
-        name: "Creator",
-        creditsAmount: 80,
-        amountMinor: 999,
-        currencyCode: "USD",
-        marketCode: "global",
-        languageCode: "en",
-        checkoutConfigured: true,
-        providerCode: "creem",
-      },
-    ]);
-
-    expect(masked[0]).toEqual(expect.objectContaining({
-      billingProductCode: "motrend_credits_creator",
-      checkoutConfigured: false,
-    }));
-  });
-
-  it("keeps Creem packs available when runtime config is complete", () => {
-    const masked = maskUnavailableCheckoutOffers({
-      fsApiUsername: undefined,
-      fsApiPassword: undefined,
-      fsStoreHost: undefined,
-      creemApiKey: "creem_live_key",
-      creemWebhookSecret: "whsec_test",
-      creemApiBaseUrl: "https://api.creem.io",
-    }, [
-      {
-        billingProductId: "prod_1",
-        billingProductCode: "motrend_credits_starter",
-        priceId: "price_1",
-        name: "Starter",
-        creditsAmount: 30,
-        amountMinor: 499,
-        currencyCode: "USD",
-        marketCode: "global",
-        languageCode: "en",
-        checkoutConfigured: true,
-        providerCode: "creem",
-      },
-    ]);
-
-    expect(masked[0]).toEqual(expect.objectContaining({
-      billingProductCode: "motrend_credits_starter",
       checkoutConfigured: true,
     }));
   });
