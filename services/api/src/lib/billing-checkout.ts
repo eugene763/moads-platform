@@ -7,11 +7,6 @@ import {
 } from "@moads/db";
 import {FastifyInstance} from "fastify";
 
-import {
-  createFastSpringCheckoutSession,
-  extractFastSpringProductPath,
-  isFastSpringConfigured,
-} from "./fastspring.js";
 import {createDodoCheckoutSession, isDodoCheckoutConfigured} from "./dodo.js";
 
 const ATTRIBUTION_MAX_LENGTH = 512;
@@ -246,42 +241,12 @@ export async function createBillingCheckoutResponse(
   });
 
   try {
-    const hasFastSpringProduct = extractFastSpringProductPath(draft.externalPriceId) != null;
     if (draft.providerCode === BILLING_DODO_PROVIDER_CODE && isDodoCheckoutConfigured(app.config)) {
       const session = await createDodoCheckoutSession(app.config, {
         productId: draft.externalPriceId ?? "",
         customerEmail: input.email ?? null,
         returnUrl: resolveCheckoutReturnUrl(input.attribution),
         metadata: buildCheckoutMetadata({
-          orderId: draft.orderId,
-          accountId: input.accountId,
-          productCode: input.productCode,
-          priceId: input.priceId,
-          userId: input.userId ?? null,
-          firebaseUid: input.firebaseUid ?? null,
-          email: input.email ?? null,
-          attribution: input.attribution,
-        }),
-      });
-
-      return {
-        orderId: draft.orderId,
-        status: draft.status,
-        redirectUrl: session.redirectUrl,
-        billingProductCode: draft.billingProductCode,
-        creditsAmount: draft.creditsAmount,
-        amountMinor: draft.amountMinor,
-        currencyCode: draft.currencyCode,
-      };
-    }
-
-    if (hasFastSpringProduct && isFastSpringConfigured(app.config)) {
-      const session = await createFastSpringCheckoutSession(app.config, {
-        priceReference: draft.externalPriceId ?? "",
-        customerEmail: input.email ?? null,
-        countryCode: input.countryCode ?? null,
-        languageCode: input.languageCode ?? null,
-        tags: buildCheckoutMetadata({
           orderId: draft.orderId,
           accountId: input.accountId,
           productCode: input.productCode,

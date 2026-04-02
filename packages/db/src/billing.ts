@@ -19,7 +19,6 @@ type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
 export const BILLING_CREDIT_PACK_PRODUCT_TYPE = "credit_pack";
 export const BILLING_CHECKOUT_LINK_PROVIDER_CODE = "checkout_link";
 export const BILLING_DODO_PROVIDER_CODE = "dodo";
-export const BILLING_FASTSPRING_PROVIDER_CODE = "fastspring";
 
 export interface CreditPackScope {
   productCode: string;
@@ -545,12 +544,12 @@ export async function fulfillBillingOrderFromProvider(
     const provider = await tx.billingProvider.upsert({
       where: {code: input.providerCode},
       update: {
-        name: input.providerName?.trim() || "FastSpring",
+        name: input.providerName?.trim() || input.providerCode,
         status: "active",
       },
       create: {
         code: input.providerCode,
-        name: input.providerName?.trim() || "FastSpring",
+        name: input.providerName?.trim() || input.providerCode,
         status: "active",
       },
     });

@@ -4,7 +4,6 @@ export interface MotrendCreditPackDefinition {
   creditsAmount: number;
   amountMinor: number;
   dodoProductId?: string;
-  fastspringProductPath?: string;
 }
 
 export const DEFAULT_MOTREND_CREDIT_PACKS: MotrendCreditPackDefinition[] = [

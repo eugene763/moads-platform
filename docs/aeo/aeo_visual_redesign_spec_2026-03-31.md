@@ -1059,7 +1059,7 @@ Center view (`center-view.tsx`): add same panel header style + badge variants + 
 | M3 | Verify Coolvetica font file is accessible in Cloud Run container (confirm `font-display: swap` works without FOUT in prod) | Infra check |
 | M4 | Set `NEXT_PUBLIC_GA4_MEASUREMENT_ID` env var in Cloud Run for both services if not already set | Firebase / Cloud Run console |
 | M5 | After deploy, verify floating logo position does not overlap form input on Safari iOS | Browser QA |
-| M6 | Set `Lab` pricing CTA links (`https://lab.moads.agency`) to point to Stripe / FastSpring checkout priceId once Starter checkout is live | `apps/aeo-web/app/page.tsx` |
+| M6 | Set `Lab` pricing CTA links (`https://lab.moads.agency`) to point to Dodo checkout once Starter checkout is live | `apps/aeo-web/app/page.tsx` |
 
 ---
 

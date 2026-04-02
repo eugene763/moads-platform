@@ -3,7 +3,6 @@ import {PrismaClient} from "@prisma/client";
 import {
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
   BILLING_DODO_PROVIDER_CODE,
-  BILLING_FASTSPRING_PROVIDER_CODE,
   buildCreditPackScopeRef,
 } from "../src/billing.js";
 import {DEFAULT_AEO_CREDIT_PACKS} from "../src/aeo-billing.js";
@@ -16,7 +15,6 @@ interface CreditPackSeedInput {
   providerCode?: string;
   checkoutUrl?: string;
   dodoProductId?: string;
-  fastspringProductPath?: string;
   currencyCode?: string;
   marketCode?: string;
   languageCode?: string;
@@ -29,8 +27,8 @@ function readPackInputs(): CreditPackSeedInput[] {
   if (!raw) {
     return DEFAULT_AEO_CREDIT_PACKS.map((pack) => ({
       ...pack,
-      providerCode: pack.dodoProductId ? BILLING_DODO_PROVIDER_CODE : BILLING_FASTSPRING_PROVIDER_CODE,
-      checkoutUrl: pack.dodoProductId ?? pack.fastspringProductPath,
+      providerCode: BILLING_DODO_PROVIDER_CODE,
+      checkoutUrl: pack.dodoProductId ?? "",
       currencyCode: "USD",
       marketCode: "global",
       languageCode: "en",
@@ -60,9 +58,6 @@ function readPackInputs(): CreditPackSeedInput[] {
     const dodoProductId = typeof (item as {dodoProductId?: unknown}).dodoProductId === "string" ?
       (item as {dodoProductId?: string}).dodoProductId?.trim() :
       "";
-    const fastspringProductPath = typeof (item as {fastspringProductPath?: unknown}).fastspringProductPath === "string" ?
-      (item as {fastspringProductPath?: string}).fastspringProductPath?.trim() :
-      "";
     const currencyCode = typeof (item as {currencyCode?: unknown}).currencyCode === "string" ?
       (item as {currencyCode?: string}).currencyCode?.trim().toUpperCase() :
       "USD";
@@ -83,9 +78,8 @@ function readPackInputs(): CreditPackSeedInput[] {
       creditsAmount,
       amountMinor,
       ...(providerCode ? {providerCode} : {}),
-      ...((dodoProductId || fastspringProductPath || checkoutUrl) ? {checkoutUrl: dodoProductId || fastspringProductPath || checkoutUrl} : {}),
+      ...((dodoProductId || checkoutUrl) ? {checkoutUrl: dodoProductId || checkoutUrl} : {}),
       ...(dodoProductId ? {dodoProductId} : {}),
-      ...(fastspringProductPath ? {fastspringProductPath} : {}),
       currencyCode,
       marketCode,
       languageCode,
@@ -102,7 +96,7 @@ function resolveProviderCode(input: CreditPackSeedInput): string {
     return BILLING_DODO_PROVIDER_CODE;
   }
 
-  return BILLING_FASTSPRING_PROVIDER_CODE;
+  return "checkout_link";
 }
 
 function providerNameFromCode(providerCode: string): string {
@@ -110,8 +104,8 @@ function providerNameFromCode(providerCode: string): string {
     return "Dodo Payments";
   }
 
-  if (providerCode === BILLING_FASTSPRING_PROVIDER_CODE) {
-    return "FastSpring";
+  if (providerCode === "checkout_link") {
+    return "Checkout Link";
   }
 
   return providerCode;

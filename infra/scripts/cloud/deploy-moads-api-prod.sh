@@ -74,30 +74,6 @@ secret_flags=(
   "KLING_SECRET_KEY=KLING_SECRET_KEY:latest"
 )
 
-fastspring_secret_names=(
-  "FS_API_USERNAME"
-  "FS_API_PASSWORD"
-  "FS_STORE_HOST"
-)
-fastspring_ready=true
-
-for secret_name in "${fastspring_secret_names[@]}"; do
-  if ! gcloud secrets describe "$secret_name" --project "$PROJECT_ID" >/dev/null 2>&1; then
-    fastspring_ready=false
-    break
-  fi
-done
-
-if [[ "$fastspring_ready" == "true" ]]; then
-  secret_flags+=(
-    "FS_API_USERNAME=FS_API_USERNAME:latest"
-    "FS_API_PASSWORD=FS_API_PASSWORD:latest"
-    "FS_STORE_HOST=FS_STORE_HOST:latest"
-  )
-else
-  echo "FastSpring secrets are not fully configured; checkout session creation will remain unavailable." >&2
-fi
-
 if gcloud secrets describe "DODO_API_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
   secret_flags+=("DODO_API_KEY=DODO_API_KEY:latest")
 else

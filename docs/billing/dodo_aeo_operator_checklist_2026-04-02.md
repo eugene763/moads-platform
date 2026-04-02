@@ -150,7 +150,7 @@ DODO_ENVIRONMENT=live_mode pnpm cloud-run:deploy:prod
 Notes:
 - the deploy scripts now automatically attach `DODO_API_KEY` and `DODO_WEBHOOK_KEY` when the secrets exist,
 - Dodo checkout is enabled by provider mapping in the billing price rows,
-- FastSpring remains as a fallback for any prices that still use the `fastspring` provider code.
+- Dodo is the only active payment provider for AEO credit packs in this phase.
 
 ## 6. Smoke test after deploy
 Recommended order:

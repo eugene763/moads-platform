@@ -44,19 +44,6 @@ async function main(): Promise<void> {
     },
   });
 
-  const fastSpringProvider = await prisma.billingProvider.upsert({
-    where: {code: "fastspring"},
-    update: {
-      name: "FastSpring",
-      status: "active",
-    },
-    create: {
-      code: "fastspring",
-      name: "FastSpring",
-      status: "active",
-    },
-  });
-
   const dodoProvider = await prisma.billingProvider.upsert({
     where: {code: BILLING_DODO_PROVIDER_CODE},
     update: {
@@ -98,8 +85,8 @@ async function main(): Promise<void> {
     {
       productCode: "aeo",
       packs: DEFAULT_AEO_CREDIT_PACKS,
-      getProviderId: (pack: {code: string; dodoProductId?: string; fastspringProductPath?: string}) => pack.dodoProductId ? dodoProvider.id : fastSpringProvider.id,
-      getExternalPriceId: (pack: {code: string; dodoProductId?: string; fastspringProductPath?: string}) => pack.dodoProductId ?? pack.fastspringProductPath ?? pack.code,
+      getProviderId: (_pack: {code: string; dodoProductId?: string}) => dodoProvider.id,
+      getExternalPriceId: (pack: {code: string; dodoProductId?: string}) => pack.dodoProductId ?? null,
     },
   ] as const;
 

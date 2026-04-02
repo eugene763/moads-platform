@@ -161,9 +161,6 @@ export function loadConfig(env = process.env): ApiConfig {
   const cloudTasksMotrendPollQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_POLL_QUEUE);
   const cloudTasksMotrendDownloadQueue = pickTrimmed(env.CLOUD_TASKS_MOTREND_DOWNLOAD_QUEUE);
   const cloudTasksInvokerServiceAccountEmail = pickTrimmed(env.CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT_EMAIL);
-  const fsApiUsername = pickTrimmed(env.FS_API_USERNAME);
-  const fsApiPassword = pickTrimmed(env.FS_API_PASSWORD);
-  const fsStoreHost = pickTrimmed(env.FS_STORE_HOST);
   const dodoApiKey = pickTrimmed(env.DODO_API_KEY) ?? pickTrimmed(env.DODO_PAYMENTS_API_KEY);
   const dodoWebhookKey =
     pickTrimmed(env.DODO_WEBHOOK_KEY) ??
@@ -328,9 +325,6 @@ export function loadConfig(env = process.env): ApiConfig {
     ...(cloudTasksMotrendPollQueue ? {cloudTasksMotrendPollQueue} : {}),
     ...(cloudTasksMotrendDownloadQueue ? {cloudTasksMotrendDownloadQueue} : {}),
     ...(cloudTasksInvokerServiceAccountEmail ? {cloudTasksInvokerServiceAccountEmail} : {}),
-    ...(fsApiUsername ? {fsApiUsername} : {}),
-    ...(fsApiPassword ? {fsApiPassword} : {}),
-    ...(fsStoreHost ? {fsStoreHost} : {}),
     ...(dodoApiKey ? {dodoApiKey} : {}),
     ...(dodoWebhookKey ? {dodoWebhookKey} : {}),
     dodoEnvironment,
