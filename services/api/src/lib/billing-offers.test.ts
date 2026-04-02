@@ -8,6 +8,7 @@ describe("maskUnavailableCheckoutOffers", () => {
       fsApiUsername: undefined,
       fsApiPassword: undefined,
       fsStoreHost: undefined,
+      dodoApiKey: undefined,
     }, [
       {
         billingProductId: "prod_1",
@@ -54,6 +55,7 @@ describe("maskUnavailableCheckoutOffers", () => {
       fsApiUsername: "user",
       fsApiPassword: "pass",
       fsStoreHost: "moads.onfastspring.com",
+      dodoApiKey: undefined,
     }, [
       {
         billingProductId: "prod_1",
@@ -72,6 +74,62 @@ describe("maskUnavailableCheckoutOffers", () => {
 
     expect(masked[0]).toEqual(expect.objectContaining({
       billingProductCode: "motrend_credits_pro",
+      checkoutConfigured: true,
+    }));
+  });
+
+  it("disables Dodo packs when runtime config is incomplete", () => {
+    const masked = maskUnavailableCheckoutOffers({
+      fsApiUsername: undefined,
+      fsApiPassword: undefined,
+      fsStoreHost: undefined,
+      dodoApiKey: undefined,
+    }, [
+      {
+        billingProductId: "prod_3",
+        billingProductCode: "aeo_pack_s",
+        priceId: "price_3",
+        name: "Pack S",
+        creditsAmount: 30,
+        amountMinor: 499,
+        currencyCode: "USD",
+        marketCode: "global",
+        languageCode: "en",
+        checkoutConfigured: true,
+        providerCode: "dodo",
+      },
+    ]);
+
+    expect(masked[0]).toEqual(expect.objectContaining({
+      billingProductCode: "aeo_pack_s",
+      checkoutConfigured: false,
+    }));
+  });
+
+  it("keeps Dodo packs available when runtime config is complete", () => {
+    const masked = maskUnavailableCheckoutOffers({
+      fsApiUsername: undefined,
+      fsApiPassword: undefined,
+      fsStoreHost: undefined,
+      dodoApiKey: "dodo_live_key",
+    }, [
+      {
+        billingProductId: "prod_4",
+        billingProductCode: "aeo_pack_m",
+        priceId: "price_4",
+        name: "Pack M",
+        creditsAmount: 80,
+        amountMinor: 999,
+        currencyCode: "USD",
+        marketCode: "global",
+        languageCode: "en",
+        checkoutConfigured: true,
+        providerCode: "dodo",
+      },
+    ]);
+
+    expect(masked[0]).toEqual(expect.objectContaining({
+      billingProductCode: "aeo_pack_m",
       checkoutConfigured: true,
     }));
   });

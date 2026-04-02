@@ -3,6 +3,7 @@ export interface MotrendCreditPackDefinition {
   name: string;
   creditsAmount: number;
   amountMinor: number;
+  dodoProductId?: string;
   fastspringProductPath?: string;
 }
 
@@ -12,20 +13,20 @@ export const DEFAULT_MOTREND_CREDIT_PACKS: MotrendCreditPackDefinition[] = [
     name: "Starter",
     creditsAmount: 30,
     amountMinor: 499,
-    fastspringProductPath: "motrend-credits-30",
+    dodoProductId: "pdt_0Nbn3AengyfOHAGPiGibQ",
   },
   {
     code: "motrend_credits_creator",
     name: "Creator",
     creditsAmount: 80,
     amountMinor: 999,
-    fastspringProductPath: "motrend-credits-80",
+    dodoProductId: "pdt_0Nbn3kZhICn5HGrxLBvSx",
   },
   {
     code: "motrend_credits_pro",
     name: "Pro",
     creditsAmount: 200,
     amountMinor: 1999,
-    fastspringProductPath: "motrend-credits-200",
+    dodoProductId: "pdt_0Nbn40LuSVJ47oKbWRsSd",
   },
 ];

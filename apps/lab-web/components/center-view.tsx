@@ -210,7 +210,7 @@ export function CenterView() {
         ) : (
           <div className="surface-card">
             <p className="list-title">No orders yet</p>
-            <p className="tiny">Buy a pack to see FastSpring-backed order history here.</p>
+            <p className="tiny">Buy a pack to see provider-backed order history here.</p>
           </div>
         )}
       </section>

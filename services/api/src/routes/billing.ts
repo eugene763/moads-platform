@@ -1,6 +1,7 @@
 import {FastifyInstance} from "fastify";
 
 import {
+  BILLING_DODO_PROVIDER_CODE,
   BILLING_FASTSPRING_PROVIDER_CODE,
   fulfillBillingOrderFromProvider,
   listBillingCreditPackOffers,
@@ -11,6 +12,12 @@ import {
 
 import {createBillingCheckoutResponse, normalizeCheckoutAttribution} from "../lib/billing-checkout.js";
 import {maskUnavailableCheckoutOffers} from "../lib/billing-offers.js";
+import {
+  isDodoWebhookConfigured,
+  readDodoBillingOrderId,
+  readDodoPaymentSucceededSnapshot,
+  unwrapDodoWebhook,
+} from "../lib/dodo.js";
 import {
   extractFastSpringProductPath,
   extractFastSpringWebhookOrderIds,
@@ -29,25 +36,27 @@ interface CheckoutBody {
 async function upsertWebhookEvent(
   app: FastifyInstance,
   input: {
+    providerCode: string;
+    providerName: string;
     externalEventId: string;
     eventType: string;
     payloadJson: unknown;
   },
 ) {
   const provider = await app.prisma.billingProvider.upsert({
-    where: {code: BILLING_FASTSPRING_PROVIDER_CODE},
+    where: {code: input.providerCode},
     update: {
-      name: "FastSpring",
+      name: input.providerName,
       status: "active",
     },
     create: {
-      code: BILLING_FASTSPRING_PROVIDER_CODE,
-      name: "FastSpring",
+      code: input.providerCode,
+      name: input.providerName,
       status: "active",
     },
   });
 
-  const idempotencyKey = `${BILLING_FASTSPRING_PROVIDER_CODE}:${input.eventType}:${input.externalEventId}`;
+  const idempotencyKey = `${input.providerCode}:${input.eventType}:${input.externalEventId}`;
   const existing = await app.prisma.billingWebhookEvent.findUnique({
     where: {idempotencyKey},
   });
@@ -171,6 +180,8 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
         order: externalOrder.raw,
       };
       const receipt = await upsertWebhookEvent(app, {
+        providerCode: BILLING_FASTSPRING_PROVIDER_CODE,
+        providerName: "FastSpring",
         externalEventId: externalOrder.externalOrderId,
         eventType,
         payloadJson: eventEnvelope as Prisma.InputJsonValue,
@@ -296,5 +307,151 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
       received: true,
       processed: results,
     });
+  });
+
+  app.post("/billing/webhooks/dodo", async (request, reply) => {
+    if (!isDodoWebhookConfigured(app.config)) {
+      throw new PlatformError(503, "billing_provider_unavailable", "Dodo webhook processing is not configured.");
+    }
+
+    const rawBody = request.rawBody ?? "";
+    const verifiedPayload = unwrapDodoWebhook(app.config, {
+      rawBody,
+      headers: request.headers as Record<string, unknown>,
+    });
+    const snapshot = readDodoPaymentSucceededSnapshot(verifiedPayload, request.headers as Record<string, unknown>);
+
+    if (!snapshot) {
+      reply.status(202).send({
+        received: true,
+        processed: [],
+        ignored: true,
+      });
+      return;
+    }
+
+    const receipt = await upsertWebhookEvent(app, {
+      providerCode: BILLING_DODO_PROVIDER_CODE,
+      providerName: "Dodo Payments",
+      externalEventId: snapshot.eventId,
+      eventType: snapshot.eventType,
+      payloadJson: verifiedPayload as Prisma.InputJsonValue,
+    });
+
+    if (receipt.alreadyProcessed) {
+      reply.send({
+        received: true,
+        processed: [
+          {
+            externalOrderId: snapshot.externalOrderId,
+            status: "duplicate",
+          },
+        ],
+      });
+      return;
+    }
+
+    const localOrderId = readDodoBillingOrderId(snapshot.metadata);
+    if (!localOrderId) {
+      await app.prisma.billingWebhookEvent.update({
+        where: {id: receipt.record.id},
+        data: {
+          processingStatus: "failed",
+        },
+      });
+      request.log.error({
+        externalOrderId: snapshot.externalOrderId,
+        metadata: snapshot.metadata,
+      }, "dodo webhook missing local billing order metadata");
+      reply.send({
+        received: true,
+        processed: [
+          {
+            externalOrderId: snapshot.externalOrderId,
+            status: "missing_local_order",
+          },
+        ],
+      });
+      return;
+    }
+
+    const localOrder = await app.prisma.billingOrder.findUnique({
+      where: {id: localOrderId},
+      include: {
+        price: true,
+      },
+    });
+    if (!localOrder) {
+      await app.prisma.billingWebhookEvent.update({
+        where: {id: receipt.record.id},
+        data: {
+          processingStatus: "failed",
+        },
+      });
+      throw new PlatformError(404, "billing_order_not_found", "Billing order was not found.");
+    }
+
+    const expectedProductId = localOrder.price?.externalPriceId?.trim() || null;
+    if (expectedProductId && !snapshot.productIds.includes(expectedProductId)) {
+      await app.prisma.billingWebhookEvent.update({
+        where: {id: receipt.record.id},
+        data: {
+          processingStatus: "failed",
+        },
+      });
+      throw new PlatformError(
+        409,
+        "billing_order_product_mismatch",
+        "Webhook payment does not match the local billing product.",
+      );
+    }
+
+    try {
+      const fulfilled = await fulfillBillingOrderFromProvider(app.prisma, {
+        orderId: localOrderId,
+        externalOrderId: snapshot.externalOrderId,
+        providerCode: BILLING_DODO_PROVIDER_CODE,
+        providerName: "Dodo Payments",
+        fulfilledAt: new Date(snapshot.timestamp ?? Date.now()),
+        eventType: snapshot.eventType,
+        metadata: {
+          businessId: snapshot.businessId,
+          checkoutSessionId: snapshot.checkoutSessionId,
+          currencyCode: snapshot.currencyCode,
+          customerEmail: snapshot.customerEmail,
+          productIds: snapshot.productIds,
+          totalAmountMinor: snapshot.totalAmountMinor,
+          metadata: snapshot.metadata,
+          status: snapshot.status,
+        },
+      });
+
+      await app.prisma.billingWebhookEvent.update({
+        where: {id: receipt.record.id},
+        data: {
+          processedAt: new Date(),
+          processingStatus: "processed",
+        },
+      });
+
+      reply.send({
+        received: true,
+        processed: [
+          {
+            externalOrderId: snapshot.externalOrderId,
+            orderId: fulfilled.orderId,
+            status: "processed",
+          },
+        ],
+      });
+    } catch (error) {
+      await app.prisma.billingWebhookEvent.update({
+        where: {id: receipt.record.id},
+        data: {
+          processingStatus: "failed",
+        },
+      });
+      throw error;
+    }
   });
 }

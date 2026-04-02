@@ -8,6 +8,7 @@ export type RuntimeProfile = "local" | "dev-cloud" | "prod";
 export type MotrendProviderMode = "manual" | "stub" | "kling";
 export type TaskDispatchMode = "manual" | "internal-http" | "cloud-tasks";
 export type AeoAdapterMode = "mock" | "live";
+export type DodoEnvironment = "live_mode" | "test_mode";
 
 export interface ApiConfig {
   runtimeProfile: RuntimeProfile;
@@ -39,6 +40,10 @@ export interface ApiConfig {
   fsApiUsername?: string | undefined;
   fsApiPassword?: string | undefined;
   fsStoreHost?: string | undefined;
+  dodoApiKey?: string | undefined;
+  dodoWebhookKey?: string | undefined;
+  dodoEnvironment: DodoEnvironment;
+  dodoBaseUrl?: string | undefined;
   motrendProviderMode: MotrendProviderMode;
   motrendProviderPollDelayMs: number;
   motrendStubOutputUrl?: string | undefined;
@@ -92,6 +97,7 @@ declare module "fastify" {
     authContext?: RequestAuthContext;
     accountContext?: RequestAccountContext;
     productContext?: RequestProductContext;
+    rawBody?: string;
   }
 }
 

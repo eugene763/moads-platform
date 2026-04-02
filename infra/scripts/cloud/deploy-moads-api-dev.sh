@@ -96,6 +96,20 @@ else
   echo "FastSpring secrets are not fully configured; checkout session creation will remain unavailable." >&2
 fi
 
+if gcloud secrets describe "DODO_API_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_API_KEY=DODO_API_KEY:latest")
+else
+  echo "Dodo API key is not configured; Dodo checkout session creation will remain unavailable." >&2
+fi
+
+if gcloud secrets describe "DODO_WEBHOOK_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_WEBHOOK_KEY=DODO_WEBHOOK_KEY:latest")
+elif gcloud secrets describe "DODO_WEBHOOK_SECRET" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_WEBHOOK_KEY=DODO_WEBHOOK_SECRET:latest")
+else
+  echo "Dodo webhook secret is not configured; Dodo webhook processing will remain unavailable." >&2
+fi
+
 if gcloud secrets describe "$OPENAI_API_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
   secret_flags+=("OPENAI_API_KEY=${OPENAI_API_KEY_SECRET_NAME}:latest")
 fi
@@ -134,6 +148,7 @@ env_pairs=(
   "AEO_REALTIME_MODE=${AEO_REALTIME_MODE:-mock}"
   "AEO_REALTIME_INTERVAL_MS=${AEO_REALTIME_INTERVAL_MS:-5000}"
   "AEO_AI_TIPS_MODEL=${AEO_AI_TIPS_MODEL:-gpt-5-mini}"
+  "DODO_ENVIRONMENT=${DODO_ENVIRONMENT:-test_mode}"
 )
 
 if [[ -n "${runtime_session_cookie_domain}" ]]; then
@@ -146,6 +161,10 @@ fi
 
 if [[ -n "${MOTREND_STUB_OUTPUT_URL:-}" ]]; then
   env_pairs+=("MOTREND_STUB_OUTPUT_URL=${MOTREND_STUB_OUTPUT_URL}")
+fi
+
+if [[ -n "${DODO_BASE_URL:-}" ]]; then
+  env_pairs+=("DODO_BASE_URL=${DODO_BASE_URL}")
 fi
 
 secret_string="$(IFS=,; printf '%s' "${secret_flags[*]}")"

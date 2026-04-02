@@ -1,4 +1,5 @@
 import {
+  BILLING_DODO_PROVIDER_CODE,
   BillingOrderStatus,
   PlatformError,
   Prisma,
@@ -11,6 +12,7 @@ import {
   extractFastSpringProductPath,
   isFastSpringConfigured,
 } from "./fastspring.js";
+import {createDodoCheckoutSession, isDodoCheckoutConfigured} from "./dodo.js";
 
 const ATTRIBUTION_MAX_LENGTH = 512;
 
@@ -84,7 +86,7 @@ export function normalizeCheckoutAttribution(value: unknown): Prisma.InputJsonVa
   return Object.keys(payload).length > 0 ? payload as Prisma.InputJsonValue : undefined;
 }
 
-function buildFastSpringTags(input: {
+function buildCheckoutMetadata(input: {
   orderId: string;
   accountId: string;
   productCode: string;
@@ -94,7 +96,7 @@ function buildFastSpringTags(input: {
   email?: string | null;
   attribution: Prisma.InputJsonValue | undefined;
 }): Record<string, string> {
-  const tags: Record<string, string> = {
+  const metadata: Record<string, string> = {
     billingOrderId: input.orderId,
     accountId: input.accountId,
     productCode: input.productCode,
@@ -103,17 +105,17 @@ function buildFastSpringTags(input: {
 
   const userId = normalizeString(input.userId);
   if (userId) {
-    tags.userId = userId;
+    metadata.userId = userId;
   }
 
   const firebaseUid = normalizeString(input.firebaseUid);
   if (firebaseUid) {
-    tags.firebaseUid = firebaseUid;
+    metadata.firebaseUid = firebaseUid;
   }
 
   const email = normalizeString(input.email);
   if (email) {
-    tags.email = email;
+    metadata.email = email;
   }
 
   const attribution = input.attribution && typeof input.attribution === "object" && !Array.isArray(input.attribution) ?
@@ -124,22 +126,22 @@ function buildFastSpringTags(input: {
 
   const landingUrl = normalizeString(attribution.landingUrl, 1500);
   if (landingUrl) {
-    tags.landingUrl = landingUrl;
+    metadata.landingUrl = landingUrl;
   }
 
   const referrer = normalizeString(attribution.referrer, 1500);
   if (referrer) {
-    tags.referrer = referrer;
+    metadata.referrer = referrer;
   }
 
   Object.entries(utm).forEach(([key, value]) => {
-    tags[`utm_${key}`] = value;
+    metadata[`utm_${key}`] = value;
   });
   Object.entries(ids).forEach(([key, value]) => {
-    tags[key] = value;
+    metadata[key] = value;
   });
 
-  return tags;
+  return metadata;
 }
 
 function normalizeDirectRedirectUrl(value: string | null | undefined): string | null {
@@ -162,6 +164,30 @@ function normalizeDirectRedirectUrl(value: string | null | undefined): string | 
   } catch {
     return null;
   }
+}
+
+function appendCheckoutReturnMarker(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    url.searchParams.set("checkout", "complete");
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function resolveCheckoutReturnUrl(attribution: Prisma.InputJsonValue | undefined): string | null {
+  const payload = attribution && typeof attribution === "object" && !Array.isArray(attribution) ?
+    attribution as Record<string, unknown> :
+    {};
+
+  return appendCheckoutReturnMarker(
+    normalizeDirectRedirectUrl(typeof payload.landingUrl === "string" ? payload.landingUrl : null),
+  );
 }
 
 async function markCheckoutCreationFailed(
@@ -221,13 +247,41 @@ export async function createBillingCheckoutResponse(
 
   try {
     const hasFastSpringProduct = extractFastSpringProductPath(draft.externalPriceId) != null;
+    if (draft.providerCode === BILLING_DODO_PROVIDER_CODE && isDodoCheckoutConfigured(app.config)) {
+      const session = await createDodoCheckoutSession(app.config, {
+        productId: draft.externalPriceId ?? "",
+        customerEmail: input.email ?? null,
+        returnUrl: resolveCheckoutReturnUrl(input.attribution),
+        metadata: buildCheckoutMetadata({
+          orderId: draft.orderId,
+          accountId: input.accountId,
+          productCode: input.productCode,
+          priceId: input.priceId,
+          userId: input.userId ?? null,
+          firebaseUid: input.firebaseUid ?? null,
+          email: input.email ?? null,
+          attribution: input.attribution,
+        }),
+      });
+
+      return {
+        orderId: draft.orderId,
+        status: draft.status,
+        redirectUrl: session.redirectUrl,
+        billingProductCode: draft.billingProductCode,
+        creditsAmount: draft.creditsAmount,
+        amountMinor: draft.amountMinor,
+        currencyCode: draft.currencyCode,
+      };
+    }
+
     if (hasFastSpringProduct && isFastSpringConfigured(app.config)) {
       const session = await createFastSpringCheckoutSession(app.config, {
         priceReference: draft.externalPriceId ?? "",
         customerEmail: input.email ?? null,
         countryCode: input.countryCode ?? null,
         languageCode: input.languageCode ?? null,
-        tags: buildFastSpringTags({
+        tags: buildCheckoutMetadata({
           orderId: draft.orderId,
           accountId: input.accountId,
           productCode: input.productCode,

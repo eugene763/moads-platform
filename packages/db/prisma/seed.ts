@@ -2,6 +2,7 @@ import {PrismaClient} from "@prisma/client";
 
 import {
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
+  BILLING_DODO_PROVIDER_CODE,
   buildCreditPackScopeRef,
 } from "../src/billing.js";
 import {DEFAULT_MOTREND_CREDIT_PACKS} from "../src/motrend-billing.js";
@@ -56,6 +57,19 @@ async function main(): Promise<void> {
     },
   });
 
+  const dodoProvider = await prisma.billingProvider.upsert({
+    where: {code: BILLING_DODO_PROVIDER_CODE},
+    update: {
+      name: "Dodo Payments",
+      status: "active",
+    },
+    create: {
+      code: BILLING_DODO_PROVIDER_CODE,
+      name: "Dodo Payments",
+      status: "active",
+    },
+  });
+
   const existingDefaultPriceBook = await prisma.priceBook.findFirst({
     where: {
       marketCode: "global",
@@ -78,14 +92,14 @@ async function main(): Promise<void> {
     {
       productCode: "motrend",
       packs: DEFAULT_MOTREND_CREDIT_PACKS,
-      providerId: checkoutLinkProvider.id,
-      getExternalPriceId: (pack: {code: string}) => `https://checkout.moads.agency/motrend/${pack.code}`,
+      getProviderId: (pack: {code: string; dodoProductId?: string}) => pack.dodoProductId ? dodoProvider.id : checkoutLinkProvider.id,
+      getExternalPriceId: (pack: {code: string; dodoProductId?: string}) => pack.dodoProductId ?? `https://checkout.moads.agency/motrend/${pack.code}`,
     },
     {
       productCode: "aeo",
       packs: DEFAULT_AEO_CREDIT_PACKS,
-      providerId: fastSpringProvider.id,
-      getExternalPriceId: (pack: {code: string; fastspringProductPath?: string}) => pack.fastspringProductPath ?? pack.code,
+      getProviderId: (pack: {code: string; dodoProductId?: string; fastspringProductPath?: string}) => pack.dodoProductId ? dodoProvider.id : fastSpringProvider.id,
+      getExternalPriceId: (pack: {code: string; dodoProductId?: string; fastspringProductPath?: string}) => pack.dodoProductId ?? pack.fastspringProductPath ?? pack.code,
     },
   ] as const;
 
@@ -113,7 +127,7 @@ async function main(): Promise<void> {
       const existingPrice = await prisma.billingPrice.findFirst({
         where: {
           billingProductId: billingProduct.id,
-          providerId: group.providerId,
+          providerId: group.getProviderId(pack),
           priceBookId: defaultPriceBook.id,
         },
         orderBy: {
@@ -127,6 +141,7 @@ async function main(): Promise<void> {
           data: {
             amountMinor: pack.amountMinor,
             isActive: true,
+            providerId: group.getProviderId(pack),
             externalPriceId: group.getExternalPriceId(pack),
           },
         });
@@ -136,7 +151,7 @@ async function main(): Promise<void> {
       await prisma.billingPrice.create({
         data: {
           billingProductId: billingProduct.id,
-          providerId: group.providerId,
+          providerId: group.getProviderId(pack),
           priceBookId: defaultPriceBook.id,
           externalPriceId: group.getExternalPriceId(pack),
           amountMinor: pack.amountMinor,

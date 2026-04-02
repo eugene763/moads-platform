@@ -2,6 +2,7 @@ import {PrismaClient} from "@prisma/client";
 
 import {
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
+  BILLING_DODO_PROVIDER_CODE,
   BILLING_FASTSPRING_PROVIDER_CODE,
   buildCreditPackScopeRef,
 } from "../src/billing.js";
@@ -12,7 +13,9 @@ interface CreditPackSeedInput {
   name: string;
   creditsAmount: number;
   amountMinor: number;
+  providerCode?: string;
   checkoutUrl?: string;
+  dodoProductId?: string;
   fastspringProductPath?: string;
   currencyCode?: string;
   marketCode?: string;
@@ -26,7 +29,8 @@ function readPackInputs(): CreditPackSeedInput[] {
   if (!raw) {
     return DEFAULT_AEO_CREDIT_PACKS.map((pack) => ({
       ...pack,
-      checkoutUrl: pack.fastspringProductPath,
+      providerCode: pack.dodoProductId ? BILLING_DODO_PROVIDER_CODE : BILLING_FASTSPRING_PROVIDER_CODE,
+      checkoutUrl: pack.dodoProductId ?? pack.fastspringProductPath,
       currencyCode: "USD",
       marketCode: "global",
       languageCode: "en",
@@ -47,8 +51,14 @@ function readPackInputs(): CreditPackSeedInput[] {
     const name = typeof item.name === "string" ? item.name.trim() : "";
     const creditsAmount = Number((item as {creditsAmount?: unknown}).creditsAmount);
     const amountMinor = Number((item as {amountMinor?: unknown}).amountMinor);
+    const providerCode = typeof (item as {providerCode?: unknown}).providerCode === "string" ?
+      (item as {providerCode?: string}).providerCode?.trim().toLowerCase() :
+      "";
     const checkoutUrl = typeof (item as {checkoutUrl?: unknown}).checkoutUrl === "string" ?
       (item as {checkoutUrl?: string}).checkoutUrl?.trim() :
+      "";
+    const dodoProductId = typeof (item as {dodoProductId?: unknown}).dodoProductId === "string" ?
+      (item as {dodoProductId?: string}).dodoProductId?.trim() :
       "";
     const fastspringProductPath = typeof (item as {fastspringProductPath?: unknown}).fastspringProductPath === "string" ?
       (item as {fastspringProductPath?: string}).fastspringProductPath?.trim() :
@@ -72,7 +82,9 @@ function readPackInputs(): CreditPackSeedInput[] {
       name,
       creditsAmount,
       amountMinor,
-      ...((fastspringProductPath || checkoutUrl) ? {checkoutUrl: fastspringProductPath || checkoutUrl} : {}),
+      ...(providerCode ? {providerCode} : {}),
+      ...((dodoProductId || fastspringProductPath || checkoutUrl) ? {checkoutUrl: dodoProductId || fastspringProductPath || checkoutUrl} : {}),
+      ...(dodoProductId ? {dodoProductId} : {}),
       ...(fastspringProductPath ? {fastspringProductPath} : {}),
       currencyCode,
       marketCode,
@@ -81,16 +93,40 @@ function readPackInputs(): CreditPackSeedInput[] {
   });
 }
 
-async function ensureFastSpringProvider() {
+function resolveProviderCode(input: CreditPackSeedInput): string {
+  if (typeof input.providerCode === "string" && input.providerCode.trim()) {
+    return input.providerCode.trim().toLowerCase();
+  }
+
+  if (input.dodoProductId) {
+    return BILLING_DODO_PROVIDER_CODE;
+  }
+
+  return BILLING_FASTSPRING_PROVIDER_CODE;
+}
+
+function providerNameFromCode(providerCode: string): string {
+  if (providerCode === BILLING_DODO_PROVIDER_CODE) {
+    return "Dodo Payments";
+  }
+
+  if (providerCode === BILLING_FASTSPRING_PROVIDER_CODE) {
+    return "FastSpring";
+  }
+
+  return providerCode;
+}
+
+async function ensureProvider(providerCode: string) {
   return await prisma.billingProvider.upsert({
-    where: {code: BILLING_FASTSPRING_PROVIDER_CODE},
+    where: {code: providerCode},
     update: {
-      name: "FastSpring",
+      name: providerNameFromCode(providerCode),
       status: "active",
     },
     create: {
-      code: BILLING_FASTSPRING_PROVIDER_CODE,
-      name: "FastSpring",
+      code: providerCode,
+      name: providerNameFromCode(providerCode),
       status: "active",
     },
   });
@@ -125,9 +161,9 @@ async function ensurePriceBook(input: Required<Pick<CreditPackSeedInput, "curren
 
 async function main(): Promise<void> {
   const packs = readPackInputs();
-  const provider = await ensureFastSpringProvider();
 
   for (const pack of packs) {
+    const provider = await ensureProvider(resolveProviderCode(pack));
     const priceBook = await ensurePriceBook({
       currencyCode: pack.currencyCode ?? "USD",
       marketCode: pack.marketCode ?? "global",

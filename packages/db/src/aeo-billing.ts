@@ -3,6 +3,7 @@ export interface AeoCreditPackDefinition {
   name: string;
   creditsAmount: number;
   amountMinor: number;
+  dodoProductId?: string;
   fastspringProductPath?: string;
 }
 

@@ -1,4 +1,4 @@
-import {ApiConfig, MotrendProviderMode, RuntimeProfile, TaskDispatchMode} from "./types.js";
+import {ApiConfig, DodoEnvironment, MotrendProviderMode, RuntimeProfile, TaskDispatchMode} from "./types.js";
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 const MIN_FIREBASE_SESSION_COOKIE_AGE_MS = 5 * 60 * 1000;
@@ -78,6 +78,18 @@ function parseAeoAdapterMode(value: string | undefined, envName: string): "mock"
   throw new Error(`${envName} must be one of: mock, live.`);
 }
 
+function parseDodoEnvironment(value: string | undefined): DodoEnvironment {
+  if (!value || value === "live_mode") {
+    return "live_mode";
+  }
+
+  if (value === "test_mode") {
+    return "test_mode";
+  }
+
+  throw new Error("DODO_ENVIRONMENT must be one of: live_mode, test_mode.");
+}
+
 function normalizeHost(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -152,6 +164,16 @@ export function loadConfig(env = process.env): ApiConfig {
   const fsApiUsername = pickTrimmed(env.FS_API_USERNAME);
   const fsApiPassword = pickTrimmed(env.FS_API_PASSWORD);
   const fsStoreHost = pickTrimmed(env.FS_STORE_HOST);
+  const dodoApiKey = pickTrimmed(env.DODO_API_KEY) ?? pickTrimmed(env.DODO_PAYMENTS_API_KEY);
+  const dodoWebhookKey =
+    pickTrimmed(env.DODO_WEBHOOK_KEY) ??
+    pickTrimmed(env.DODO_WEBHOOK_SECRET) ??
+    pickTrimmed(env.DODO_PAYMENTS_WEBHOOK_KEY) ??
+    pickTrimmed(env.DODO_PAYMENTS_WEBHOOK_SECRET);
+  const dodoEnvironment = parseDodoEnvironment(
+    pickTrimmed(env.DODO_ENVIRONMENT) ?? pickTrimmed(env.DODO_PAYMENTS_ENVIRONMENT),
+  );
+  const dodoBaseUrl = pickTrimmed(env.DODO_BASE_URL) ?? pickTrimmed(env.DODO_PAYMENTS_BASE_URL);
   const motrendProviderMode = parseMotrendProviderMode(env.MOTREND_PROVIDER_MODE);
   const motrendStubOutputUrl = pickTrimmed(env.MOTREND_STUB_OUTPUT_URL);
   const klingAccessKey = pickTrimmed(env.KLING_ACCESS_KEY);
@@ -309,6 +331,10 @@ export function loadConfig(env = process.env): ApiConfig {
     ...(fsApiUsername ? {fsApiUsername} : {}),
     ...(fsApiPassword ? {fsApiPassword} : {}),
     ...(fsStoreHost ? {fsStoreHost} : {}),
+    ...(dodoApiKey ? {dodoApiKey} : {}),
+    ...(dodoWebhookKey ? {dodoWebhookKey} : {}),
+    dodoEnvironment,
+    ...(dodoBaseUrl ? {dodoBaseUrl} : {}),
     motrendProviderMode,
     motrendProviderPollDelayMs: parseNumber(env.MOTREND_PROVIDER_POLL_DELAY_MS, 2_000),
     ...(motrendStubOutputUrl ? {motrendStubOutputUrl} : {}),

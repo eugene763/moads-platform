@@ -78,6 +78,7 @@ describe("getFirebaseContext", () => {
       cloudTasksMotrendPollQueue: "motrend-poll",
       cloudTasksMotrendDownloadQueue: "motrend-download",
       cloudTasksInvokerServiceAccountEmail: "demo-compute@developer.gserviceaccount.com",
+      dodoEnvironment: "live_mode",
       motrendProviderMode: "manual",
       motrendProviderPollDelayMs: 2000,
       klingBaseUrl: "https://api-singapore.klingai.com",

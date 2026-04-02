@@ -18,6 +18,7 @@ type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
 
 export const BILLING_CREDIT_PACK_PRODUCT_TYPE = "credit_pack";
 export const BILLING_CHECKOUT_LINK_PROVIDER_CODE = "checkout_link";
+export const BILLING_DODO_PROVIDER_CODE = "dodo";
 export const BILLING_FASTSPRING_PROVIDER_CODE = "fastspring";
 
 export interface CreditPackScope {
