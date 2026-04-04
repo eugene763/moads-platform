@@ -6,13 +6,17 @@ import {
   markMotrendSubmitTaskSucceeded,
   MotrendTaskType,
   PlatformError,
+  sweepStaleMotrendJobs,
 } from "@moads/db";
 import {FastifyInstance} from "fastify";
 
 import {pollMotrendProviderJob, submitMotrendProviderJob} from "./motrend-provider.js";
 
+type MotrendSweepResult = Awaited<ReturnType<typeof sweepStaleMotrendJobs>>;
+
 export interface ProcessDueMotrendTasksResult {
   processedCount: number;
+  sweep: MotrendSweepResult;
   tasks: Array<{
     taskId: string;
     taskType: string;
@@ -149,6 +153,9 @@ export async function processDueMotrendTasks(
   } = {},
 ): Promise<ProcessDueMotrendTasksResult> {
   const limit = Math.max(1, Math.min(input.limit ?? 10, 50));
+  const sweep = await sweepStaleMotrendJobs(app.prisma, {
+    limitPerBucket: Math.max(5, limit),
+  });
   const results: ProcessDueMotrendTasksResult["tasks"] = [];
 
   for (let index = 0; index < limit; index += 1) {
@@ -165,6 +172,7 @@ export async function processDueMotrendTasks(
 
   return {
     processedCount: results.length,
+    sweep,
     tasks: results,
   };
 }

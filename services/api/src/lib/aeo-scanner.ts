@@ -2,6 +2,12 @@ import {PlatformError} from "@moads/db";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_USER_AGENT = "MOADS-AEO-Scanner/1.0 (+https://moads.agency)";
+const AI_BOTS = [
+  {name: "GPTBot", agent: "GPTBot"},
+  {name: "ClaudeBot", agent: "ClaudeBot"},
+  {name: "Google-Extended", agent: "Google-Extended"},
+  {name: "PerplexityBot", agent: "PerplexityBot"},
+] as const;
 
 type ScoreDimension = "access" | "basic_seo" | "ratings_schema";
 
@@ -61,6 +67,30 @@ interface FetchMetadata {
   redirected: boolean;
   contentType: string | null;
   bytes: number;
+}
+
+interface CrawlabilityBotEvidence {
+  allowed: boolean;
+  explicitly: boolean;
+  reachable: boolean | null;
+  statusCode: number | null;
+}
+
+interface CrawlabilityEvidence {
+  robotsUrl: string;
+  robotsExists: boolean;
+  allowsAll: boolean;
+  sitemapUrl: string | null;
+  sitemapExists: boolean;
+  aiBots: Record<string, CrawlabilityBotEvidence>;
+}
+
+interface ProductPageSampleEvidence {
+  sampled: boolean;
+  url: string | null;
+  title: string | null;
+  aggregateRating: AggregateRatingEvidence | null;
+  onPage: OnPageRatingEvidence | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -291,6 +321,255 @@ function extractOnPageEvidence(html: string): OnPageRatingEvidence {
   };
 }
 
+function parseAIBotRules(robotsText: string): Record<string, {allowed: boolean; explicitly: boolean}> {
+  const result: Record<string, {allowed: boolean; explicitly: boolean}> = {};
+  let currentAgents: string[] = [];
+  let previousWasUserAgent = false;
+
+  for (const rawLine of robotsText.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    if (/^user-agent:/i.test(line)) {
+      const agent = line.replace(/^user-agent:\s*/i, "").trim();
+      currentAgents = previousWasUserAgent ? [...currentAgents, agent] : [agent];
+      previousWasUserAgent = true;
+      continue;
+    }
+
+    previousWasUserAgent = false;
+
+    const directive = line.split(":")[0]?.trim().toLowerCase();
+    const value = line.replace(/^[^:]+:/, "").trim();
+    if (!directive || !currentAgents.length) {
+      continue;
+    }
+
+    if (directive !== "allow" && directive !== "disallow") {
+      continue;
+    }
+
+    for (const currentAgent of currentAgents) {
+      for (const bot of AI_BOTS) {
+        const matchesWildcard = currentAgent === "*";
+        const matchesBot = currentAgent.toLowerCase() === bot.agent.toLowerCase();
+        if (!matchesWildcard && !matchesBot) {
+          continue;
+        }
+
+        const isAllowed = directive === "allow" || value !== "/";
+        if (matchesWildcard) {
+          if (!result[bot.name]?.explicitly) {
+            result[bot.name] = {
+              allowed: isAllowed,
+              explicitly: false,
+            };
+          }
+          continue;
+        }
+
+        result[bot.name] = {
+          allowed: isAllowed,
+          explicitly: true,
+        };
+      }
+    }
+  }
+
+  for (const bot of AI_BOTS) {
+    if (!result[bot.name]) {
+      result[bot.name] = {
+        allowed: true,
+        explicitly: false,
+      };
+    }
+  }
+
+  return result;
+}
+
+function extractSitemapUrls(robotsText: string): string[] {
+  const matches = robotsText.match(/Sitemap:\s*(https?:\/\/[^\s]+)/gi) ?? [];
+  return matches.map((value) => value.replace(/^Sitemap:\s*/i, "").trim());
+}
+
+async function fetchTextDocument(input: {
+  url: string;
+  fetchImpl: typeof fetch;
+  timeoutMs: number;
+  userAgent?: string;
+}): Promise<{
+  ok: boolean;
+  status: number | null;
+  text: string;
+}> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
+
+  try {
+    const response = await input.fetchImpl(input.url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "user-agent": input.userAgent ?? DEFAULT_USER_AGENT,
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      text: await response.text(),
+    };
+  } catch {
+    return {
+      ok: false,
+      status: null,
+      text: "",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCrawlabilityEvidence(input: {
+  baseUrl: string;
+  fetchImpl: typeof fetch;
+}): Promise<CrawlabilityEvidence> {
+  const robotsUrl = new URL("/robots.txt", input.baseUrl).toString();
+  const robotsResponse = await fetchTextDocument({
+    url: robotsUrl,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: 5_000,
+  });
+
+  const robotsExists = robotsResponse.ok && robotsResponse.text.trim().length > 0;
+  const aiBotRules = robotsExists ? parseAIBotRules(robotsResponse.text) : {};
+  const sitemapUrl = robotsExists ?
+    extractSitemapUrls(robotsResponse.text)[0] ?? new URL("/sitemap.xml", input.baseUrl).toString() :
+    new URL("/sitemap.xml", input.baseUrl).toString();
+
+  const sitemapResponse = await fetchTextDocument({
+    url: sitemapUrl,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: 5_000,
+  });
+  const sitemapExists = sitemapResponse.ok && /<(urlset|sitemapindex)\b/i.test(sitemapResponse.text);
+
+  const botEntries = await Promise.all(
+    AI_BOTS.map(async (bot) => {
+      const rule = aiBotRules[bot.name] ?? {allowed: true, explicitly: false};
+      const reachableResponse = await fetchTextDocument({
+        url: input.baseUrl,
+        fetchImpl: input.fetchImpl,
+        timeoutMs: 5_000,
+        userAgent: `${bot.agent}/1.0`,
+      });
+
+      return [
+        bot.name,
+        {
+          allowed: rule.allowed,
+          explicitly: rule.explicitly,
+          reachable: reachableResponse.status == null ? null : reachableResponse.ok,
+          statusCode: reachableResponse.status,
+        } satisfies CrawlabilityBotEvidence,
+      ] as const;
+    }),
+  );
+
+  return {
+    robotsUrl,
+    robotsExists,
+    allowsAll: robotsExists ? !/Disallow:\s*\/\s*$/mi.test(robotsResponse.text) : true,
+    sitemapUrl,
+    sitemapExists,
+    aiBots: Object.fromEntries(botEntries),
+  };
+}
+
+function findProductPageCandidate(html: string, baseUrl: string): string | null {
+  const patterns = [
+    /href=["'](\/products\/[^"'#?]+)/i,
+    /href=["'](\/collections\/[^"']+\/products\/[^"'#?]+)/i,
+    /href=["']([^"']*\/dp\/[A-Z0-9]{10}[^"'#?]*)/i,
+    /href=["'](\/p\/[^"'#?]+)/i,
+    /href=["']([^"']*product[^"']*\.html)/i,
+  ];
+
+  const host = new URL(baseUrl).host;
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    const rawCandidate = match?.[1];
+    if (!rawCandidate) {
+      continue;
+    }
+
+    try {
+      const candidate = new URL(rawCandidate, baseUrl);
+      if (candidate.host !== host) {
+        continue;
+      }
+      return candidate.toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function fetchProductPageEvidence(input: {
+  html: string;
+  requestedUrl: string;
+  fetchImpl: typeof fetch;
+}): Promise<ProductPageSampleEvidence | null> {
+  const requested = new URL(input.requestedUrl);
+  if (requested.pathname !== "/" && requested.pathname !== "") {
+    return null;
+  }
+
+  const productUrl = findProductPageCandidate(input.html, input.requestedUrl);
+  if (!productUrl) {
+    return {
+      sampled: false,
+      url: null,
+      title: null,
+      aggregateRating: null,
+      onPage: null,
+    };
+  }
+
+  const response = await fetchTextDocument({
+    url: productUrl,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: 8_000,
+  });
+
+  if (!response.ok || response.text.length < 300) {
+    return {
+      sampled: false,
+      url: productUrl,
+      title: null,
+      aggregateRating: null,
+      onPage: null,
+    };
+  }
+
+  const nodes = parseJsonLdScripts(response.text);
+  return {
+    sampled: true,
+    url: productUrl,
+    title: extractTitle(response.text),
+    aggregateRating: extractAggregateRating(nodes),
+    onPage: extractOnPageEvidence(response.text),
+  };
+}
+
 function calculateScore(input: {
   httpStatus: number | null;
   hasTitle: boolean;
@@ -420,6 +699,46 @@ function buildRecommendations(issues: AeoIssue[]): AeoRecommendation[] {
     });
   }
 
+  if (hasIssue("robots_txt_missing")) {
+    recommendations.push({
+      id: "publish_robots_txt",
+      title: "Publish a crawl-friendly robots.txt",
+      description: "Add robots.txt with explicit crawl rules and a sitemap reference so answer engines can discover site sections consistently.",
+      impactScore: 5,
+      priority: "medium",
+    });
+  }
+
+  if (hasIssue("sitemap_missing")) {
+    recommendations.push({
+      id: "publish_sitemap",
+      title: "Add an XML sitemap",
+      description: "Expose sitemap.xml so search and answer engines can discover product and category URLs beyond the homepage.",
+      impactScore: 5,
+      priority: "medium",
+    });
+  }
+
+  if (hasIssue("ai_bot_crawl_limited")) {
+    recommendations.push({
+      id: "allow_ai_bots",
+      title: "Review AI bot crawl access",
+      description: "Check robots.txt and CDN/WAF rules for GPTBot, ClaudeBot, Google-Extended, and PerplexityBot so they can reach key pages.",
+      impactScore: 6,
+      priority: "medium",
+    });
+  }
+
+  if (hasIssue("product_page_schema_only")) {
+    recommendations.push({
+      id: "surface_schema_on_target_pages",
+      title: "Surface schema on the URLs you share and rank",
+      description: "A sampled product page has rating evidence, but the scanned page does not. Make sure target landing URLs expose schema and visible trust signals too.",
+      impactScore: 4,
+      priority: "low",
+    });
+  }
+
   if (recommendations.length === 0) {
     recommendations.push({
       id: "monitor_schema_consistency",
@@ -451,6 +770,8 @@ function evaluateAeoHtml(input: {
   html: string;
   fetchMeta: FetchMetadata;
   blocked: boolean;
+  crawlability: CrawlabilityEvidence | null;
+  productPage: ProductPageSampleEvidence | null;
 }): AeoDeterministicScanResult {
   const title = extractTitle(input.html);
   const description = extractMetaContent(input.html, "description");
@@ -590,7 +911,79 @@ function evaluateAeoHtml(input: {
     ));
   }
 
+  if (!input.blocked && input.crawlability) {
+    if (!input.crawlability.robotsExists) {
+      issues.push(buildIssue(
+        "robots_txt_missing",
+        "low",
+        "access",
+        0,
+        "robots.txt was not found. Bots can still crawl, but crawl guidance is missing.",
+      ));
+    }
+
+    if (!input.crawlability.sitemapExists) {
+      issues.push(buildIssue(
+        "sitemap_missing",
+        "low",
+        "basic_seo",
+        0,
+        "sitemap.xml was not detected. Discovery of deeper product URLs may be slower.",
+      ));
+    }
+
+    const limitedBots = Object.entries(input.crawlability.aiBots).filter(([, state]) => state.allowed === false || state.reachable === false);
+    if (limitedBots.length > 0) {
+      issues.push(buildIssue(
+        "ai_bot_crawl_limited",
+        "medium",
+        "access",
+        0,
+        `Some AI bots are blocked or unreachable: ${limitedBots.map(([name]) => name).join(", ")}.`,
+      ));
+    }
+  }
+
+  if (!aggregate && input.productPage?.sampled && input.productPage.aggregateRating) {
+    issues.push(buildIssue(
+      "product_page_schema_only",
+      "low",
+      "ratings_schema",
+      0,
+      "A sampled product page has rating schema, but the scanned URL does not expose it directly.",
+    ));
+  }
+
   const recommendations = buildRecommendations(issues);
+  const sortedIssues = [...issues].sort((left, right) => right.pointsLost - left.pointsLost);
+  const fastestWin = recommendations.find((recommendation) => recommendation.priority !== "high") ?? recommendations[0] ?? null;
+  const promptHost = (() => {
+    try {
+      return new URL(input.finalUrl ?? input.requestedUrl).hostname.replace(/^www\./, "");
+    } catch {
+      return input.normalizedUrl;
+    }
+  })();
+  const promptKit = [
+    {
+      id: "prompt_visibility",
+      title: "Brand visibility check",
+      engine: "ChatGPT or Gemini",
+      prompt: `You are evaluating ecommerce sites for AI readiness. Review ${promptHost} and explain whether this site is easy to trust, cite, and recommend in product-answer workflows. Focus on schema, visible review proof, content structure, and crawlability.`,
+    },
+    {
+      id: "prompt_comparison",
+      title: "Competitor comparison prompt",
+      engine: "Perplexity or Claude",
+      prompt: `Compare ${promptHost} with two stronger competitors in the same niche. Which site is more citation-ready for AI answers, and what technical or content gaps does ${promptHost} need to close first?`,
+    },
+    {
+      id: "prompt_fix_plan",
+      title: "90-day fix plan prompt",
+      engine: "Any LLM",
+      prompt: `Create a 90-day AI discovery improvement plan for ${promptHost}. Prioritize quick wins first, then structural fixes. Include schema, answer formatting, review proof, crawlability, and page metadata.`,
+    },
+  ];
 
   const ratingStatus = input.blocked ?
     "blocked" :
@@ -624,10 +1017,27 @@ function evaluateAeoHtml(input: {
         aggregateRating: aggregate,
       },
       onPage,
+      crawlability: input.crawlability,
+      productPage: input.productPage,
       notes: [
         "raw_html_mode",
         "structured_data_validity_does_not_guarantee_rich_results",
       ],
+    },
+    actionPlan: {
+      topIssues: sortedIssues.slice(0, 3).map((issue) => ({
+        code: issue.code,
+        message: issue.message,
+        severity: issue.severity,
+        dimension: issue.dimension,
+        pointsLost: issue.pointsLost,
+      })),
+      fastestWin,
+      priorityFixes: recommendations.slice(0, 3),
+    },
+    promptKit: {
+      mode: "manual",
+      prompts: promptKit,
     },
     topFixes: recommendations.slice(0, 5),
   } satisfies Record<string, unknown>;
@@ -639,6 +1049,8 @@ function evaluateAeoHtml(input: {
     ogTitle,
     aggregateRating: aggregate,
     onPage,
+    crawlability: input.crawlability,
+    productPage: input.productPage,
   } satisfies Record<string, unknown>;
 
   const signalBlocksJson = {
@@ -654,7 +1066,7 @@ function evaluateAeoHtml(input: {
     bytes: input.fetchMeta.bytes,
     finalUrl: input.finalUrl,
     httpStatus: input.httpStatus,
-    parserVersion: "aeo_parser_v1",
+    parserVersion: "aeo_parser_v2",
   } satisfies Record<string, unknown>;
 
   return {
@@ -665,8 +1077,8 @@ function evaluateAeoHtml(input: {
     status: input.blocked ? "blocked" : "completed",
     confidenceLevel,
     publicScore: score.total,
-    rulesetVersion: "aeo_rules_v1",
-    promptVersion: "deterministic_v1",
+    rulesetVersion: "aeo_rules_v2",
+    promptVersion: "deterministic_v2",
     reportJson,
     recommendationsJson: recommendations,
     extractedFactsJson,
@@ -695,6 +1107,8 @@ export async function runAeoDeterministicScan(input: {
   let response: Response;
   let html = "";
   let blocked = false;
+  let crawlability: CrawlabilityEvidence | null = null;
+  let productPage: ProductPageSampleEvidence | null = null;
   try {
     response = await fetchImpl(requestedUrl, {
       method: "GET",
@@ -718,6 +1132,8 @@ export async function runAeoDeterministicScan(input: {
       httpStatus: null,
       html: "",
       blocked: true,
+      crawlability: null,
+      productPage: null,
       fetchMeta: {
         responseMs,
         redirected: false,
@@ -739,6 +1155,20 @@ export async function runAeoDeterministicScan(input: {
 
   const finalUrl = response.url || requestedUrl;
 
+  if (!blocked) {
+    [crawlability, productPage] = await Promise.all([
+      fetchCrawlabilityEvidence({
+        baseUrl: finalUrl,
+        fetchImpl,
+      }),
+      fetchProductPageEvidence({
+        html,
+        requestedUrl: finalUrl,
+        fetchImpl,
+      }),
+    ]);
+  }
+
   return evaluateAeoHtml({
     requestedUrl,
     normalizedUrl,
@@ -746,6 +1176,8 @@ export async function runAeoDeterministicScan(input: {
     httpStatus,
     html,
     blocked,
+    crawlability,
+    productPage,
     fetchMeta: {
       responseMs,
       redirected: response.redirected,
@@ -763,6 +1195,8 @@ export function serializeAeoResultForPrompt(result: AeoDeterministicScanResult):
       confidenceLevel: result.confidenceLevel,
     },
     extractedFacts: result.extractedFactsJson,
+    evidence: (result.reportJson as {evidence?: unknown}).evidence ?? null,
+    actionPlan: (result.reportJson as {actionPlan?: unknown}).actionPlan ?? null,
     issues: result.issuesJson,
     recommendations: result.recommendationsJson,
   });
