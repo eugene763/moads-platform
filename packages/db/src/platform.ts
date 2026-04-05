@@ -25,6 +25,7 @@ export interface SessionBootstrapInput {
   photoUrl?: string | null;
   signInProvider?: string | null;
   legacySupportCode?: string | null;
+  disallowNewMotrendSignup?: boolean;
 }
 
 export interface SessionBootstrapResult {
@@ -193,6 +194,18 @@ export async function bootstrapSessionLogin(
         },
       },
     });
+
+    if (
+      product.code === "motrend" &&
+      !existingMembership &&
+      input.disallowNewMotrendSignup
+    ) {
+      throw new PlatformError(
+        409,
+        "motrend_signup_blocked",
+        "This browser already used MoTrend registration before. Please log in instead.",
+      );
+    }
 
     if (!existingMembership) {
       createdMembership = true;

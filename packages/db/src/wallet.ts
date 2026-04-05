@@ -7,7 +7,7 @@ import {
 import {PlatformError, assertOrThrow} from "./errors.js";
 
 export const GLOBAL_CREDITS_WALLET_CURRENCY = "CREDITS";
-export const MOTREND_TEST_BOOTSTRAP_CREDITS = 20;
+export const MOTREND_TEST_BOOTSTRAP_CREDITS = 3;
 export const MOTREND_TEST_BOOTSTRAP_REASON = "motrend_test_bootstrap";
 
 export type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;

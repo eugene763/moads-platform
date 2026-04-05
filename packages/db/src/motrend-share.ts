@@ -104,6 +104,7 @@ export async function createOrReuseMotrendPublicShare(
     userId: string;
     jobId: string;
     entryDomain: string;
+    previewImageUrl?: string | null;
   },
 ) {
   return await prisma.$transaction(async (tx) => {
@@ -132,7 +133,7 @@ export async function createOrReuseMotrendPublicShare(
     const previewImageUrl = safeExternalUrl(readJsonString(preview.thumbnailUrl));
     const metadata = buildShareMetadata({
       templateName: template.name,
-      previewImageUrl,
+      previewImageUrl: safeExternalUrl(input.previewImageUrl) || previewImageUrl,
       entryDomain: input.entryDomain,
     });
 

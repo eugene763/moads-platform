@@ -177,6 +177,7 @@ function renderPublicShareHtml(
   </style>
 </head>
 <body>
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N2W4DK23" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="wrap">
     <div class="card">
       <a class="brand" href="/"><h1>MoTrend©</h1></a>
@@ -196,6 +197,7 @@ function renderPublicShareHtml(
       <div id="note" class="note"></div>
     </div>
   </div>
+  <script src="https://trend.moads.agency/gtm-bootstrap.js?v=20260404a"></script>
   <script>
     (function() {
       const initialState = ${initialState};
@@ -409,12 +411,17 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       throw new PlatformError(400, "job_id_required", "job id is required.");
     }
 
+    const body = request.body as {previewImageUrl?: unknown} | undefined;
+    const previewImageUrl = typeof body?.previewImageUrl === "string" ?
+      body.previewImageUrl.trim() :
+      "";
     const entryDomain = await getMotrendEntryDomain(app);
     const share = await createOrReuseMotrendPublicShare(app.prisma, {
       accountId: request.accountContext.accountId,
       userId: request.authContext.userId,
       jobId: params.id.trim(),
       entryDomain,
+      previewImageUrl,
     });
 
     reply.send(await buildPublicSharePayload(app, share.slug, entryDomain));

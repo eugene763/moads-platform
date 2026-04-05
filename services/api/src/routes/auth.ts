@@ -9,12 +9,22 @@ import {
 import {requireAuth, resolveAccount} from "../middleware/auth.js";
 import {resolveCookieDomain, resolveRequestProduct} from "../lib/product-context.js";
 
+const MOTREND_REGISTRATION_COOKIE_KEY = "motrend_registration_seen_v1";
+const MOTREND_REGISTRATION_SERVER_COOKIE_KEY = "motrend_registration_seen_srv_v1";
+const MOTREND_GIFT_COOKIE_KEY = "motrend_gift_claimed_v1";
+const MOTREND_GIFT_SERVER_COOKIE_KEY = "motrend_gift_claimed_srv_v1";
+
+function hasTruthyCookie(request: FastifyRequest, name: string): boolean {
+  const raw = request.cookies?.[name];
+  return typeof raw === "string" && raw.trim() === "1";
+}
+
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
-  const baseCookieOptions = (request: FastifyRequest) => {
+  const baseCookieOptions = (request: FastifyRequest, httpOnly = true) => {
     const domain = resolveCookieDomain(request);
     if (domain) {
       return {
-        httpOnly: true as const,
+        httpOnly,
         sameSite: "lax" as const,
         secure: app.config.nodeEnv !== "development",
         path: "/",
@@ -23,7 +33,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return {
-      httpOnly: true as const,
+      httpOnly,
       sameSite: "lax" as const,
       secure: app.config.nodeEnv !== "development",
       path: "/",
@@ -50,9 +60,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         productCode: "aeo",
       }));
     const decoded = await app.firebase.auth.verifyIdToken(body.idToken);
-    const sessionCookie = await app.firebase.auth.createSessionCookie(body.idToken, {
-      expiresIn: app.config.sessionCookieMaxAgeMs,
-    });
+    const disallowNewMotrendSignup = product.productCode === "motrend" && (
+      hasTruthyCookie(request, MOTREND_REGISTRATION_SERVER_COOKIE_KEY) ||
+      hasTruthyCookie(request, MOTREND_REGISTRATION_COOKIE_KEY) ||
+      hasTruthyCookie(request, MOTREND_GIFT_SERVER_COOKIE_KEY) ||
+      hasTruthyCookie(request, MOTREND_GIFT_COOKIE_KEY)
+    );
 
     const bootstrap = await bootstrapSessionLogin(app.prisma, {
       firebaseUid: decoded.uid,
@@ -63,12 +76,40 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       photoUrl: decoded.picture ?? null,
       signInProvider: typeof decoded.firebase?.sign_in_provider === "string" ? decoded.firebase.sign_in_provider : null,
       legacySupportCode: null,
+      disallowNewMotrendSignup,
+    });
+
+    const sessionCookie = await app.firebase.auth.createSessionCookie(body.idToken, {
+      expiresIn: app.config.sessionCookieMaxAgeMs,
     });
 
     reply.setCookie(app.config.sessionCookieName, sessionCookie, {
       ...baseCookieOptions(request),
       maxAge: Math.floor(app.config.sessionCookieMaxAgeMs / 1000),
     });
+
+    if (product.productCode === "motrend") {
+      const sharedMaxAge = Math.floor(app.config.sessionCookieMaxAgeMs / 1000);
+      reply.setCookie(MOTREND_REGISTRATION_SERVER_COOKIE_KEY, "1", {
+        ...baseCookieOptions(request, true),
+        maxAge: sharedMaxAge,
+      });
+      reply.setCookie(MOTREND_REGISTRATION_COOKIE_KEY, "1", {
+        ...baseCookieOptions(request, false),
+        maxAge: sharedMaxAge,
+      });
+
+      if (bootstrap.grantedTestCredits) {
+        reply.setCookie(MOTREND_GIFT_SERVER_COOKIE_KEY, "1", {
+          ...baseCookieOptions(request, true),
+          maxAge: sharedMaxAge,
+        });
+        reply.setCookie(MOTREND_GIFT_COOKIE_KEY, "1", {
+          ...baseCookieOptions(request, false),
+          maxAge: sharedMaxAge,
+        });
+      }
+    }
 
     reply.send(bootstrap);
   });
