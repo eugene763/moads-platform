@@ -258,6 +258,7 @@ function renderPublicShareHtml(
         currentState = state;
         const inlineUrl = safeUrl(state.inlineUrl || "");
         const downloadUrl = safeUrl(state.downloadUrl || "");
+        const posterUrl = safeUrl(state.previewImageUrl || "");
         const hasPreparedVideo = !!(inlineUrl || downloadUrl);
 
         showError("");
@@ -270,6 +271,11 @@ function renderPublicShareHtml(
           if ((videoEl.getAttribute("data-current-src") || "") !== videoSrc) {
             videoEl.setAttribute("data-current-src", videoSrc);
             videoEl.src = videoSrc;
+          }
+          if (posterUrl) {
+            videoEl.poster = posterUrl;
+          } else {
+            videoEl.removeAttribute("poster");
           }
           btnSaveFile.href = downloadUrl || inlineUrl;
           noteEl.textContent = "Prepared links are temporary. If they expire, prepare them again from this page.";
