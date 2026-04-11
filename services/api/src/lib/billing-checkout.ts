@@ -92,10 +92,10 @@ function buildCheckoutMetadata(input: {
   attribution: Prisma.InputJsonValue | undefined;
 }): Record<string, string> {
   const metadata: Record<string, string> = {
-    billingOrderId: input.orderId,
-    accountId: input.accountId,
-    productCode: input.productCode,
-    priceId: input.priceId,
+    billing_order_id: input.orderId,
+    account_id: input.accountId,
+    product_code: input.productCode,
+    price_id: input.priceId,
   };
 
   const userId = normalizeString(input.userId);
@@ -108,32 +108,27 @@ function buildCheckoutMetadata(input: {
     metadata.firebaseUid = firebaseUid;
   }
 
-  const email = normalizeString(input.email);
-  if (email) {
-    metadata.email = email;
-  }
-
   const attribution = input.attribution && typeof input.attribution === "object" && !Array.isArray(input.attribution) ?
     input.attribution as Record<string, unknown> :
     {};
   const utm = normalizeStringMap(attribution.utm);
   const ids = normalizeStringMap(attribution.ids);
 
-  const landingUrl = normalizeString(attribution.landingUrl, 1500);
-  if (landingUrl) {
-    metadata.landingUrl = landingUrl;
-  }
+  const allowedUtmKeys = ["source", "medium", "campaign"];
+  const allowedIdKeys = ["gclid", "gbraid", "wbraid", "fbclid", "ysclid"];
 
-  const referrer = normalizeString(attribution.referrer, 1500);
-  if (referrer) {
-    metadata.referrer = referrer;
-  }
-
-  Object.entries(utm).forEach(([key, value]) => {
-    metadata[`utm_${key}`] = value;
+  allowedUtmKeys.forEach((key) => {
+    const value = utm[key];
+    if (value) {
+      metadata[`utm_${key}`] = value;
+    }
   });
-  Object.entries(ids).forEach(([key, value]) => {
-    metadata[key] = value;
+
+  allowedIdKeys.forEach((key) => {
+    const value = ids[key];
+    if (value) {
+      metadata[key] = value;
+    }
   });
 
   return metadata;

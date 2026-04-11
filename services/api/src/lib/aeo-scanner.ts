@@ -359,7 +359,7 @@ function parseAIBotRules(robotsText: string): Record<string, {allowed: boolean; 
           continue;
         }
 
-        const isAllowed = directive === "allow" || value !== "/";
+        const isAllowed = directive === "allow";
         if (matchesWildcard) {
           if (!result[bot.name]?.explicitly) {
             result[bot.name] = {

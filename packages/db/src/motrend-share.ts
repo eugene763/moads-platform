@@ -38,6 +38,19 @@ function safeExternalUrl(value: string | null | undefined): string | null {
       return null;
     }
 
+    const isApprovedAssetHost =
+      url.hostname === "trend.moads.agency" ||
+      url.hostname === "gen-lang-client-0651837818.web.app" ||
+      url.hostname === "gen-lang-client-0651837818.firebaseapp.com";
+    const isApprovedStorageHost =
+      url.hostname === "firebasestorage.googleapis.com" &&
+      /^\/v0\/b\/gen-lang-client-0651837818\.firebasestorage\.app\/o\//.test(url.pathname) &&
+      Boolean((url.searchParams.get("token") || "").trim());
+
+    if (!isApprovedAssetHost && !isApprovedStorageHost) {
+      return null;
+    }
+
     return url.toString();
   } catch {
     return null;

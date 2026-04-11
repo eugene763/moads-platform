@@ -8,6 +8,15 @@ interface JsonObject {
   [key: string]: unknown;
 }
 
+interface DodoSdkErrorLike {
+  status?: unknown;
+  response?: {
+    status?: unknown;
+    data?: unknown;
+  };
+  message?: unknown;
+}
+
 interface DodoPaymentRecord {
   payment_id?: unknown;
   currency?: unknown;
@@ -80,6 +89,25 @@ function readStringMap(value: unknown): Record<string, string> {
   }, {});
 }
 
+function readErrorStatus(value: unknown): number | null {
+  const status = Number(value);
+  return Number.isFinite(status) && status > 0 ? Math.floor(status) : null;
+}
+
+function readDodoErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const sdkError = error as DodoSdkErrorLike;
+  const responseData = readJsonObject(sdkError.response?.data);
+  const candidate = readJsonString(responseData.message) ||
+    readJsonString(responseData.error) ||
+    readJsonString(sdkError.message);
+
+  return candidate || null;
+}
+
 function normalizeDodoProductId(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
     return null;
@@ -148,17 +176,34 @@ export async function createDodoCheckoutSession(
   const customerEmail = readJsonString(input.customerEmail);
   const returnUrl = readJsonString(input.returnUrl);
 
-  const response = await client.checkoutSessions.create({
-    product_cart: [
-      {
-        product_id: productId,
-        quantity: 1,
-      },
-    ],
-    ...(customerEmail ? {customer: {email: customerEmail}} : {}),
-    ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
-    ...(returnUrl ? {return_url: returnUrl, cancel_url: returnUrl} : {}),
-  });
+  let response;
+  try {
+    response = await client.checkoutSessions.create({
+      product_cart: [
+        {
+          product_id: productId,
+          quantity: 1,
+        },
+      ],
+      ...(customerEmail ? {customer: {email: customerEmail}} : {}),
+      ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
+      ...(returnUrl ? {return_url: returnUrl, cancel_url: returnUrl} : {}),
+    });
+  } catch (error) {
+    const sdkError = error as DodoSdkErrorLike;
+    const status = readErrorStatus(sdkError.response?.status) ?? readErrorStatus(sdkError.status);
+    const message = readDodoErrorMessage(error) || "Dodo checkout session creation failed.";
+
+    if (status === 400 || status === 422) {
+      throw new PlatformError(409, "billing_checkout_unavailable", message);
+    }
+
+    if (status === 401 || status === 403) {
+      throw new PlatformError(503, "billing_provider_unavailable", message);
+    }
+
+    throw new PlatformError(502, "billing_provider_invalid_response", message);
+  }
 
   const sessionId = readJsonString((response as {session_id?: unknown}).session_id);
   const checkoutUrl = readJsonString((response as {checkout_url?: unknown}).checkout_url);

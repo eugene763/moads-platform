@@ -25,7 +25,7 @@ export interface SessionBootstrapInput {
   photoUrl?: string | null;
   signInProvider?: string | null;
   legacySupportCode?: string | null;
-  disallowNewMotrendSignup?: boolean;
+  suppressMotrendGift?: boolean;
 }
 
 export interface SessionBootstrapResult {
@@ -195,18 +195,6 @@ export async function bootstrapSessionLogin(
       },
     });
 
-    if (
-      product.code === "motrend" &&
-      !existingMembership &&
-      input.disallowNewMotrendSignup
-    ) {
-      throw new PlatformError(
-        409,
-        "motrend_signup_blocked",
-        "This browser already used MoTrend registration before. Please log in instead.",
-      );
-    }
-
     if (!existingMembership) {
       createdMembership = true;
       await tx.productMembership.create({
@@ -220,7 +208,7 @@ export async function bootstrapSessionLogin(
       });
     }
 
-    const grantedTestCredits = product.code === "motrend" && createdMembership ?
+    const grantedTestCredits = product.code === "motrend" && createdMembership && !input.suppressMotrendGift ?
       await grantMotrendBootstrapCredits(tx, {
         walletId: wallet.id,
         accountId: account.id,
@@ -238,6 +226,7 @@ export async function bootstrapSessionLogin(
         payloadJson: {
           productCode: product.code,
           createdMembership,
+          suppressMotrendGift: Boolean(input.suppressMotrendGift),
           grantedTestCredits,
           grantedTestCreditsAmount: grantedTestCredits ?
             MOTREND_TEST_BOOTSTRAP_CREDITS :
