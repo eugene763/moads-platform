@@ -185,6 +185,7 @@ export async function createDodoCheckoutSession(
           quantity: 1,
         },
       ],
+      minimal_address: true,
       ...(customerEmail ? {customer: {email: customerEmail}} : {}),
       ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
       ...(returnUrl ? {return_url: returnUrl, cancel_url: returnUrl} : {}),
