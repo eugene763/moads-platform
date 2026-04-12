@@ -30,14 +30,14 @@ const tickerItems = [
 ];
 
 const dimensionCards = [
-  {title: "Product Data Completeness", weight: "16%", description: "Attributes, variants, and taxonomy coverage for clearer engine understanding.", tags: ["Attributes", "Variants", "Taxonomy"]},
-  {title: "Structured Data & Schema", weight: "15%", description: "JSON-LD health, rating markup, and citation-ready schema coverage.", tags: ["JSON-LD", "Product schema", "FAQ schema"]},
-  {title: "AI Engine Optimization", weight: "18%", description: "Signals that help answer engines parse, cite, and trust the page.", tags: ["llms.txt", "Citation sources", "Trust signals"]},
-  {title: "Content Architecture", weight: "11%", description: "Clear sections, headings, and answer blocks for shopping and discovery prompts.", tags: ["Headings", "Answer blocks", "Buying guides"]},
-  {title: "Marketplace Compliance", weight: "12%", description: "Marketplace-specific readiness and structured requirements across channels.", tags: ["Platform specs", "Enhanced content", "Programs"]},
-  {title: "Social Proof & Reviews", weight: "12%", description: "Review volume, rating consistency, and trust cues visible on page.", tags: ["Review volume", "Rating average", "Velocity"]},
-  {title: "Visual Content Quality", weight: "7%", description: "Image/video presentation that helps engines and shoppers interpret context.", tags: ["Image count", "Video", "Alt text"]},
-  {title: "Technical & Pricing", weight: "9%", description: "Performance and pricing clarity that support stronger page confidence.", tags: ["Core Web Vitals", "Mobile score", "Price signals"]},
+  {title: "Access", weight: "Scored now", description: "Reachability, crawl status, and fetch stability for the scanned URL.", tags: ["HTTP access", "Status", "Raw HTML reachability"]},
+  {title: "Basic SEO", weight: "Scored now", description: "Title, description, canonical, and social title signals parsed from the page source.", tags: ["Title", "Meta description", "Canonical"]},
+  {title: "Ratings Schema", weight: "Scored now", description: "AggregateRating presence, count fields, valid scale, and visible trust evidence.", tags: ["JSON-LD", "Review count", "Visible match"]},
+  {title: "Crawlability", weight: "Evidence layer", description: "robots.txt, sitemap, and AI bot guidance enrich the report without changing the top-line score yet.", tags: ["robots.txt", "Sitemap", "AI bots"]},
+  {title: "Product Page Sample", weight: "Evidence layer", description: "If you scan a homepage, we try one richer product-like URL to avoid under-reading the site.", tags: ["Sample PDP", "Schema carryover", "Trust cues"]},
+  {title: "Content Structure", weight: "Evidence layer", description: "Clear sections, headings, and answer blocks help us frame the action plan and future score expansion.", tags: ["Headings", "Answer blocks", "Sections"]},
+  {title: "Action Plan", weight: "Evidence layer", description: "Priority fixes and the fastest win are generated from measured issues on the page.", tags: ["Top issues", "Fastest win", "Priority fixes"]},
+  {title: "Prompt Kit", weight: "Evidence layer", description: "Manual prompts help teams validate AI discoverability without triggering paid provider calls during the scan.", tags: ["Manual prompts", "Review workflow", "Future bridge"]},
 ];
 
 const pricingCards = [
@@ -54,7 +54,7 @@ const pricingCards = [
       "No credit card required",
     ],
     href: "/",
-    cta: "Get Free Score",
+    cta: "Open Checker",
   },
   {
     name: "Credit Packs",
@@ -135,7 +135,7 @@ export default function HomePage() {
     <main>
       <AeoTopNav />
 
-      <section className="hero">
+      <section className="hero" id="top">
         <div className="hero-float-logos" aria-hidden="true">
           {floatLogos.map((item) => (
             <div key={item.label} className="float-logo" style={floatStyle(item)}>
@@ -160,7 +160,9 @@ export default function HomePage() {
               Start with a deterministic score from raw page evidence.
             </p>
 
-            <ScanForm />
+            <div id="scan">
+              <ScanForm />
+            </div>
 
             <div className="sample-report-card">
               <div className="sample-report-header">
@@ -215,8 +217,8 @@ export default function HomePage() {
               <article className="step-card">
                 <span className="step-badge">Step 02</span>
                 {iconForStep("chart")}
-                <h3>We Analyze 8 Dimensions</h3>
-                <p>We check structure, accessibility, answer-readiness, schema, content, trust, visuals, and technical signals.</p>
+                <h3>We Score 3 Blocks + Evidence</h3>
+                <p>Today&apos;s top-line score is deterministic and rules-based. Extra evidence helps explain what to fix next.</p>
               </article>
               <article className="step-card">
                 <span className="step-badge">Step 03</span>
@@ -243,7 +245,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Scoring System</p>
-            <h2 className="section-title">8 dimensions of AI discoverability</h2>
+            <h2 className="section-title">Deterministic score now, broader evidence alongside it</h2>
             <div className="dimensions-grid">
               {dimensionCards.map((card, index) => (
                 <article key={card.title} className={`dimension-card accent-${(index % 4) + 1}`}>
@@ -260,6 +262,16 @@ export default function HomePage() {
                 </article>
               ))}
             </div>
+            <p className="pricing-note">
+              Top-line score currently weights
+              {" "}
+              <strong>Access</strong>
+              ,{" "}
+              <strong>Basic SEO</strong>
+              , and{" "}
+              <strong>Ratings Schema</strong>
+              . The remaining cards represent evidence and roadmap areas shown in the report.
+            </p>
           </div>
         </div>
       </section>

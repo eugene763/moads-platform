@@ -184,6 +184,17 @@ export function ReportView({publicToken}: {publicToken: string}) {
 
   const aggregate = report.report.evidence?.structuredData?.aggregateRating;
   const onPage = report.report.evidence?.onPage;
+  const crawlability = report.report.evidence?.crawlability;
+  const productPage = report.report.evidence?.productPage;
+  const actionPlan = report.report.actionPlan;
+  const promptKit = report.report.promptKit?.prompts ?? [];
+  const scanModeNote = report.report.summary?.scanModeNote;
+  const scoredNow = [
+    ["Access", report.report.dimensions?.access],
+    ["Basic SEO", report.report.dimensions?.basicSeo],
+    ["Ratings Schema", report.report.dimensions?.ratingsSchema],
+  ] as const;
+  const limitedBots = Object.entries(crawlability?.aiBots ?? {}).filter(([, state]) => state.allowed === false || state.reachable === false);
 
   return (
     <div className="report-shell">
@@ -193,11 +204,12 @@ export function ReportView({publicToken}: {publicToken: string}) {
           <p className="score-kicker">AI Discovery Score (Beta)</p>
           <h1 className="score-heading">{publicScore}/100</h1>
           <p className="score-summary">
-            Deterministic score from raw page evidence. Current page status:
+            Deterministic page-readiness score from fetchable HTML evidence. Current page status:
             {" "}
             <strong>{statusLabel}</strong>
             .
           </p>
+          {scanModeNote ? <p className="tiny note-banner">{scanModeNote}</p> : null}
           <div className="score-badges">
             <span className="badge badge-score">Schema {ratingStatus}</span>
             <span className="badge badge-score">Confidence {report.confidenceLevel ?? "unknown"}</span>
@@ -209,6 +221,36 @@ export function ReportView({publicToken}: {publicToken: string}) {
           <button type="button" className="cta-ghost" onClick={() => void copyLink()}>Copy Link</button>
           <Link className="cta-primary" href="/dashboard">Open Dashboard</Link>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>How This Score Works</h2>
+          <span className="badge badge-score">Deterministic</span>
+        </div>
+        <div className="evidence-grid">
+          <article className="surface-card">
+            <h3>Scored now</h3>
+            <ul className="meta-list">
+              {scoredNow.map(([label, value]) => (
+                <li key={label}>
+                  <span>{label}</span>
+                  <strong>{value ?? "--"}</strong>
+                </li>
+              ))}
+            </ul>
+          </article>
+          <article className="surface-card">
+            <h3>Evidence layer</h3>
+            <ul className="meta-list">
+              <li><span>Crawlability</span><strong>{crawlability?.robotsExists || crawlability?.sitemapExists ? "Included" : "Checking only if reachable"}</strong></li>
+              <li><span>Product page sample</span><strong>{productPage?.sampled ? "Included" : "Not found"}</strong></li>
+              <li><span>Action plan</span><strong>{actionPlan?.priorityFixes?.length ? "Included" : "Pending"}</strong></li>
+              <li><span>Prompt kit</span><strong>{promptKit.length ? "Included" : "Pending"}</strong></li>
+            </ul>
+          </article>
+        </div>
+        <p className="tiny">Only Access, Basic SEO, and Ratings Schema change the top-line score today. Crawlability, product-page sampling, and prompts help explain the result.</p>
       </section>
 
       <section className="panel">
@@ -229,9 +271,60 @@ export function ReportView({publicToken}: {publicToken: string}) {
             <p>Visible reviews: {onPage?.reviewsCount ?? "not found"}</p>
             <p className="tiny">{onPage?.snippet ?? "No matching snippet found in raw HTML."}</p>
           </article>
+          <article className="surface-card">
+            <h3>Crawlability</h3>
+            <p>robots.txt: {crawlability?.robotsExists ? "found" : "not found"}</p>
+            <p>sitemap.xml: {crawlability?.sitemapExists ? "found" : "not found"}</p>
+            <p className="tiny">
+              {limitedBots.length ? `Some AI bots are limited: ${limitedBots.map(([name]) => name).join(", ")}.` : "No explicit AI bot block was detected in the evidence layer."}
+            </p>
+          </article>
+          <article className="surface-card">
+            <h3>Product Page Sample</h3>
+            <p>Sampled: {productPage?.sampled ? "yes" : "no"}</p>
+            <p>URL: {productPage?.url ?? "not found"}</p>
+            <p className="tiny">
+              {productPage?.sampled ?
+                `Source: ${productPage.source ?? "unknown"} · Rating: ${productPage.aggregateRating?.ratingValue ?? productPage.onPage?.ratingValue ?? "not found"}` :
+                "If you scanned a homepage, we attempted one richer product-like URL to improve evidence quality."}
+            </p>
+          </article>
         </div>
         <p className="tiny">Structured data validity still does not guarantee rich-result display in search surfaces.</p>
       </section>
+
+      {actionPlan ? (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Priority Action Plan</h2>
+            <span className="badge badge-score">{actionPlan.priorityFixes?.length ?? 0} fixes</span>
+          </div>
+          <div className="evidence-grid">
+            <article className="surface-card">
+              <h3>Top issues</h3>
+              <ul className="meta-list">
+                {(actionPlan.topIssues ?? []).slice(0, 3).map((issue) => (
+                  <li key={issue.code}>
+                    <span>{issue.code}</span>
+                    <strong>{issue.pointsLost ? `-${issue.pointsLost}` : issue.severity}</strong>
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="surface-card">
+              <h3>Fastest win</h3>
+              {actionPlan.fastestWin ? (
+                <>
+                  <p>{actionPlan.fastestWin.title}</p>
+                  <p className="tiny">{actionPlan.fastestWin.description}</p>
+                </>
+              ) : (
+                <p className="tiny">No fastest-win hint was generated for this scan yet.</p>
+              )}
+            </article>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="panel-header">
@@ -312,6 +405,24 @@ export function ReportView({publicToken}: {publicToken: string}) {
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {promptKit.length ? (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Prompt Kit</h2>
+            <span className="badge badge-score">Manual</span>
+          </div>
+          <div className="prompt-grid">
+            {promptKit.map((prompt) => (
+              <article key={prompt.id} className="surface-card">
+                <p className="list-title">{prompt.title}</p>
+                <p className="tiny">Best run in: {prompt.engine}</p>
+                <p className="tiny prompt-copy">{prompt.prompt}</p>
+              </article>
+            ))}
+          </div>
         </section>
       ) : null}
 

@@ -1,7 +1,8 @@
 import {PlatformError} from "@moads/db";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
-const DEFAULT_USER_AGENT = "MOADS-AEO-Scanner/1.0 (+https://moads.agency)";
+const DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
+const DEFAULT_ACCEPT_LANGUAGE = "en-US,en;q=0.9";
 const AI_BOTS = [
   {name: "GPTBot", agent: "GPTBot"},
   {name: "ClaudeBot", agent: "ClaudeBot"},
@@ -82,11 +83,13 @@ interface CrawlabilityEvidence {
   allowsAll: boolean;
   sitemapUrl: string | null;
   sitemapExists: boolean;
+  sitemapCandidates: string[];
   aiBots: Record<string, CrawlabilityBotEvidence>;
 }
 
 interface ProductPageSampleEvidence {
   sampled: boolean;
+  source: "homepage_link" | "sitemap" | "none";
   url: string | null;
   title: string | null;
   aggregateRating: AggregateRatingEvidence | null;
@@ -395,6 +398,64 @@ function extractSitemapUrls(robotsText: string): string[] {
   return matches.map((value) => value.replace(/^Sitemap:\s*/i, "").trim());
 }
 
+function isRetryableStatus(status: number | null): boolean {
+  return status == null || status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function isLikelyProductUrl(candidate: URL): boolean {
+  const path = candidate.pathname.toLowerCase();
+  return path.includes("/products/")
+    || path.includes("/product/")
+    || path.includes("/collections/")
+    || path.includes("/shop/")
+    || /\/p\/[^/]+/.test(path)
+    || /\/dp\/[a-z0-9]{8,}/.test(path)
+    || /product[^/]*\.html?$/.test(path)
+    || /\/item\/[^/]+/.test(path);
+}
+
+function dedupeUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const url of urls) {
+    if (!url || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    output.push(url);
+  }
+
+  return output;
+}
+
+function extractSitemapProductCandidates(sitemapText: string, baseUrl: string): string[] {
+  const host = new URL(baseUrl).host;
+  const candidates: string[] = [];
+
+  for (const match of sitemapText.matchAll(/<loc>([^<]+)<\/loc>/gi)) {
+    const rawUrl = decodeHtmlEntities(match[1] ?? "").trim();
+    if (!rawUrl) {
+      continue;
+    }
+
+    try {
+      const candidate = new URL(rawUrl);
+      if (candidate.host !== host) {
+        continue;
+      }
+      if (!isLikelyProductUrl(candidate)) {
+        continue;
+      }
+      candidates.push(candidate.toString());
+    } catch {
+      continue;
+    }
+  }
+
+  return dedupeUrls(candidates).slice(0, 6);
+}
+
 async function fetchTextDocument(input: {
   url: string;
   fetchImpl: typeof fetch;
@@ -404,35 +465,68 @@ async function fetchTextDocument(input: {
   ok: boolean;
   status: number | null;
   text: string;
+  finalUrl: string | null;
+  redirected: boolean;
+  contentType: string | null;
 }> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
 
-  try {
-    const response = await input.fetchImpl(input.url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "user-agent": input.userAgent ?? DEFAULT_USER_AGENT,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
+    try {
+      const response = await input.fetchImpl(input.url, {
+        method: "GET",
+        redirect: "follow",
+        signal: controller.signal,
+        headers: {
+          "user-agent": input.userAgent ?? DEFAULT_USER_AGENT,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": DEFAULT_ACCEPT_LANGUAGE,
+          "cache-control": "no-cache",
+          pragma: "no-cache",
+          "upgrade-insecure-requests": "1",
+        },
+      });
 
-    return {
-      ok: response.ok,
-      status: response.status,
-      text: await response.text(),
-    };
-  } catch {
-    return {
-      ok: false,
-      status: null,
-      text: "",
-    };
-  } finally {
-    clearTimeout(timeout);
+      const payload = {
+        ok: response.ok,
+        status: response.status,
+        text: await response.text(),
+        finalUrl: response.url || input.url,
+        redirected: response.redirected,
+        contentType: response.headers.get("content-type"),
+      };
+
+      if (attempt === 0 && isRetryableStatus(payload.status)) {
+        continue;
+      }
+
+      return payload;
+    } catch {
+      if (attempt === 0) {
+        continue;
+      }
+      return {
+        ok: false,
+        status: null,
+        text: "",
+        finalUrl: null,
+        redirected: false,
+        contentType: null,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  return {
+    ok: false,
+    status: null,
+    text: "",
+    finalUrl: null,
+    redirected: false,
+    contentType: null,
+  };
 }
 
 async function fetchCrawlabilityEvidence(input: {
@@ -458,6 +552,7 @@ async function fetchCrawlabilityEvidence(input: {
     timeoutMs: 5_000,
   });
   const sitemapExists = sitemapResponse.ok && /<(urlset|sitemapindex)\b/i.test(sitemapResponse.text);
+  const sitemapCandidates = sitemapExists ? extractSitemapProductCandidates(sitemapResponse.text, input.baseUrl) : [];
 
   const botEntries = await Promise.all(
     AI_BOTS.map(async (bot) => {
@@ -487,56 +582,97 @@ async function fetchCrawlabilityEvidence(input: {
     allowsAll: robotsExists ? !/Disallow:\s*\/\s*$/mi.test(robotsResponse.text) : true,
     sitemapUrl,
     sitemapExists,
+    sitemapCandidates,
     aiBots: Object.fromEntries(botEntries),
   };
 }
 
-function findProductPageCandidate(html: string, baseUrl: string): string | null {
+function findProductPageCandidates(html: string, baseUrl: string): string[] {
   const patterns = [
-    /href=["'](\/products\/[^"'#?]+)/i,
-    /href=["'](\/collections\/[^"']+\/products\/[^"'#?]+)/i,
-    /href=["']([^"']*\/dp\/[A-Z0-9]{10}[^"'#?]*)/i,
-    /href=["'](\/p\/[^"'#?]+)/i,
-    /href=["']([^"']*product[^"']*\.html)/i,
+    /href=["'](\/products\/[^"'#?]+)/gi,
+    /href=["'](\/collections\/[^"']+\/products\/[^"'#?]+)/gi,
+    /href=["']([^"']*\/dp\/[A-Z0-9]{10}[^"'#?]*)/gi,
+    /href=["'](\/p\/[^"'#?]+)/gi,
+    /href=["']([^"']*product[^"']*\.html)/gi,
   ];
 
   const host = new URL(baseUrl).host;
+  const candidates: string[] = [];
 
   for (const pattern of patterns) {
-    const match = html.match(pattern);
-    const rawCandidate = match?.[1];
-    if (!rawCandidate) {
-      continue;
-    }
-
-    try {
-      const candidate = new URL(rawCandidate, baseUrl);
-      if (candidate.host !== host) {
+    for (const match of html.matchAll(pattern)) {
+      const rawCandidate = match[1];
+      if (!rawCandidate) {
         continue;
       }
-      return candidate.toString();
-    } catch {
-      continue;
+
+      try {
+        const candidate = new URL(rawCandidate, baseUrl);
+        if (candidate.host !== host) {
+          continue;
+        }
+        if (!isLikelyProductUrl(candidate)) {
+          continue;
+        }
+        candidates.push(candidate.toString());
+      } catch {
+        continue;
+      }
     }
   }
 
-  return null;
+  return dedupeUrls(candidates).slice(0, 6);
+}
+
+function scoreProductEvidence(sample: ProductPageSampleEvidence): number {
+  let score = 0;
+
+  if (sample.aggregateRating) {
+    score += 20;
+    if ((sample.aggregateRating.reviewCount ?? 0) > 0 || (sample.aggregateRating.ratingCount ?? 0) > 0) {
+      score += 8;
+    }
+  }
+
+  if (sample.onPage?.ratingValue != null) {
+    score += 6;
+  }
+
+  if (sample.onPage?.reviewsCount != null) {
+    score += 4;
+  }
+
+  if (sample.title) {
+    score += 2;
+  }
+
+  return score;
 }
 
 async function fetchProductPageEvidence(input: {
   html: string;
   requestedUrl: string;
   fetchImpl: typeof fetch;
+  crawlability: CrawlabilityEvidence | null;
 }): Promise<ProductPageSampleEvidence | null> {
   const requested = new URL(input.requestedUrl);
   if (requested.pathname !== "/" && requested.pathname !== "") {
     return null;
   }
 
-  const productUrl = findProductPageCandidate(input.html, input.requestedUrl);
-  if (!productUrl) {
+  const homepageCandidates = findProductPageCandidates(input.html, input.requestedUrl);
+  const sitemapCandidates = input.crawlability?.sitemapCandidates ?? [];
+  const candidateEntries = dedupeUrls([...homepageCandidates, ...sitemapCandidates])
+    .slice(0, 3)
+    .map((url) => ({
+      url,
+      source: homepageCandidates.includes(url) ? "homepage_link" : "sitemap",
+    })) as Array<{url: string; source: "homepage_link" | "sitemap"}>;
+
+  if (!candidateEntries.length) {
     return {
       sampled: false,
+      source: "none",
       url: null,
       title: null,
       aggregateRating: null,
@@ -544,30 +680,40 @@ async function fetchProductPageEvidence(input: {
     };
   }
 
-  const response = await fetchTextDocument({
-    url: productUrl,
-    fetchImpl: input.fetchImpl,
-    timeoutMs: 8_000,
-  });
+  let bestSample: ProductPageSampleEvidence | null = null;
+  let bestScore = -1;
 
-  if (!response.ok || response.text.length < 300) {
-    return {
+  for (const candidate of candidateEntries) {
+    const response = await fetchTextDocument({
+      url: candidate.url,
+      fetchImpl: input.fetchImpl,
+      timeoutMs: 8_000,
+    });
+
+    const sample: ProductPageSampleEvidence = (!response.ok || response.text.length < 300) ? {
       sampled: false,
-      url: productUrl,
+      source: candidate.source,
+      url: candidate.url,
       title: null,
       aggregateRating: null,
       onPage: null,
+    } : {
+      sampled: true,
+      source: candidate.source,
+      url: candidate.url,
+      title: extractTitle(response.text),
+      aggregateRating: extractAggregateRating(parseJsonLdScripts(response.text)),
+      onPage: extractOnPageEvidence(response.text),
     };
+
+    const score = scoreProductEvidence(sample);
+    if (score > bestScore) {
+      bestSample = sample;
+      bestScore = score;
+    }
   }
 
-  const nodes = parseJsonLdScripts(response.text);
-  return {
-    sampled: true,
-    url: productUrl,
-    title: extractTitle(response.text),
-    aggregateRating: extractAggregateRating(nodes),
-    onPage: extractOnPageEvidence(response.text),
-  };
+  return bestSample;
 }
 
 function calculateScore(input: {
@@ -781,14 +927,28 @@ function evaluateAeoHtml(input: {
   const jsonLdNodes = parseJsonLdScripts(input.html);
   const aggregate = extractAggregateRating(jsonLdNodes);
   const onPage = extractOnPageEvidence(input.html);
+  const rootLikeRequest = (() => {
+    try {
+      const requested = new URL(input.requestedUrl);
+      return requested.pathname === "/" || requested.pathname === "";
+    } catch {
+      return false;
+    }
+  })();
+  const scoreAggregate = aggregate ?? (rootLikeRequest ? input.productPage?.aggregateRating ?? null : null);
+  const scoreOnPage = (onPage.ratingValue != null || onPage.reviewsCount != null) ?
+    onPage :
+    rootLikeRequest ?
+      input.productPage?.onPage ?? onPage :
+      onPage;
 
-  const bestRating = aggregate?.bestRating ?? 5;
-  const worstRating = aggregate?.worstRating ?? 1;
-  const hasCount = (aggregate?.reviewCount ?? 0) > 0 || (aggregate?.ratingCount ?? 0) > 0;
-  const hasVisibleEvidence = onPage.ratingValue != null || onPage.reviewsCount != null;
+  const bestRating = scoreAggregate?.bestRating ?? 5;
+  const worstRating = scoreAggregate?.worstRating ?? 1;
+  const hasCount = (scoreAggregate?.reviewCount ?? 0) > 0 || (scoreAggregate?.ratingCount ?? 0) > 0;
+  const hasVisibleEvidence = scoreOnPage.ratingValue != null || scoreOnPage.reviewsCount != null;
 
   const validScale = (() => {
-    if (!aggregate?.ratingValue) {
+    if (!scoreAggregate?.ratingValue) {
       return false;
     }
 
@@ -796,22 +956,22 @@ function evaluateAeoHtml(input: {
       return false;
     }
 
-    return aggregate.ratingValue >= worstRating && aggregate.ratingValue <= bestRating;
+    return scoreAggregate.ratingValue >= worstRating && scoreAggregate.ratingValue <= bestRating;
   })();
 
   const consistentEvidence = (() => {
-    if (!aggregate?.ratingValue || !onPage.ratingValue) {
+    if (!scoreAggregate?.ratingValue || !scoreOnPage.ratingValue) {
       return false;
     }
 
-    const delta = Math.abs(aggregate.ratingValue - onPage.ratingValue);
+    const delta = Math.abs(scoreAggregate.ratingValue - scoreOnPage.ratingValue);
     if (delta > 0.35) {
       return false;
     }
 
-    if (aggregate.reviewCount && onPage.reviewsCount) {
-      const gap = Math.abs(aggregate.reviewCount - onPage.reviewsCount);
-      if (gap > Math.max(25, aggregate.reviewCount * 0.2)) {
+    if (scoreAggregate.reviewCount && scoreOnPage.reviewsCount) {
+      const gap = Math.abs(scoreAggregate.reviewCount - scoreOnPage.reviewsCount);
+      if (gap > Math.max(25, scoreAggregate.reviewCount * 0.2)) {
         return false;
       }
     }
@@ -825,8 +985,8 @@ function evaluateAeoHtml(input: {
     hasDescription: Boolean(description),
     hasCanonical: Boolean(canonical),
     hasOgTitle: Boolean(ogTitle),
-    hasAggregate: Boolean(aggregate),
-    hasRatingValue: Boolean(aggregate?.ratingValue),
+    hasAggregate: Boolean(scoreAggregate),
+    hasRatingValue: Boolean(scoreAggregate?.ratingValue),
     hasCount,
     validScale,
     hasVisibleEvidence,
@@ -857,7 +1017,7 @@ function evaluateAeoHtml(input: {
     issues.push(buildIssue("canonical_missing", "low", "basic_seo", 7, "Missing canonical signal."));
   }
 
-  if (!aggregate) {
+  if (!scoreAggregate) {
     issues.push(buildIssue(
       "aggregate_rating_missing",
       "high",
@@ -899,7 +1059,7 @@ function evaluateAeoHtml(input: {
 
   const stripped = stripHtml(input.html);
   const scriptCount = (input.html.match(/<script\b/gi) ?? []).length;
-  const likelyJsHeavy = stripped.length < 500 && scriptCount > 15;
+  const likelyJsHeavy = stripped.length < 700 && scriptCount > 15;
 
   if (likelyJsHeavy) {
     issues.push(buildIssue(
@@ -907,7 +1067,7 @@ function evaluateAeoHtml(input: {
       "medium",
       "access",
       3,
-      "The page appears JS-heavy in raw HTML. Some facts may be missing without rendered mode.",
+      "This page appears client-rendered; score is based on raw HTML snapshot only.",
     ));
   }
 
@@ -1006,6 +1166,7 @@ function evaluateAeoHtml(input: {
       status: input.blocked ? "blocked" : "completed",
       ratingSchemaStatus: ratingStatus,
       confidenceLevel,
+      scanModeNote: likelyJsHeavy ? "This page appears client-rendered; score is based on raw HTML snapshot only." : null,
     },
     dimensions: {
       access: score.access,
@@ -1021,8 +1182,9 @@ function evaluateAeoHtml(input: {
       productPage: input.productPage,
       notes: [
         "raw_html_mode",
+        rootLikeRequest && input.productPage?.sampled ? "product_page_sample_used_for_enrichment" : null,
         "structured_data_validity_does_not_guarantee_rich_results",
-      ],
+      ].filter(Boolean),
     },
     actionPlan: {
       topIssues: sortedIssues.slice(0, 3).map((issue) => ({
@@ -1066,7 +1228,8 @@ function evaluateAeoHtml(input: {
     bytes: input.fetchMeta.bytes,
     finalUrl: input.finalUrl,
     httpStatus: input.httpStatus,
-    parserVersion: "aeo_parser_v2",
+    parserVersion: "aeo_parser_v3",
+    usedProductPageEvidence: rootLikeRequest && Boolean(input.productPage?.sampled),
   } satisfies Record<string, unknown>;
 
   return {
@@ -1077,8 +1240,8 @@ function evaluateAeoHtml(input: {
     status: input.blocked ? "blocked" : "completed",
     confidenceLevel,
     publicScore: score.total,
-    rulesetVersion: "aeo_rules_v2",
-    promptVersion: "deterministic_v2",
+    rulesetVersion: "aeo_rules_v3",
+    promptVersion: "deterministic_v3",
     reportJson,
     recommendationsJson: recommendations,
     extractedFactsJson,
@@ -1098,31 +1261,21 @@ export async function runAeoDeterministicScan(input: {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fetchImpl = input.fetchImpl ?? fetch;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-
   const startedAt = Date.now();
-  let response: Response;
+  let primaryDocument: Awaited<ReturnType<typeof fetchTextDocument>>;
   let html = "";
   let blocked = false;
   let crawlability: CrawlabilityEvidence | null = null;
   let productPage: ProductPageSampleEvidence | null = null;
   try {
-    response = await fetchImpl(requestedUrl, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "user-agent": input.userAgent ?? DEFAULT_USER_AGENT,
-        accept: "text/html,application/xhtml+xml",
-      },
+    primaryDocument = await fetchTextDocument({
+      url: requestedUrl,
+      fetchImpl,
+      timeoutMs,
+      ...(input.userAgent ? {userAgent: input.userAgent} : {}),
     });
-
-    html = await response.text();
+    html = primaryDocument.text;
   } catch (error) {
-    clearTimeout(timeout);
     const responseMs = Date.now() - startedAt;
 
     return evaluateAeoHtml({
@@ -1141,32 +1294,29 @@ export async function runAeoDeterministicScan(input: {
         bytes: 0,
       },
     });
-  } finally {
-    clearTimeout(timeout);
   }
 
   const responseMs = Date.now() - startedAt;
-  const httpStatus = response.status;
-  const contentType = response.headers.get("content-type");
+  const httpStatus = primaryDocument.status;
+  const contentType = primaryDocument.contentType;
 
-  if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429 || httpStatus >= 500) {
+  if (httpStatus != null && (httpStatus === 401 || httpStatus === 403 || httpStatus === 429 || httpStatus >= 500)) {
     blocked = true;
   }
 
-  const finalUrl = response.url || requestedUrl;
+  const finalUrl = primaryDocument.finalUrl ?? requestedUrl;
 
   if (!blocked) {
-    [crawlability, productPage] = await Promise.all([
-      fetchCrawlabilityEvidence({
-        baseUrl: finalUrl,
-        fetchImpl,
-      }),
-      fetchProductPageEvidence({
-        html,
-        requestedUrl: finalUrl,
-        fetchImpl,
-      }),
-    ]);
+    crawlability = await fetchCrawlabilityEvidence({
+      baseUrl: finalUrl,
+      fetchImpl,
+    });
+    productPage = await fetchProductPageEvidence({
+      html,
+      requestedUrl: finalUrl,
+      fetchImpl,
+      crawlability,
+    });
   }
 
   return evaluateAeoHtml({
@@ -1180,7 +1330,7 @@ export async function runAeoDeterministicScan(input: {
     productPage,
     fetchMeta: {
       responseMs,
-      redirected: response.redirected,
+      redirected: primaryDocument.redirected,
       contentType,
       bytes: Buffer.byteLength(html),
     },

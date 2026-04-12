@@ -14,8 +14,8 @@ interface AeoTopNavProps {
 export function AeoTopNav({
   secondaryLabel = "Log In",
   secondaryHref = "/dashboard",
-  ctaLabel = "Get Free Score",
-  ctaHref = "/",
+  ctaLabel = "Open Checker",
+  ctaHref = "/#scan",
 }: AeoTopNavProps) {
   const [scrolled, setScrolled] = useState(false);
 

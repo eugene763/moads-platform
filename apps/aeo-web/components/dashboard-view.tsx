@@ -55,7 +55,12 @@ export function DashboardView() {
       setScans(scanList.scans);
       setSelectedScanId(scanList.scans[0]?.scanId ?? null);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to load dashboard.");
+      const message = requestError instanceof Error ? requestError.message : "Failed to load dashboard.";
+      if (/session|membership required|product membership/i.test(message)) {
+        setError(null);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -145,7 +150,7 @@ export function DashboardView() {
     return (
       <div className="state-card">
         <h2>AEO Dashboard</h2>
-        <p>Sign in to unlock history, wallet, connected evidence, and AI tips.</p>
+        <p>Sign in to see saved scans, wallet balance, connected evidence, and AI tips. The score itself stays free.</p>
         <button type="button" className="cta-primary" onClick={signIn} disabled={signInBusy}>
           {signInBusy ? "Signing in..." : "Sign In with Google"}
         </button>

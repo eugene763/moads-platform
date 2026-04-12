@@ -30,7 +30,6 @@ import {
   normalizeSiteUrl,
   runAeoDeterministicScan,
 } from "../lib/aeo-scanner.js";
-import {requireProductMembership} from "../middleware/access.js";
 import {requireAdminClaim} from "../middleware/admin.js";
 import {requireAuth, resolveAccount} from "../middleware/auth.js";
 
@@ -128,7 +127,7 @@ async function tryResolveAuthContext(request: FastifyRequest) {
 }
 
 export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
-  const authGuards = [requireAuth, resolveAccount, requireProductMembership("aeo")];
+  const authGuards = [requireAuth, resolveAccount];
   const aiTipsAdapter = createAeoAiTipsAdapter(app.config);
   const gaAdapter = createAeoGaAdapter(app.config);
   const realtimeAdapter = createAeoRealtimeAdapter(app.config);

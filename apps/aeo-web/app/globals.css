@@ -1028,6 +1028,14 @@ input {
   line-height: 1.6;
 }
 
+.note-banner {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--warn-soft);
+  color: #8a5304;
+}
+
 .score-badges {
   display: flex;
   flex-wrap: wrap;
@@ -1062,6 +1070,36 @@ input {
   margin: 0 0 8px;
 }
 
+.meta-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.meta-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.meta-list li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.meta-list span {
+  color: var(--muted);
+}
+
+.meta-list strong {
+  text-align: right;
+}
+
 .list {
   margin: 0;
   padding: 0;
@@ -1084,6 +1122,16 @@ input {
 .list-title {
   margin: 0 0 4px;
   font-weight: 700;
+}
+
+.prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.prompt-copy {
+  white-space: pre-wrap;
 }
 
 .badge {
@@ -1274,6 +1322,7 @@ input {
   .pricing-cards,
   .features-layout,
   .dimensions-grid,
+  .prompt-grid,
   .evidence-grid,
   .dashboard-grid {
     grid-template-columns: 1fr;

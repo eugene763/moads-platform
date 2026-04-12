@@ -70,9 +70,9 @@ export function ScanForm() {
         </button>
       </div>
       <div className="hero-trust" aria-label="Trust signals">
-        <span>No credit card</span>
-        <span>Results in 60 seconds</span>
-        <span>51+ checks</span>
+        <span>Free score</span>
+        <span>Scored now: 3 blocks</span>
+        <span>Evidence layer included</span>
       </div>
       <p className="form-hint">{formHint}</p>
       {error ? <p className="error-text">{error}</p> : null}

@@ -19,6 +19,12 @@ export interface PublicScanReport {
   report: {
     summary?: {
       ratingSchemaStatus?: string;
+      scanModeNote?: string | null;
+    };
+    dimensions?: {
+      access?: number;
+      basicSeo?: number;
+      ratingsSchema?: number;
     };
     evidence?: {
       structuredData?: {
@@ -33,6 +39,60 @@ export interface PublicScanReport {
         reviewsCount?: number;
         snippet?: string | null;
       };
+      crawlability?: {
+        robotsExists?: boolean;
+        sitemapExists?: boolean;
+        aiBots?: Record<string, {allowed?: boolean; explicitly?: boolean; reachable?: boolean | null}>;
+      };
+      productPage?: {
+        sampled?: boolean;
+        source?: string;
+        url?: string | null;
+        title?: string | null;
+        aggregateRating?: {
+          ratingValue?: number;
+          reviewCount?: number;
+          ratingCount?: number;
+        } | null;
+        onPage?: {
+          ratingValue?: number;
+          reviewsCount?: number;
+          snippet?: string | null;
+        } | null;
+      };
+      notes?: string[];
+    };
+    actionPlan?: {
+      topIssues?: Array<{
+        code: string;
+        message: string;
+        severity: string;
+        dimension: string;
+        pointsLost: number;
+      }>;
+      fastestWin?: {
+        id: string;
+        title: string;
+        description: string;
+        impactScore: number;
+        priority: string;
+      } | null;
+      priorityFixes?: Array<{
+        id: string;
+        title: string;
+        description: string;
+        impactScore: number;
+        priority: string;
+      }>;
+    };
+    promptKit?: {
+      mode?: string;
+      prompts?: Array<{
+        id: string;
+        title: string;
+        engine: string;
+        prompt: string;
+      }>;
     };
   };
   recommendations: Array<{
