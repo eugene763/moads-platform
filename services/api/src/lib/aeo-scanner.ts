@@ -402,12 +402,32 @@ function isRetryableStatus(status: number | null): boolean {
   return status == null || status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
+function hasNonHtmlExtension(pathname: string): boolean {
+  return /\.(xml|xsl|txt|json|rss|atom|pdf|csv|zip|jpg|jpeg|png|webp|gif|svg|ico|mp4|mp3|mov|webm)$/i.test(pathname);
+}
+
+function isTechnicalDiscoveryUrl(candidate: URL): boolean {
+  const path = candidate.pathname.toLowerCase();
+  return path.includes("sitemap")
+    || path.endsWith("/feed")
+    || path.includes("/feeds/")
+    || path.includes("/rss")
+    || path.includes("/robots.txt")
+    || path.includes("/manifest")
+    || path.includes("/api/")
+    || hasNonHtmlExtension(path);
+}
+
 function isLikelyProductUrl(candidate: URL): boolean {
   const path = candidate.pathname.toLowerCase();
+  if (isTechnicalDiscoveryUrl(candidate)) {
+    return false;
+  }
   return path.includes("/products/")
     || path.includes("/product/")
     || path.includes("/collections/")
-    || path.includes("/shop/")
+    || path.includes("/shop/buy-")
+    || path.includes("/shop/product/")
     || /\/p\/[^/]+/.test(path)
     || /\/dp\/[a-z0-9]{8,}/.test(path)
     || /product[^/]*\.html?$/.test(path)
@@ -429,7 +449,7 @@ function dedupeUrls(urls: string[]): string[] {
   return output;
 }
 
-function extractSitemapProductCandidates(sitemapText: string, baseUrl: string): string[] {
+function extractSitemapLocs(sitemapText: string, baseUrl: string): string[] {
   const host = new URL(baseUrl).host;
   const candidates: string[] = [];
 
@@ -444,16 +464,79 @@ function extractSitemapProductCandidates(sitemapText: string, baseUrl: string): 
       if (candidate.host !== host) {
         continue;
       }
-      if (!isLikelyProductUrl(candidate)) {
-        continue;
-      }
       candidates.push(candidate.toString());
     } catch {
       continue;
     }
   }
 
-  return dedupeUrls(candidates).slice(0, 6);
+  return dedupeUrls(candidates);
+}
+
+function extractSitemapProductCandidates(sitemapText: string, baseUrl: string): string[] {
+  return extractSitemapLocs(sitemapText, baseUrl)
+    .filter((value) => {
+      try {
+        return isLikelyProductUrl(new URL(value));
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, 12);
+}
+
+function extractNestedSitemapCandidates(sitemapText: string, baseUrl: string): string[] {
+  return extractSitemapLocs(sitemapText, baseUrl)
+    .filter((value) => {
+      try {
+        return isTechnicalDiscoveryUrl(new URL(value));
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, 4);
+}
+
+function isLikelyHtmlContentType(contentType: string | null): boolean {
+  if (!contentType) {
+    return true;
+  }
+  return /text\/html|application\/xhtml\+xml/i.test(contentType);
+}
+
+async function collectSitemapProductCandidates(input: {
+  sitemapUrl: string;
+  sitemapText: string;
+  baseUrl: string;
+  fetchImpl: typeof fetch;
+}): Promise<string[]> {
+  const directCandidates = extractSitemapProductCandidates(input.sitemapText, input.baseUrl);
+  if (directCandidates.length > 0 || !/<sitemapindex\b/i.test(input.sitemapText)) {
+    return directCandidates.slice(0, 12);
+  }
+
+  const nestedSitemaps = extractNestedSitemapCandidates(input.sitemapText, input.baseUrl);
+  if (!nestedSitemaps.length) {
+    return [];
+  }
+
+  const nestedCandidates = await Promise.all(
+    nestedSitemaps.map(async (url) => {
+      const nestedResponse = await fetchTextDocument({
+        url,
+        fetchImpl: input.fetchImpl,
+        timeoutMs: 4_000,
+      });
+
+      if (!nestedResponse.ok || !/<(urlset|sitemapindex)\b/i.test(nestedResponse.text)) {
+        return [] as string[];
+      }
+
+      return extractSitemapProductCandidates(nestedResponse.text, input.baseUrl);
+    }),
+  );
+
+  return dedupeUrls(nestedCandidates.flat()).slice(0, 12);
 }
 
 async function fetchTextDocument(input: {
@@ -552,7 +635,12 @@ async function fetchCrawlabilityEvidence(input: {
     timeoutMs: 5_000,
   });
   const sitemapExists = sitemapResponse.ok && /<(urlset|sitemapindex)\b/i.test(sitemapResponse.text);
-  const sitemapCandidates = sitemapExists ? extractSitemapProductCandidates(sitemapResponse.text, input.baseUrl) : [];
+  const sitemapCandidates = sitemapExists ? await collectSitemapProductCandidates({
+    sitemapUrl,
+    sitemapText: sitemapResponse.text,
+    baseUrl: input.baseUrl,
+    fetchImpl: input.fetchImpl,
+  }) : [];
 
   const botEntries = await Promise.all(
     AI_BOTS.map(async (bot) => {
@@ -646,6 +734,10 @@ function scoreProductEvidence(sample: ProductPageSampleEvidence): number {
     score += 2;
   }
 
+  if (sample.source === "homepage_link") {
+    score += 1;
+  }
+
   return score;
 }
 
@@ -690,17 +782,30 @@ async function fetchProductPageEvidence(input: {
       timeoutMs: 8_000,
     });
 
-    const sample: ProductPageSampleEvidence = (!response.ok || response.text.length < 300) ? {
+    const finalUrl = response.finalUrl ?? candidate.url;
+    const finalCandidate = (() => {
+      try {
+        return new URL(finalUrl);
+      } catch {
+        return null;
+      }
+    })();
+    const validHtmlDocument = response.ok
+      && response.text.length >= 300
+      && isLikelyHtmlContentType(response.contentType)
+      && Boolean(finalCandidate && isLikelyProductUrl(finalCandidate));
+
+    const sample: ProductPageSampleEvidence = (!validHtmlDocument) ? {
       sampled: false,
       source: candidate.source,
-      url: candidate.url,
+      url: finalUrl,
       title: null,
       aggregateRating: null,
       onPage: null,
     } : {
       sampled: true,
       source: candidate.source,
-      url: candidate.url,
+      url: finalUrl,
       title: extractTitle(response.text),
       aggregateRating: extractAggregateRating(parseJsonLdScripts(response.text)),
       onPage: extractOnPageEvidence(response.text),
@@ -711,6 +816,17 @@ async function fetchProductPageEvidence(input: {
       bestSample = sample;
       bestScore = score;
     }
+  }
+
+  if (!bestSample || bestScore <= 0) {
+    return {
+      sampled: false,
+      source: "none",
+      url: null,
+      title: null,
+      aggregateRating: null,
+      onPage: null,
+    };
   }
 
   return bestSample;

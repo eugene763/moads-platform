@@ -75,4 +75,123 @@ describe("aeo scanner", () => {
     expect(result.publicScore).toBeLessThan(70);
     expect(result.issuesJson.some((issue) => issue.code === "aggregate_rating_missing")).toBe(true);
   });
+
+  it("uses nested sitemap product URLs instead of sitemap index files", async () => {
+    const homepageHtml = `
+      <html>
+        <head>
+          <title>Store Home</title>
+          <meta name="description" content="Home page" />
+        </head>
+        <body>
+          <a href="/collections/featured">Featured</a>
+        </body>
+      </html>
+    `;
+
+    const robotsTxt = `
+      User-agent: *
+      Allow: /
+      Sitemap: https://example.com/sitemap.xml
+    `;
+
+    const sitemapIndexXml = `
+      <sitemapindex>
+        <sitemap><loc>https://example.com/ae/shop/sitemap-index.xml</loc></sitemap>
+      </sitemapindex>
+    `;
+
+    const nestedSitemapXml = `
+      <urlset>
+        <url><loc>https://example.com/products/test-product</loc></url>
+      </urlset>
+    `;
+
+    const productHtml = `
+      <html>
+        <head>
+          <title>Test Product</title>
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Product","name":"Test","aggregateRating":{"@type":"AggregateRating","ratingValue":4.6,"reviewCount":42}}
+          </script>
+        </head>
+        <body>
+          <h1>Test Product</h1>
+          <p>Rated 4.6 out of 5 stars from 42 reviews.</p>
+        </body>
+      </html>
+    `;
+
+    const result = await runAeoDeterministicScan({
+      siteUrl: "https://example.com",
+      fetchImpl: async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+        if (url === "https://example.com/" || url === "https://example.com") {
+          return new Response(homepageHtml, {
+            status: 200,
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+            },
+          });
+        }
+
+        if (url === "https://example.com/robots.txt") {
+          return new Response(robotsTxt, {
+            status: 200,
+            headers: {
+              "content-type": "text/plain; charset=utf-8",
+            },
+          });
+        }
+
+        if (url === "https://example.com/sitemap.xml") {
+          return new Response(sitemapIndexXml, {
+            status: 200,
+            headers: {
+              "content-type": "application/xml; charset=utf-8",
+            },
+          });
+        }
+
+        if (url === "https://example.com/ae/shop/sitemap-index.xml") {
+          return new Response(nestedSitemapXml, {
+            status: 200,
+            headers: {
+              "content-type": "application/xml; charset=utf-8",
+            },
+          });
+        }
+
+        if (url === "https://example.com/products/test-product") {
+          return new Response(productHtml, {
+            status: 200,
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+            },
+          });
+        }
+
+        return new Response("", {status: 404});
+      },
+    });
+
+    const report = result.reportJson as {
+      evidence?: {
+        productPage?: {
+          url?: string | null;
+          sampled?: boolean;
+          source?: string;
+        };
+      };
+      summary?: {
+        score?: number;
+      };
+    };
+
+    expect(report.evidence?.productPage?.sampled).toBe(true);
+    expect(report.evidence?.productPage?.url).toBe("https://example.com/products/test-product");
+    expect(report.evidence?.productPage?.source).toBe("sitemap");
+    expect(result.publicScore).toBeGreaterThan(40);
+  });
 });
