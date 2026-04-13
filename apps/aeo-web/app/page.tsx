@@ -53,7 +53,7 @@ const pricingCards = [
       "Auth unlock for deeper breakdown",
       "No credit card required",
     ],
-    href: "/",
+    href: "/#scan",
     cta: "Open Checker",
   },
   {
