@@ -1,6 +1,6 @@
 # MoTrend Beta v1 Status
 
-Last updated: 2026-04-14 (Europe/Madrid)
+Last updated: 2026-04-15 (Asia/Tbilisi)
 
 ## Scope
 
@@ -11,12 +11,12 @@ This note freezes the currently usable MoTrend stack as the working **Beta v1** 
 ### Frontend
 - Repo: `/Users/malevich/Documents/Playground/motrend`
 - Branch: `feature/motrend-wallet-fastspring`
-- Snapshot anchor at freeze start: `b4bb9b1b3b6a7a097457dfb54f98c7a57ca49ec6`
+- Snapshot anchor at freeze start: `f83c45486708a3e7a14f8ca7c683256252f3bda8`
 
 ### Backend
 - Repo: `/Users/malevich/Documents/Playground/moads-platform`
 - Branch: `feature/motrend-wallet-fastspring`
-- Current backend anchor: `73c12443f33fb153714c8442a546751fe8004160`
+- Current backend anchor: `844b6de7563907ad202519bc21b79bcb4be3f762`
 
 ## Runtime
 
@@ -46,15 +46,17 @@ This note freezes the currently usable MoTrend stack as the working **Beta v1** 
   - Starter `30`
   - Creator `80`
   - Pro `200`
+- Runtime mode: `DODO_ENVIRONMENT=live_mode`
+- Current live API revision: `moads-api-00036-fgz`
 
 ### Sharing and downloads
 - Canonical user-facing share links should use `/v/<slug>`
 - `save-video.html` remains the direct/open-safe fallback
 - Expired prepared artifacts should recover through `Prepare download`
 
-## QA mode note
+## Runtime mode note
 
-For current beta QA, the production contour has been exercised with Dodo `test_mode` so checkout flow can be validated without real charges.
+The production contour has been restored to Dodo `live_mode`. Test-mode checkout remains available only for future explicit QA runs when prod/runtime is intentionally switched back.
 
 ## Known beta constraints
 
