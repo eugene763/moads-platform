@@ -4,7 +4,12 @@ Date: 2026-04-14
 Status: Live launch contract for the current contour  
 Repository: `moads-platform`  
 Branch: `feature/motrend-wallet-fastspring`  
-Git anchor: `d184e17`
+Git anchor: `ac04f69`
+
+Operational note:
+- branch HEAD is newer than the last verified live runtime snapshot,
+- latest commits after `d184e17` are documentation/status alignment and do not change the last confirmed runtime revisions listed below,
+- next redeploy may require renewed `gcloud auth login` before Cloud Run/Firebase commands succeed.
 
 ## 1) Purpose
 

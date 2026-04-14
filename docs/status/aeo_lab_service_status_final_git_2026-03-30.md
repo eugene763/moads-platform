@@ -3,7 +3,7 @@
 Snapshot date: 2026-04-14  
 Repository: `moads-platform`  
 Branch: `feature/motrend-wallet-fastspring`  
-Current HEAD: `d184e17`
+Current HEAD: `ac04f69`
 
 ## 1) Git anchors
 
@@ -11,9 +11,12 @@ Important recent commits:
 - `054b4bb` — day-1 scan/dashboard stabilization
 - `99c4035` — free pricing CTA points to checker anchor
 - `d184e17` — product-page sampling hardened for scanner
+- `748e531` — canonical final launch handoff doc added
+- `ac04f69` — current branch head after latest docs/status alignment
 
 Interpretation rule:
 - runtime behavior should be read from these commits plus the live checks below
+- branch HEAD is ahead of the last verified runtime snapshot; latest post-runtime commits are documentation/status work rather than a newly confirmed runtime rollout
 
 ## 2) Last verified live runtime
 

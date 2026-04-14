@@ -3,6 +3,7 @@
 Date: 2026-04-14  
 Repository: `moads-platform`  
 Branch: `feature/motrend-wallet-fastspring`
+Current HEAD: `ac04f69`
 
 ## 1) Current launch position
 
@@ -28,6 +29,11 @@ Last verified live revisions before this handoff:
 - `moads-api` -> `moads-api-00034-h54`
 - `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
 - `moads-lab-web` -> `moads-lab-web-00009-2mr`
+
+Interpretation note:
+- branch HEAD is now ahead of the last verified runtime snapshot,
+- latest commits after `d184e17` are primarily docs/status/billing-surface alignment,
+- any next frontend deploy may still require fresh `gcloud auth login`.
 
 Live endpoints:
 - `https://aeo.moads.agency/`

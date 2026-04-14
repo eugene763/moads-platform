@@ -6,7 +6,11 @@ Goal: run implementation in autonomous blocks with minimal user interruption aga
 ## Global execution rules (for all blocks)
 
 - Use repository: `/Users/malevich/Documents/Playground/moads-platform`
-- Git anchor: `d184e17`
+- Git anchor: `ac04f69`
+- Runtime interpretation note:
+  - current branch HEAD is newer than the last verified live runtime snapshot,
+  - latest commits after `d184e17` are docs/status and rollout-alignment work,
+  - when re-deploying frontends, expect possible `gcloud auth login` reauth before Cloud Run/Firebase commands succeed
 - Practical baseline:
   - live score = deterministic 3-block score,
   - evidence layer = crawlability + product sample + action plan + prompt kit,

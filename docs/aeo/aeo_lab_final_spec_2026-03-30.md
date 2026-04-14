@@ -4,11 +4,13 @@ Date: 2026-04-14
 Status: Current launch baseline for the live AEO/LAB contour  
 Repository: `moads-platform`  
 Branch: `feature/motrend-wallet-fastspring`  
-Current git anchor: `d184e17`  
+Current git anchor: `ac04f69`  
 Key stabilization commits:
 - `054b4bb` — day-1 scan/dashboard stabilization
 - `99c4035` — free pricing CTA routes to checker anchor
 - `d184e17` — hardened product-page sampling in scanner
+- `748e531` — canonical final launch handoff doc added
+- `ac04f69` — current branch head after latest status/doc alignment
 
 ## 1) Objective
 
@@ -227,6 +229,11 @@ Last verified live revisions:
 - `moads-api` -> `moads-api-00034-h54`
 - `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
 - `moads-lab-web` -> `moads-lab-web-00009-2mr`
+
+Operational note:
+- branch HEAD is newer than the last verified runtime snapshot,
+- latest post-runtime commits are documentation/status changes,
+- frontend redeploy may require renewed `gcloud` auth before the next publish.
 
 Endpoint checks:
 - `https://aeo.moads.agency/` -> `200`

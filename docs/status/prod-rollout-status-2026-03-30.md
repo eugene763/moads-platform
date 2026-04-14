@@ -3,7 +3,7 @@
 Snapshot date: 2026-04-14  
 Repository: `moads-platform`  
 Branch: `feature/motrend-wallet-fastspring`  
-Current code anchor: `d184e17`
+Current code anchor: `ac04f69`
 
 ## Current rollout state
 
@@ -56,6 +56,11 @@ Current code anchor: `d184e17`
 
 ### Current operator friction
 - `gcloud auth login` may be needed before future deploy or `gcloud run services describe` commands when token refresh expires
+
+### Git vs runtime note
+- current branch HEAD is newer than the last verified live runtime snapshot,
+- latest commits after `d184e17` are primarily documentation/status alignment,
+- until a fresh deploy is confirmed, keep the runtime revisions above as the last known live baseline
 
 ## Practical release interpretation
 
