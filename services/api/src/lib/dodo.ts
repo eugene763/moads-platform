@@ -185,6 +185,8 @@ export async function createDodoCheckoutSession(
           quantity: 1,
         },
       ],
+      allowed_payment_method_types: ["credit", "debit", "apple_pay", "google_pay"],
+      billing_currency: "USD",
       minimal_address: true,
       ...(customerEmail ? {customer: {email: customerEmail}} : {}),
       ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
