@@ -1,120 +1,120 @@
 # AEO/LAB Service Status (Git-Anchored)
 
-Snapshot time: 2026-03-30 14:02:15 +0400  
+Snapshot date: 2026-04-14  
 Repository: `moads-platform`  
-Status type: technical verification for Claude/Codex handoff
+Branch: `feature/motrend-wallet-fastspring`  
+Current HEAD: `d184e17`
 
-## 1) Git snapshot anchor
+## 1) Git anchors
 
-- `HEAD`: `cf118be`  
-  `docs: add prod rollout status snapshot and harden frontend deploy check`
-- Functional base for AEO/LAB MVP: `b359096`  
-  `feat: finalize AEO/LAB pro contour MVP and frontend routing setup`
+Important recent commits:
+- `054b4bb` — day-1 scan/dashboard stabilization
+- `99c4035` — free pricing CTA points to checker anchor
+- `d184e17` — product-page sampling hardened for scanner
 
-Interpretation rule for this status file:
-- runtime behavior is anchored to these two commits plus live checks below.
+Interpretation rule:
+- runtime behavior should be read from these commits plus the live checks below
 
-## 2) Live runtime check (current)
+## 2) Last verified live runtime
 
-Direct checks executed at snapshot time:
+Last verified Cloud Run revisions:
+- `moads-api` -> `moads-api-00034-h54`
+- `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
+- `moads-lab-web` -> `moads-lab-web-00009-2mr`
+
+Last verified public checks:
 - `https://aeo.moads.agency/` -> `200`
 - `https://lab.moads.agency/` -> `200`
-- `POST https://api.moads.agency/v1/aeo/public-scans` -> `200`
+- `POST https://api.moads.agency/v1/aeo/public-scans` -> working
 
-Referenced rollout status source:
-- `docs/status/prod-rollout-status-2026-03-30.md`
+## 3) What is live now
 
-From rollout source (as-of 2026-03-30 13:18:44 +04):
-- Firebase custom domains for `aeo.moads.agency` and `lab.moads.agency` are `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE`.
-- Cloud Run services updated:
-  - `moads-aeo-web`
-  - `moads-lab-web`
-  - `moads-api`
+### AEO
+- landing with URL-only checker
+- public scan -> public token -> public report
+- sign-in gate for account features
+- free dashboard access after sign-in
+- richer report IA:
+  - scored-now block
+  - evidence layer
+  - action plan
+  - prompt kit
 
-## 3) API coverage in current code
+### LAB
+- account/billing center
+- pack-first commercial surface
+- coming-soon framing for plans
 
-Mounted route groups:
-- `/v1/auth/*`
-- `/v1/me`, `/v1/wallet/summary`
-- `/v1/aeo/*`
-- `/v1/lab/*`
+### Billing
+- Dodo-only AEO pack model
+- Dodo webhook route mounted at:
+  - `POST /v1/billing/webhooks/dodo`
 
-### 3.1 `/v1/aeo` coverage
+## 4) API coverage currently in code
 
-Implemented and active in code:
-- public scan creation/report:
-  - `POST /v1/aeo/public-scans`
-  - `GET /v1/aeo/public-scans/:publicToken`
-- public waitlist:
-  - `POST /v1/aeo/waitlist`
-- auth flow:
-  - `POST /v1/aeo/scans/:scanId/claim`
-  - `GET /v1/aeo/scans`
-  - `GET /v1/aeo/scans/:scanId`
-  - `POST /v1/aeo/scans/:scanId/generate-ai-tips`
-- site management:
-  - `GET /v1/aeo/sites`
-  - `POST /v1/aeo/sites`
-- offer/pricing/orders:
-  - `GET /v1/aeo/offers/starter`
-  - `POST /v1/aeo/offers/starter/consume`
-  - `GET /v1/aeo/pricing/credit-packs`
-  - `GET /v1/aeo/orders`
-  - `POST /v1/aeo/orders/checkout`
-  - `POST /v1/aeo/orders/:orderId/manual-fulfill` (admin)
-- evidence:
-  - `GET /v1/aeo/evidence/ga4`
-  - `GET /v1/aeo/realtime/stream` (SSE)
+### `/v1/aeo`
+- `POST /v1/aeo/public-scans`
+- `GET /v1/aeo/public-scans/:publicToken`
+- `POST /v1/aeo/waitlist`
+- `POST /v1/aeo/scans/:scanId/claim`
+- `GET /v1/aeo/scans`
+- `GET /v1/aeo/scans/:scanId`
+- `POST /v1/aeo/scans/:scanId/generate-ai-tips`
+- `GET /v1/aeo/evidence/ga4`
+- `GET /v1/aeo/realtime/stream`
 
-### 3.2 `/v1/lab` coverage
-
+### `/v1/lab`
 - `GET /v1/lab/center`
-- `GET /v1/lab/orders`
-- `POST /v1/lab/starter/checkout`
-- `POST /v1/lab/admin/orders/:orderId/manual-fulfill` (admin)
+- current order/account center routes used by LAB
 
-### 3.3 Auth/wallet/me coverage
-
+### auth / me / wallet
 - `POST /v1/auth/session-login`
 - `POST /v1/auth/session-logout`
 - `GET /v1/auth/me`
 - `GET /v1/me`
-- `GET /v1/me/products`
 - `GET /v1/wallet/summary`
 
-## 4) Done vs deferred status
+## 5) Scanner status
 
-## Done now
-- AEO and LAB Next.js apps are present and deployed through pro frontend scripts.
-- Public AEO scan/report token flow is active.
-- Auth claim and unlock flow is active.
-- AI tips endpoint with credit charging path is active.
-- Shared auth/account/membership/wallet backend integration is active.
-- API gateway path model for pro namespace is scripted and documented.
+Current scanner characteristics:
+- deterministic
+- raw HTML only
+- browser-like fetch headers
+- one controlled retry
+- evidence-first enrichments:
+  - robots
+  - sitemap
+  - AI bot rules
+  - product-page sample
+  - action plan
+  - prompt kit
 
-## Deferred / next iteration
-- Global ranking board and opt-in shared leaderboard.
-- Advanced marketplace-specific parsers/connectors.
-- Full production move to dedicated `moads-pro` contour with all secrets/access finalized.
-- Full automated subscription/webhook hardening beyond manual-safe fulfillment baseline.
+Current limitation:
+- no headless browser fallback
+- no paid-provider intelligence inside public scan
 
-## 5) Current blockers and risks
+Recent hardening:
+- technical sitemap URLs are no longer used as fake product pages
+- if no valid HTML PDP sample is found, report now returns `productPage: none`
 
-Primary contour risk remains dedicated pro project readiness:
-- missing/blocked access for `moads-pro` project,
-- required secrets missing in pro context:
-  - `SESSION_COOKIE_SECRET_PRO`
-  - `MOADS_API_PRO_DATABASE_URL`
-- managed pro DB sync and pro API deploy cannot complete until permissions/secrets are fixed.
+## 6) Current blockers / non-blockers
 
-Operational note:
-- additional pro gateway LB resources were created in current project; final placement decision is still required.
+### Non-blocking
+- IAM warnings during Cloud Run deploys still appear, but deploys complete and traffic routes correctly
 
-## 6) Practical interpretation for implementers
+### Current operational friction
+- `gcloud auth login` may be needed before future deploy/describe commands if token refresh expires
 
-Use this as the current truth:
-- service is live on `aeo.moads.agency` and `lab.moads.agency` in current project contour,
-- API contracts listed above are available,
-- product work can continue immediately in repo,
-- migration to dedicated `moads-pro` should be treated as an infrastructure phase gate, not as a blocker for UX/backend iteration.
+### Not considered blockers for launch baseline
+- live monitored intelligence
+- recurring subscriptions
+- headless render fallback
 
+## 7) Practical truth for implementers
+
+Use this as the current reality:
+- AEO/LAB are live in the current contour
+- score is narrower than the marketing surface and that is intentional
+- evidence layer is broader than the top-line score
+- Dodo is the active payments path
+- public scan still avoids paid provider calls

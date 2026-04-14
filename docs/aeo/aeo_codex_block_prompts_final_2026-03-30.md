@@ -1,12 +1,16 @@
 # AEO/LAB Final Block Prompt Pack for Codex
 
-Date: 2026-03-30  
-Goal: run implementation in autonomous blocks with minimal user interruption.
+Date: 2026-04-14  
+Goal: run implementation in autonomous blocks with minimal user interruption against the current live launch baseline.
 
 ## Global execution rules (for all blocks)
 
 - Use repository: `/Users/malevich/Documents/Playground/moads-platform`
-- Git anchor: `cf118be` with functional baseline `b359096`
+- Git anchor: `d184e17`
+- Practical baseline:
+  - live score = deterministic 3-block score,
+  - evidence layer = crawlability + product sample + action plan + prompt kit,
+  - Dodo = only active AEO billing provider
 - Keep `free-first` UX and economy:
   - public scan free,
   - score deterministic and shared across plans,

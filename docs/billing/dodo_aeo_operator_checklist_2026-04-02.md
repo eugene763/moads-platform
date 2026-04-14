@@ -1,75 +1,65 @@
 # Dodo Payments AEO Operator Checklist
 
 ## Scope
-- This checklist wires **AEO credit packs** to Dodo Payments.
-- Current launch model stays:
-  - `Free` = free public scan + auth unlock
-  - `Pack S / M / L` = one-time paid credit packs
+- This checklist wires AEO credit packs to Dodo Payments.
+- Current launch mode:
+  - `Free` = free public scan
+  - `Pack S / M / L` = one-time paid packs
   - `Starter / Pro / Store` = not live in checkout yet
 
-## 1. Create AEO one-time products in Dodo
-In the Dodo Payments dashboard, create **three separate one-time products**.
+## 1) Active AEO products in Dodo
 
-Recommended products:
+Current mapped products:
 
-| Product | Internal code | Price | Credits | Pricing model |
+| Product | Code | Credits | Price | Dodo product id |
 | --- | --- | ---: | ---: | --- |
-| Pack S | `aeo_pack_s` | `$4.99` | `30` | One-time |
-| Pack M | `aeo_pack_m` | `$9.99` | `80` | One-time |
-| Pack L | `aeo_pack_l` | `$19.99` | `200` | One-time |
+| Pack S | `aeo_pack_s` | 30 | `$4.99` | `pdt_0NcVKMKum3pnZI0k9W9GP` |
+| Pack M | `aeo_pack_m` | 80 | `$9.99` | `pdt_0NcVKTv8PCbSE5KplPmSI` |
+| Pack L | `aeo_pack_l` | 200 | `$19.99` | `pdt_0NcVKZ0msSsA9QJ8ZVzH6` |
 
-Recommended naming:
-- `Pack S`
-- `Pack M`
-- `Pack L`
+Use the same Dodo business as Motrend unless you intentionally want separate merchant reporting and payouts.
 
-Recommended description pattern:
-- `30 AEO credits for AI tips and usage-based actions`
-- `80 AEO credits for AI tips and usage-based actions`
-- `200 AEO credits for AI tips and usage-based actions`
+## 2) Webhook setup
 
-What matters for the integration:
-- each product must be a **one-time** product,
-- each product must return a **product id** in Dodo,
-- we will save those ids into MO Ads billing prices as `externalPriceId`.
-
-After creation, copy the three Dodo product ids.
-
-## 2. Create webhook endpoint in Dodo
-In the Dodo Payments dashboard:
-
+In Dodo:
 1. Go to `Settings -> Webhooks`
-2. Add a new endpoint
-3. Set URL to:
+2. Add endpoint:
 
 ```text
 https://api.moads.agency/v1/billing/webhooks/dodo
 ```
 
-4. Limit the event filter to:
+3. Filter to event:
 
 ```text
 payment.succeeded
 ```
 
-5. Save the endpoint
-6. Copy the webhook signing secret / webhook key for this endpoint
+4. Copy the webhook signing key / secret
 
-The backend now verifies Dodo webhook signatures using the official Dodo SDK and the raw request body.
+## 3) Required GCP secrets
 
-## 3. Store secrets in GCP
-Required secrets:
+Required:
 - `DODO_API_KEY`
 - `DODO_WEBHOOK_KEY`
 
-Create the webhook secret if it does not exist yet:
+Optional but recommended for future AI tips:
+- `OPENAI_API_KEY`
+
+Create missing secrets:
 
 ```bash
+gcloud secrets describe DODO_API_KEY --project gen-lang-client-0651837818 >/dev/null 2>&1 || \
+gcloud secrets create DODO_API_KEY --project gen-lang-client-0651837818 --replication-policy=automatic
+
 gcloud secrets describe DODO_WEBHOOK_KEY --project gen-lang-client-0651837818 >/dev/null 2>&1 || \
 gcloud secrets create DODO_WEBHOOK_KEY --project gen-lang-client-0651837818 --replication-policy=automatic
+
+gcloud secrets describe OPENAI_API_KEY --project gen-lang-client-0651837818 >/dev/null 2>&1 || \
+gcloud secrets create OPENAI_API_KEY --project gen-lang-client-0651837818 --replication-policy=automatic
 ```
 
-Add or rotate the API key:
+Rotate Dodo API key:
 
 ```bash
 read -s DODO_API_KEY && echo
@@ -77,7 +67,7 @@ printf '%s' "$DODO_API_KEY" | gcloud secrets versions add DODO_API_KEY --data-fi
 unset DODO_API_KEY
 ```
 
-Add or rotate the webhook key:
+Rotate Dodo webhook key:
 
 ```bash
 read -s DODO_WEBHOOK_KEY && echo
@@ -85,8 +75,17 @@ printf '%s' "$DODO_WEBHOOK_KEY" | gcloud secrets versions add DODO_WEBHOOK_KEY -
 unset DODO_WEBHOOK_KEY
 ```
 
-## 4. Upsert AEO pack mapping to Dodo
-Replace the placeholders below with the real Dodo product ids from step 1.
+Add OpenAI API key when ready:
+
+```bash
+read -s OPENAI_API_KEY && echo
+printf '%s' "$OPENAI_API_KEY" | gcloud secrets versions add OPENAI_API_KEY --data-file=- --project gen-lang-client-0651837818
+unset OPENAI_API_KEY
+```
+
+## 4) Upsert AEO pack mapping
+
+The current product ids are already known. The operator command is:
 
 ```bash
 export AEO_CREDIT_PACKS_JSON='[
@@ -96,7 +95,7 @@ export AEO_CREDIT_PACKS_JSON='[
     "creditsAmount": 30,
     "amountMinor": 499,
     "providerCode": "dodo",
-    "dodoProductId": "pdt_replace_pack_s",
+    "dodoProductId": "pdt_0NcVKMKum3pnZI0k9W9GP",
     "currencyCode": "USD",
     "marketCode": "global",
     "languageCode": "en"
@@ -107,7 +106,7 @@ export AEO_CREDIT_PACKS_JSON='[
     "creditsAmount": 80,
     "amountMinor": 999,
     "providerCode": "dodo",
-    "dodoProductId": "pdt_replace_pack_m",
+    "dodoProductId": "pdt_0NcVKTv8PCbSE5KplPmSI",
     "currencyCode": "USD",
     "marketCode": "global",
     "languageCode": "en"
@@ -118,76 +117,52 @@ export AEO_CREDIT_PACKS_JSON='[
     "creditsAmount": 200,
     "amountMinor": 1999,
     "providerCode": "dodo",
-    "dodoProductId": "pdt_replace_pack_l",
+    "dodoProductId": "pdt_0NcVKZ0msSsA9QJ8ZVzH6",
     "currencyCode": "USD",
     "marketCode": "global",
     "languageCode": "en"
   }
 ]'
-```
-
-Then run:
-
-```bash
 pnpm --dir /Users/malevich/Documents/Playground/moads-platform billing:aeo-credit-packs:upsert:prod
 ```
 
-## 5. Deploy API with the correct Dodo environment
-For a first safe run, you can use **test mode**:
+## 5) Deploy contract
 
-```bash
-cd /Users/malevich/Documents/Playground/moads-platform
-DODO_ENVIRONMENT=test_mode pnpm cloud-run:deploy:prod
-```
-
-For real payments, switch to **live mode**:
+Launch mode deploy:
 
 ```bash
 cd /Users/malevich/Documents/Playground/moads-platform
 DODO_ENVIRONMENT=live_mode pnpm cloud-run:deploy:prod
+pnpm cloud-frontends:deploy:pro
 ```
 
 Notes:
-- the deploy scripts now automatically attach `DODO_API_KEY` and `DODO_WEBHOOK_KEY` when the secrets exist,
-- Dodo checkout is enabled by provider mapping in the billing price rows,
-- Dodo is the only active payment provider for AEO credit packs in this phase.
+- Dodo is the only active provider for AEO packs
+- public scan does not require OpenAI
+- OpenAI is only for optional AI tips
 
-## 6. Smoke test after deploy
-Recommended order:
+## 6) Smoke test
 
-1. Sign in on:
-   - `https://lab.moads.agency/center`
+1. Sign in on `https://lab.moads.agency/center`
 2. Buy `Pack S`
 3. Confirm redirect goes to Dodo checkout
-4. Complete a test payment
+4. Complete payment
 5. Confirm webhook hits:
    - `POST /v1/billing/webhooks/dodo`
-6. Confirm wallet balance increases exactly once
-7. Confirm order appears in LAB order history
+6. Confirm wallet balance increments once
+7. Confirm order is visible in LAB
 
-## 7. Current backend contract
-The current backend implementation expects:
-- checkout creation via Dodo Checkout Sessions,
-- metadata to include local billing order identifiers,
-- webhook event:
-  - `payment.succeeded`
-- webhook headers:
-  - `webhook-id`
-  - `webhook-signature`
-  - `webhook-timestamp`
+## 7) OpenAI clarification
 
-The current live endpoint for Dodo webhook processing is:
+OpenAI setup requires:
+- billing enabled in OpenAI Platform
+- API key created
+- key stored in `OPENAI_API_KEY`
 
-```text
-https://api.moads.agency/v1/billing/webhooks/dodo
-```
+OpenAI does not require:
+- products
+- assistants
+- GPTs
+- prompt objects
 
-## 8. What stays out of scope for this phase
-- recurring subscriptions in Dodo,
-- Starter / Pro / Store paid plans,
-- GA4 / realtime provider billing,
-- OpenAI billing changes,
-- customer portal flows.
-
-This phase is only:
-- `Free + one-time packs via Dodo`.
+Public scan remains OpenAI-free.

@@ -1,88 +1,66 @@
 # MO Ads Platform — Production Rollout Status
 
-## Snapshot
-- Timestamp: 2026-03-30 13:18:44 +04
-- Repository: `moads-platform`
-- Commit deployed target: `b359096`
-- Active gcloud account: `eugene@moads.agency`
-- Active project for executed deploys: `gen-lang-client-0651837818`
+Snapshot date: 2026-04-14  
+Repository: `moads-platform`  
+Branch: `feature/motrend-wallet-fastspring`  
+Current code anchor: `d184e17`
 
-## Actions Executed
-1. `pnpm cloud-run:deploy:prod`
-2. `pnpm cloud-lb:bootstrap:prod`
-3. `pnpm cloud-frontends:deploy:pro`
-4. `pnpm cloud-run:deploy:pro` (attempted)
-5. `pnpm cloud-lb:bootstrap:pro-gateway`
-6. `pnpm db:sync:managed:prod` (attempted)
-7. Manual managed-prod DB sync with `prisma db push --accept-data-loss` + seed + backfill/sync scripts (attempted)
-8. `pnpm db:sync:managed:pro` (attempted)
+## Current rollout state
 
-## Runtime Status (Current)
-### Cloud Run services (us-central1)
-- `moads-api` -> revision `moads-api-00012-n79` (updated)
-- `moads-aeo-web` -> revision `moads-aeo-web-00003-9zl` (updated)
-- `moads-lab-web` -> revision `moads-lab-web-00003-x99` (updated)
-- `moads-api-dev` -> revision `moads-api-dev-00009-j85` (unchanged in this rollout)
+### Last verified live revisions
+- `moads-api` -> `moads-api-00034-h54`
+- `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
+- `moads-lab-web` -> `moads-lab-web-00009-2mr`
 
-### Public endpoint checks
-- `https://aeo.moads.agency/` -> HTTP 200
-- `https://lab.moads.agency/` -> HTTP 200
-- `https://moads-aeo.web.app/` -> HTTP 200
-- `https://moads-lab.web.app/` -> HTTP 200
-- `POST https://api.moads.agency/v1/aeo/public-scans` with `{"siteUrl":"https://example.com"}` -> HTTP 200
+### Last verified public checks
+- `https://aeo.moads.agency/` -> HTTP `200`
+- `https://lab.moads.agency/` -> HTTP `200`
+- uncached `POST https://api.moads.agency/v1/aeo/public-scans` -> working
 
-### Firebase custom domain state
-- `aeo.moads.agency` on site `moads-aeo` -> `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE`
-- `lab.moads.agency` on site `moads-lab` -> `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE`
+## What was rolled forward after the original March rollout
 
-## Load Balancer Status
-### Prod API LB (`bootstrap-moads-api-prod-lb.sh`)
-- API host: `api.moads.agency`
-- Cert status: `ACTIVE`
-- IPv4: `34.160.111.112`
-- IPv6: `2600:1901:0:7fdc::`
-- DNS currently resolves to above addresses.
+### Day-1 stabilization
+- checker CTA routing fixed
+- dashboard no longer shows membership-style gate for free baseline
+- landing/report copy aligned with real score model
 
-### Pro gateway LB (`bootstrap-moads-api-pro-gateway-lb.sh`)
-- Resources were created in project `gen-lang-client-0651837818`.
-- Cert status: `PROVISIONING`
-- IPv4: `34.96.69.153`
-- IPv6: `2600:1901:0:d0a5::`
-- Note: this is additional gateway infrastructure; production DNS is still pointed to prod API LB addresses.
+### Scanner improvements
+- browser-like fetch headers
+- controlled retry
+- crawlability evidence
+- sitemap/robots evidence
+- PDP sampling for root/homepage scans
+- hardened filtering so technical sitemap URLs are no longer treated as product pages
 
-## Database Sync Status
-### Managed prod DB
-- `prisma db push --accept-data-loss` -> completed successfully.
-- `db:seed` -> completed.
-- `backfill-legacy-support-codes.ts` -> completed (`scanned=13, updated=0, skipped=13`).
-- `sync-legacy-motrend-templates.ts` -> failed due Google auth re-auth token issue:
-  - `invalid_grant`
-  - `invalid_rapt`
+### Payments
+- Dodo is the only active AEO pack billing provider
+- FastSpring is no longer part of active AEO pack rollout
 
-### Managed pro DB
-- `pnpm db:sync:managed:pro` failed.
-- Reason: no access to project `moads-pro` (Secret Manager permission error / consumer invalid for current account/project context).
+## Runtime notes
 
-## Pro API Status
-- `pnpm cloud-run:deploy:pro` failed before deploy.
-- Blocking missing secret in target project context:
-  - `SESSION_COOKIE_SECRET_PRO`
-- `MOADS_API_PRO_DATABASE_URL` is also expected by deploy script and should exist in the pro contour.
+### AEO current behavior
+- URL-only entry
+- deterministic score
+- broader evidence layer
+- no paid provider calls in public scan
 
-## Known Blockers / Follow-up Required
-1. Complete re-auth for gcloud user and rerun legacy template sync on managed prod DB:
-   - `gcloud auth login`
-   - rerun `pnpm db:sync:legacy-templates:prod` (or the script directly with prod DB env/proxy)
-2. Provide/access actual pro contour project and required secrets for pro API deploy:
-   - `SESSION_COOKIE_SECRET_PRO`
-   - `MOADS_API_PRO_DATABASE_URL`
-   - plus pro Cloud SQL + permissions for `db:sync:managed:pro`
-3. Confirm whether the newly created `moads-api-gateway-*` resources in `gen-lang-client-0651837818` should remain or be moved to a dedicated gateway project as originally planned.
+### LAB current behavior
+- billing/account center
+- pack-first commercial surface
+- plans remain coming soon
 
-## Verification Commands Used
-- `gcloud run services list --region=us-central1`
-- `curl -I https://aeo.moads.agency/`
-- `curl -I https://lab.moads.agency/`
-- `curl -X POST https://api.moads.agency/v1/aeo/public-scans ...`
-- Firebase Hosting custom-domain API checks via `firebasehosting.googleapis.com`
-- `dig api.moads.agency A/AAAA`
+## Operations notes
+
+### Known non-blocking warnings
+- Cloud Run deploys may show IAM policy warnings while still succeeding and routing traffic correctly
+
+### Current operator friction
+- `gcloud auth login` may be needed before future deploy or `gcloud run services describe` commands when token refresh expires
+
+## Practical release interpretation
+
+For current launch work, treat this as the real state:
+- AEO and LAB are live
+- Dodo pack commerce is the intended launch path
+- scanner is stable enough for launch but still conservative on complex sites
+- next meaningful backend iteration is richer content/PDP reading, not a new score philosophy
