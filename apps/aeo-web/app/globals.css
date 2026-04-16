@@ -460,13 +460,19 @@ input {
 .float-logo-mark {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 800;
+  background: #fff;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.float-logo-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 @keyframes float-bob {
@@ -517,14 +523,22 @@ input {
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
+  line-height: 1;
 }
 
-.ticker-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--faint);
+.ticker-logo-wrap {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+.ticker-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .how-section,
