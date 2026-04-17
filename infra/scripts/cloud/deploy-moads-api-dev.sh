@@ -41,9 +41,6 @@ RUNTIME_SERVICE_ACCOUNT_EMAIL="${RUNTIME_SERVICE_ACCOUNT_EMAIL:-moads-api-dev-ru
 SESSION_COOKIE_SECRET_NAME="${SESSION_COOKIE_SECRET_NAME:-SESSION_COOKIE_SECRET_DEV}"
 DATABASE_URL_SECRET_NAME="${DATABASE_URL_SECRET_NAME:-MOADS_API_DEV_DATABASE_URL}"
 OPENAI_API_KEY_SECRET_NAME="${OPENAI_API_KEY_SECRET_NAME:-OPENAI_API_KEY}"
-DODO_API_KEY_SECRET_NAME="${DODO_API_KEY_SECRET_NAME:-DODO_API_KEY_DEV}"
-DODO_WEBHOOK_KEY_SECRET_NAME="${DODO_WEBHOOK_KEY_SECRET_NAME:-DODO_WEBHOOK_KEY_DEV}"
-DODO_WEBHOOK_SECRET_NAME="${DODO_WEBHOOK_SECRET_NAME:-DODO_WEBHOOK_SECRET_DEV}"
 
 if [[ -z "${PROJECT_ID}" ]]; then
   echo "FIREBASE_PROJECT_ID or PROJECT_ID is required." >&2
@@ -75,28 +72,16 @@ secret_flags=(
   "KLING_SECRET_KEY=KLING_SECRET_KEY:latest"
 )
 
-if ! gcloud secrets describe "$DODO_API_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  DODO_API_KEY_SECRET_NAME="DODO_API_KEY"
-fi
-
-if gcloud secrets describe "$DODO_API_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  secret_flags+=("DODO_API_KEY=${DODO_API_KEY_SECRET_NAME}:latest")
+if gcloud secrets describe "DODO_API_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_API_KEY=DODO_API_KEY:latest")
 else
   echo "Dodo API key is not configured; Dodo checkout session creation will remain unavailable." >&2
 fi
 
-if ! gcloud secrets describe "$DODO_WEBHOOK_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  DODO_WEBHOOK_KEY_SECRET_NAME="DODO_WEBHOOK_KEY"
-fi
-
-if ! gcloud secrets describe "$DODO_WEBHOOK_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  DODO_WEBHOOK_SECRET_NAME="DODO_WEBHOOK_SECRET"
-fi
-
-if gcloud secrets describe "$DODO_WEBHOOK_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  secret_flags+=("DODO_WEBHOOK_KEY=${DODO_WEBHOOK_KEY_SECRET_NAME}:latest")
-elif gcloud secrets describe "$DODO_WEBHOOK_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  secret_flags+=("DODO_WEBHOOK_KEY=${DODO_WEBHOOK_SECRET_NAME}:latest")
+if gcloud secrets describe "DODO_WEBHOOK_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_WEBHOOK_KEY=DODO_WEBHOOK_KEY:latest")
+elif gcloud secrets describe "DODO_WEBHOOK_SECRET" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_WEBHOOK_KEY=DODO_WEBHOOK_SECRET:latest")
 else
   echo "Dodo webhook secret is not configured; Dodo webhook processing will remain unavailable." >&2
 fi

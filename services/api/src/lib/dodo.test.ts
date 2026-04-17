@@ -1,7 +1,6 @@
 import {describe, expect, it} from "vitest";
 
 import {
-  buildDodoStaticCheckoutLink,
   extractDodoProductId,
   isDodoCheckoutConfigured,
   isDodoWebhookConfigured,
@@ -30,29 +29,6 @@ describe("dodo helpers", () => {
     expect(extractDodoProductId(" pdt_123 ")).toBe("pdt_123");
     expect(extractDodoProductId("")).toBe(null);
     expect(extractDodoProductId(undefined)).toBe(null);
-  });
-
-  it("builds static test-mode checkout links with redirect and metadata", () => {
-    const checkoutUrl = new URL(buildDodoStaticCheckoutLink({
-      dodoEnvironment: "test_mode",
-    }, {
-      productId: " pdt_123 ",
-      customerEmail: "buyer@example.com",
-      redirectUrl: "https://preview.example.com/?checkout=complete",
-      metadata: {
-        billing_order_id: "ord_123",
-        account_id: "acct_123",
-      },
-    }));
-
-    expect(checkoutUrl.origin).toBe("https://test.checkout.dodopayments.com");
-    expect(checkoutUrl.pathname).toBe("/buy/pdt_123");
-    expect(checkoutUrl.searchParams.get("quantity")).toBe("1");
-    expect(checkoutUrl.searchParams.get("email")).toBe("buyer@example.com");
-    expect(checkoutUrl.searchParams.get("disableEmail")).toBe("true");
-    expect(checkoutUrl.searchParams.get("redirect_url")).toBe("https://preview.example.com/?checkout=complete");
-    expect(checkoutUrl.searchParams.get("metadata_billing_order_id")).toBe("ord_123");
-    expect(checkoutUrl.searchParams.get("metadata_account_id")).toBe("acct_123");
   });
 
   it("extracts payment.succeeded snapshot details", () => {

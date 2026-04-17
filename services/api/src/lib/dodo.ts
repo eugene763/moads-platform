@@ -42,13 +42,6 @@ export interface DodoCheckoutSession {
   raw: unknown;
 }
 
-export interface DodoStaticCheckoutLinkInput {
-  productId: string;
-  customerEmail?: string | null;
-  redirectUrl?: string | null;
-  metadata?: Record<string, string>;
-}
-
 export interface DodoPaymentSucceededSnapshot {
   eventId: string;
   eventType: "payment.succeeded";
@@ -167,43 +160,6 @@ export function isDodoWebhookConfigured(config: Pick<ApiConfig, "dodoApiKey" | "
 
 export function extractDodoProductId(value: string | null | undefined): string | null {
   return normalizeDodoProductId(value);
-}
-
-function readCheckoutBaseUrl(environment: ApiConfig["dodoEnvironment"]): string {
-  return environment === "test_mode" ?
-    "https://test.checkout.dodopayments.com/buy/" :
-    "https://checkout.dodopayments.com/buy/";
-}
-
-export function buildDodoStaticCheckoutLink(
-  config: Pick<ApiConfig, "dodoEnvironment">,
-  input: DodoStaticCheckoutLinkInput,
-): string {
-  const productId = normalizeDodoProductId(input.productId);
-  if (!productId) {
-    throw new PlatformError(409, "billing_checkout_unavailable", "Checkout is not configured for this credit pack yet.");
-  }
-
-  const checkoutUrl = new URL(productId, readCheckoutBaseUrl(config.dodoEnvironment));
-  checkoutUrl.searchParams.set("quantity", "1");
-
-  const redirectUrl = readJsonString(input.redirectUrl);
-  if (redirectUrl) {
-    checkoutUrl.searchParams.set("redirect_url", redirectUrl);
-  }
-
-  const customerEmail = readJsonString(input.customerEmail);
-  if (customerEmail) {
-    checkoutUrl.searchParams.set("email", customerEmail);
-    checkoutUrl.searchParams.set("disableEmail", "true");
-  }
-
-  const metadata = readStringMap(input.metadata);
-  for (const [key, value] of Object.entries(metadata)) {
-    checkoutUrl.searchParams.set(`metadata_${key}`, value);
-  }
-
-  return checkoutUrl.toString();
 }
 
 export async function createDodoCheckoutSession(

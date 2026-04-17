@@ -115,12 +115,11 @@ async function hasRecentMotrendGiftFingerprint(
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   const baseCookieOptions = (request: FastifyRequest, httpOnly = true) => {
-    const sameSite = app.config.runtimeProfile === "dev-cloud" ? "none" as const : "lax" as const;
     const domain = resolveCookieDomain(request);
     if (domain) {
       return {
         httpOnly,
-        sameSite,
+        sameSite: "lax" as const,
         secure: app.config.nodeEnv !== "development",
         path: "/",
         domain,
@@ -129,7 +128,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     return {
       httpOnly,
-      sameSite,
+      sameSite: "lax" as const,
       secure: app.config.nodeEnv !== "development",
       path: "/",
     };

@@ -1,5 +1,4 @@
 import type {CSSProperties} from "react";
-import Image from "next/image";
 import Link from "next/link";
 
 import {AeoTopNav} from "../components/aeo-top-nav";
@@ -7,27 +6,27 @@ import {FeatureTabs} from "../components/feature-tabs";
 import {ScanForm} from "../components/scan-form";
 
 const floatLogos = [
-  {label: "ChatGPT", src: "/logos/chatgpt.svg", top: "28%", left: "2%", duration: "4.2s", delay: "0s"},
-  {label: "Perplexity", src: "/logos/perplexity.svg", top: "58%", left: "3%", duration: "3.8s", delay: "0.6s"},
-  {label: "DeepSeek", src: "/logos/deepseek.svg", top: "78%", left: "2%", duration: "5s", delay: "1.2s"},
-  {label: "Grok", src: "/logos/grok.svg", top: "15%", left: "82%", duration: "4s", delay: "0.3s"},
-  {label: "Gemini", src: "/logos/gemini.svg", top: "42%", left: "84%", duration: "4.5s", delay: "0.9s"},
-  {label: "Claude", src: "/logos/claude.svg", top: "68%", left: "81%", duration: "3.6s", delay: "1.5s"},
+  {label: "ChatGPT", letter: "C", top: "28%", left: "2%", duration: "4.2s", delay: "0s", color: "#10A37F"},
+  {label: "Perplexity", letter: "P", top: "58%", left: "3%", duration: "3.8s", delay: "0.6s", color: "#0EA5A4"},
+  {label: "DeepSeek", letter: "D", top: "78%", left: "2%", duration: "5s", delay: "1.2s", color: "#2563EB"},
+  {label: "Grok", letter: "G", top: "15%", left: "82%", duration: "4s", delay: "0.3s", color: "#111827"},
+  {label: "Gemini", letter: "G", top: "42%", left: "84%", duration: "4.5s", delay: "0.9s", color: "#7C3AED"},
+  {label: "Claude", letter: "C", top: "68%", left: "81%", duration: "3.6s", delay: "1.5s", color: "#C26D45"},
 ];
 
 const tickerItems = [
-  {label: "ChatGPT Shopping", src: "/logos/chatgpt.svg"},
-  {label: "Amazon", src: "/logos/amazon.svg"},
-  {label: "Google AI Overview", src: "/logos/google-shopping.svg"},
-  {label: "Walmart", src: "/logos/walmart.svg"},
-  {label: "Perplexity", src: "/logos/perplexity.svg"},
-  {label: "TikTok Shop", src: "/logos/tiktok.svg"},
-  {label: "eBay", src: "/logos/ebay.svg"},
-  {label: "Claude", src: "/logos/claude.svg"},
-  {label: "Shopee", src: "/logos/shopee.svg"},
-  {label: "Gemini Shopping", src: "/logos/gemini.svg"},
-  {label: "Etsy", src: "/logos/etsy.svg"},
-  {label: "Shopify", src: "/logos/shopify.svg"},
+  "ChatGPT Shopping",
+  "Amazon",
+  "Google AI Overview",
+  "Walmart",
+  "Perplexity",
+  "TikTok Shop",
+  "eBay",
+  "Claude",
+  "Shopee",
+  "Gemini Shopping",
+  "Etsy",
+  "Shopify",
 ];
 
 const dimensionCards = [
@@ -140,8 +139,8 @@ export default function HomePage() {
         <div className="hero-float-logos" aria-hidden="true">
           {floatLogos.map((item) => (
             <div key={item.label} className="float-logo" style={floatStyle(item)}>
-              <span className="float-logo-mark">
-                <Image src={item.src} alt="" width={18} height={18} className="float-logo-icon" aria-hidden="true" />
+              <span className="float-logo-mark" style={{backgroundColor: item.color}}>
+                {item.letter}
               </span>
               <span>{item.label}</span>
             </div>
@@ -195,11 +194,9 @@ export default function HomePage() {
       <section className="platform-ticker" aria-label="Supported discovery surfaces">
         <div className="ticker-track">
           {[...tickerItems, ...tickerItems].map((item, index) => (
-            <div key={`${item.label}-${index}`} className="ticker-item">
-              <span className="ticker-logo-wrap" aria-hidden="true">
-                <Image src={item.src} alt="" width={18} height={18} className="ticker-logo" />
-              </span>
-              <span>{item.label}</span>
+            <div key={`${item}-${index}`} className="ticker-item">
+              <span className="ticker-dot" />
+              <span>{item}</span>
             </div>
           ))}
         </div>

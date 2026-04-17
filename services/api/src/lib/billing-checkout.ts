@@ -7,11 +7,7 @@ import {
 } from "@moads/db";
 import {FastifyInstance} from "fastify";
 
-import {
-  buildDodoStaticCheckoutLink,
-  createDodoCheckoutSession,
-  isDodoCheckoutConfigured,
-} from "./dodo.js";
+import {createDodoCheckoutSession, isDodoCheckoutConfigured} from "./dodo.js";
 
 const ATTRIBUTION_MAX_LENGTH = 512;
 
@@ -184,15 +180,6 @@ function resolveCheckoutReturnUrl(attribution: Prisma.InputJsonValue | undefined
   );
 }
 
-function canUseDodoStaticCheckoutFallback(app: FastifyInstance, externalPriceId: string | null): boolean {
-  return (
-    app.config.runtimeProfile !== "prod" &&
-    app.config.dodoEnvironment === "test_mode" &&
-    typeof externalPriceId === "string" &&
-    externalPriceId.trim().startsWith("pdt_")
-  );
-}
-
 async function markCheckoutCreationFailed(
   app: FastifyInstance,
   input: {
@@ -249,75 +236,27 @@ export async function createBillingCheckoutResponse(
   });
 
   try {
-    const checkoutMetadata = buildCheckoutMetadata({
-      orderId: draft.orderId,
-      accountId: input.accountId,
-      productCode: input.productCode,
-      priceId: input.priceId,
-      userId: input.userId ?? null,
-      firebaseUid: input.firebaseUid ?? null,
-      email: input.email ?? null,
-      attribution: input.attribution,
-    });
-    const checkoutReturnUrl = resolveCheckoutReturnUrl(input.attribution);
-
     if (draft.providerCode === BILLING_DODO_PROVIDER_CODE && isDodoCheckoutConfigured(app.config)) {
-      try {
-        const session = await createDodoCheckoutSession(app.config, {
-          productId: draft.externalPriceId ?? "",
-          customerEmail: input.email ?? null,
-          returnUrl: checkoutReturnUrl,
-          metadata: checkoutMetadata,
-        });
-
-        return {
+      const session = await createDodoCheckoutSession(app.config, {
+        productId: draft.externalPriceId ?? "",
+        customerEmail: input.email ?? null,
+        returnUrl: resolveCheckoutReturnUrl(input.attribution),
+        metadata: buildCheckoutMetadata({
           orderId: draft.orderId,
-          status: draft.status,
-          redirectUrl: session.redirectUrl,
-          billingProductCode: draft.billingProductCode,
-          creditsAmount: draft.creditsAmount,
-          amountMinor: draft.amountMinor,
-          currencyCode: draft.currencyCode,
-        };
-      } catch (error) {
-        if (!canUseDodoStaticCheckoutFallback(app, draft.externalPriceId)) {
-          throw error;
-        }
+          accountId: input.accountId,
+          productCode: input.productCode,
+          priceId: input.priceId,
+          userId: input.userId ?? null,
+          firebaseUid: input.firebaseUid ?? null,
+          email: input.email ?? null,
+          attribution: input.attribution,
+        }),
+      });
 
-        app.log.warn({
-          billingOrderId: draft.orderId,
-          billingProductCode: draft.billingProductCode,
-          fallback: "dodo_static_checkout_link",
-          reason: error instanceof Error ? error.message : String(error),
-        }, "falling back to static Dodo checkout link");
-
-        return {
-          orderId: draft.orderId,
-          status: draft.status,
-          redirectUrl: buildDodoStaticCheckoutLink(app.config, {
-            productId: draft.externalPriceId ?? "",
-            customerEmail: input.email ?? null,
-            redirectUrl: checkoutReturnUrl,
-            metadata: checkoutMetadata,
-          }),
-          billingProductCode: draft.billingProductCode,
-          creditsAmount: draft.creditsAmount,
-          amountMinor: draft.amountMinor,
-          currencyCode: draft.currencyCode,
-        };
-      }
-    }
-
-    if (draft.providerCode === BILLING_DODO_PROVIDER_CODE && canUseDodoStaticCheckoutFallback(app, draft.externalPriceId)) {
       return {
         orderId: draft.orderId,
         status: draft.status,
-        redirectUrl: buildDodoStaticCheckoutLink(app.config, {
-          productId: draft.externalPriceId ?? "",
-          customerEmail: input.email ?? null,
-          redirectUrl: checkoutReturnUrl,
-          metadata: checkoutMetadata,
-        }),
+        redirectUrl: session.redirectUrl,
         billingProductCode: draft.billingProductCode,
         creditsAmount: draft.creditsAmount,
         amountMinor: draft.amountMinor,

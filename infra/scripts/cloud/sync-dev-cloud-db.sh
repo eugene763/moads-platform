@@ -13,11 +13,6 @@ PROXY_AUTH_FLAG="${PROXY_AUTH_FLAG:---gcloud-auth}"
 APP_PASSWORD_SECRET="${APP_PASSWORD_SECRET:-MOADS_PLATFORM_DEV_APP_PASSWORD}"
 DB_USER="${DB_USER:-moads_app}"
 DB_NAME="${DB_NAME:-moads_platform}"
-DB_PUSH_ARGS=()
-
-if [[ "${PRISMA_ACCEPT_DATA_LOSS:-0}" == "1" ]]; then
-  DB_PUSH_ARGS+=("--accept-data-loss")
-fi
 
 if [[ ! -x "$PROXY_BIN" ]]; then
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -64,17 +59,12 @@ if ! nc -z 127.0.0.1 "$PROXY_PORT" >/dev/null 2>&1; then
 fi
 
 cd "$ROOT_DIR"
-DATABASE_URL="$DATABASE_URL" pnpm --filter @moads/db prisma db push "${DB_PUSH_ARGS[@]}"
+DATABASE_URL="$DATABASE_URL" pnpm --filter @moads/db prisma db push
 DATABASE_URL="$DATABASE_URL" pnpm --filter @moads/db db:seed
-
-if [[ "${RUN_LEGACY_TEMPLATE_SYNC:-0}" == "1" ]]; then
-  (
-    cd "$ROOT_DIR/services/api"
-    MOADS_ENV=dev-cloud \
-      FIREBASE_PROJECT_ID="$PROJECT_ID" \
-      DATABASE_URL="$DATABASE_URL" \
-      pnpm exec tsx ../../infra/scripts/sync-legacy-motrend-templates.ts
-  )
-else
-  echo "Skipping legacy template sync. Run pnpm db:sync:legacy-templates:dev-cloud when you explicitly need Firestore parity."
-fi
+(
+  cd "$ROOT_DIR/services/api"
+  MOADS_ENV=dev-cloud \
+    FIREBASE_PROJECT_ID="$PROJECT_ID" \
+    DATABASE_URL="$DATABASE_URL" \
+    pnpm exec tsx ../../infra/scripts/sync-legacy-motrend-templates.ts
+)
