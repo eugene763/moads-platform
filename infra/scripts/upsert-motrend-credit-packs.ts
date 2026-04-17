@@ -6,7 +6,8 @@ import {
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
   buildCreditPackScopeRef,
 } from "../../packages/db/src/billing.js";
-import {DEFAULT_MOTREND_CREDIT_PACKS} from "../../packages/db/src/motrend-billing.js";
+import {getDefaultMotrendCreditPacks} from "../../packages/db/src/motrend-billing.js";
+import type {MotrendDodoEnvironment} from "../../packages/db/src/motrend-billing.js";
 
 interface CreditPackSeedInput {
   code: string;
@@ -23,10 +24,19 @@ interface CreditPackSeedInput {
 
 const prisma = new PrismaClient();
 
+function resolveDodoEnvironment(): MotrendDodoEnvironment {
+  const raw =
+    process.env.DODO_ENVIRONMENT?.trim() ||
+    process.env.DODO_PAYMENTS_ENVIRONMENT?.trim() ||
+    "live_mode";
+
+  return raw === "test_mode" ? "test_mode" : "live_mode";
+}
+
 function readPackInputs(): CreditPackSeedInput[] {
   const raw = process.env.MOTREND_CREDIT_PACKS_JSON?.trim();
   if (!raw) {
-    return DEFAULT_MOTREND_CREDIT_PACKS.map((pack) => ({
+    return getDefaultMotrendCreditPacks(resolveDodoEnvironment()).map((pack) => ({
       ...pack,
       providerCode: pack.dodoProductId ? BILLING_DODO_PROVIDER_CODE : BILLING_CHECKOUT_LINK_PROVIDER_CODE,
       checkoutUrl: pack.dodoProductId ?? "",

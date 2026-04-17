@@ -2,13 +2,44 @@ import {FastifyReply, FastifyRequest} from "fastify";
 
 import {PlatformError} from "@moads/db";
 
+function readBearerToken(request: FastifyRequest): string | null {
+  const rawHeader = request.headers.authorization;
+  if (typeof rawHeader !== "string") {
+    return null;
+  }
+
+  const trimmed = rawHeader.trim();
+  if (!trimmed.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+
+  const token = trimmed.slice("bearer ".length).trim();
+  return token || null;
+}
+
 export async function requireAuth(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const sessionCookie = request.cookies[request.server.config.sessionCookieName];
-  if (!sessionCookie) {
+  const bearerToken = request.server.config.runtimeProfile !== "prod" ? readBearerToken(request) : null;
+
+  let decoded;
+  if (sessionCookie) {
+    try {
+      decoded = await request.server.firebase.auth.verifySessionCookie(sessionCookie, true);
+    } catch (error) {
+      if (!bearerToken) {
+        throw error;
+      }
+    }
+  }
+
+  if (!decoded && bearerToken) {
+    decoded = await request.server.firebase.auth.verifyIdToken(bearerToken);
+  }
+
+  if (!decoded) {
     throw new PlatformError(401, "unauthenticated", "Sign in first.");
   }
 
-  const decoded = await request.server.firebase.auth.verifySessionCookie(sessionCookie, true);
   const user = await request.server.prisma.identityUser.findUnique({
     where: {firebaseUid: decoded.uid},
   });

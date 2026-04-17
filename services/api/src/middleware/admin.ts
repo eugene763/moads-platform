@@ -7,24 +7,7 @@ export async function hasCurrentAdminClaim(request: FastifyRequest): Promise<boo
     throw new PlatformError(500, "auth_context_missing", "Auth context is missing.");
   }
 
-  if (request.authContext.claims.admin === true) {
-    return true;
-  }
-
-  try {
-    const userRecord = await request.server.firebase.auth.getUser(request.authContext.firebaseUid);
-    return userRecord.customClaims?.admin === true;
-  } catch (error) {
-    request.log.warn(
-      {
-        err: error,
-        firebaseUid: request.authContext.firebaseUid,
-        userId: request.authContext.userId,
-      },
-      "firebase custom claim lookup failed",
-    );
-    return false;
-  }
+  return request.authContext.claims.admin === true;
 }
 
 export async function requireAdminClaim(request: FastifyRequest, _reply: FastifyReply): Promise<void> {

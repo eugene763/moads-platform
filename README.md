@@ -89,6 +89,8 @@ The default local stack is:
 - `pnpm motrend:downloads:cleanup`
 - `pnpm motrend:downloads:cleanup:dev-cloud`
 - `pnpm env:render:dev-cloud`
+- `pnpm qa:prepare:dev-cloud`
+- `pnpm qa:prepare:dev-cloud:accept-data-loss`
 
 ## Environment Profiles
 
@@ -113,6 +115,7 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - `pnpm db:sync:managed:dev-cloud` uses Cloud SQL Auth Proxy plus the `MOADS_PLATFORM_DEV_APP_PASSWORD` secret to run `prisma db push`, seed, and legacy template sync against managed Postgres.
 - `pnpm cloud-run:deploy:dev-cloud` expects `SESSION_COOKIE_SECRET_DEV` when available, plus `MOADS_API_DEV_DATABASE_URL`, `KLING_ACCESS_KEY`, and `KLING_SECRET_KEY` in Secret Manager; it falls back to the shared `SESSION_COOKIE_SECRET` only when the dev-specific cookie secret does not exist. `FIREBASE_SERVICE_ACCOUNT` is optional because Cloud Run ADC can be used when the runtime service account has the required Firebase roles.
 - `dev-cloud` currently uses `moads_session_dev` so browser sessions do not collide with `prod`.
+- Local `dev:dev-cloud` and the DB-backed `*:dev-cloud` helper scripts now start a Cloud SQL Auth Proxy automatically and rewrite the Cloud Run-style `DATABASE_URL` to a local proxy connection for the duration of the command.
 - `pnpm cloud-run:deploy:prod` deploys `moads-api` with ingress `internal-and-cloud-load-balancing`; prod traffic must enter through the HTTPS Load Balancer path, not directly through `run.app`.
 - `pnpm cloud-run:deploy:pro` deploys the pro contour API service `moads-api-pro` in a separate project/runtime and defaults all AEO external connectors to `mock` mode.
 - `pnpm cloud-frontends:deploy:pro` deploys `apps/aeo-web` and `apps/lab-web` to dedicated Cloud Run services, creates/updates Firebase Hosting pro sites, and maps `aeo.moads.agency` / `lab.moads.agency` to the correct frontend sites.
@@ -131,3 +134,10 @@ Local scripts never read `.env`, `.env.dev-cloud.local`, or `.env.prod.local` im
 - Prisma Dev remains available through `pnpm db:dev:start`, but only as a fallback when Docker Postgres is unavailable.
 - Runtime topology and safe `prod -> dev-cloud` sync rules live in `docs/runtime-topology.md`.
 - `pnpm env:render:dev-cloud` is read-only against cloud resources: it reads the live `moads-api` Cloud Run config plus Secret Manager values and rewrites them into a local `.env.dev-cloud.local` for testing. It keeps `MOTREND_PROVIDER_MODE=manual` by default so secrets are present but real Kling generation does not start accidentally.
+- Safe Firebase QA for MoTrend should run from a Firebase Hosting preview channel or `*.web.app` / `*.firebaseapp.com` host, not from `trend.moads.agency`. Those QA frontend hosts are expected to target `https://api-dev.moads.agency`.
+- `dev-cloud` intentionally defaults `API_ALLOWED_ORIGINS` to localhost plus Firebase preview hosts. `trend.moads.agency` is no longer part of the default dev-cloud browser contour.
+- `pnpm qa:prepare:dev-cloud` is the shortest path to refresh the verification contour before feature QA: it renders `.env.dev-cloud.local`, syncs dev Cloud SQL, and upserts MoTrend credit packs using the active `DODO_ENVIRONMENT`.
+- `pnpm cloud-tasks:ensure:dev-cloud` stays explicit. Run it when queue config changes or after infra drift, not on every QA refresh.
+- `pnpm qa:prepare:dev-cloud` intentionally skips Firestore legacy template sync so the default QA refresh does not depend on a legacy contour or interactive Google reauth. If you explicitly need that parity check, run `pnpm db:sync:legacy-templates:dev-cloud` afterward.
+- If dev Cloud SQL has accumulated drift and `prisma db push` stops on a data-loss warning, use `pnpm qa:prepare:dev-cloud:accept-data-loss`. That flag is for `dev-cloud` only and must never be mirrored into `prod`.
+- Payment QA should happen only after `pnpm billing:credit-packs:upsert:dev-cloud` has run with `DODO_ENVIRONMENT=test_mode`, so checkout links point at Dodo test products rather than live products.

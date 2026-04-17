@@ -10,13 +10,16 @@ INSTANCE_CONNECTION_NAME="${INSTANCE_CONNECTION_NAME:-$PROJECT_ID:$REGION:$INSTA
 PROXY_BIN="${PROXY_BIN:-/tmp/cloud-sql-proxy}"
 PROXY_PORT="${PROXY_PORT:-55432}"
 PROXY_AUTH_FLAG="${PROXY_AUTH_FLAG:---gcloud-auth}"
-APP_PASSWORD_SECRET="${APP_PASSWORD_SECRET:-MOADS_PLATFORM_DEV_APP_PASSWORD}"
-DB_USER="${DB_USER:-moads_app}"
-DB_NAME="${DB_NAME:-moads_platform}"
-DB_PUSH_ARGS=()
+PROXY_LOG_FILE="${PROXY_LOG_FILE:-/tmp/moads-dev-cloud-sql-proxy.log}"
 
-if [[ "${PRISMA_ACCEPT_DATA_LOSS:-0}" == "1" ]]; then
-  DB_PUSH_ARGS+=("--accept-data-loss")
+if [[ $# -eq 0 ]]; then
+  echo "Usage: with-dev-cloud-sql-proxy.sh <command> [args...]" >&2
+  exit 1
+fi
+
+if [[ -z "${DATABASE_URL:-}" ]]; then
+  echo "DATABASE_URL must be set before starting the dev-cloud SQL proxy helper." >&2
+  exit 1
 fi
 
 if [[ ! -x "$PROXY_BIN" ]]; then
@@ -40,10 +43,23 @@ if [[ ! -x "$PROXY_BIN" ]]; then
   chmod +x "$PROXY_BIN"
 fi
 
-APP_PASSWORD="$(gcloud secrets versions access latest --secret "$APP_PASSWORD_SECRET" --project "$PROJECT_ID")"
-DATABASE_URL="postgresql://${DB_USER}:${APP_PASSWORD}@127.0.0.1:${PROXY_PORT}/${DB_NAME}?schema=public"
+DATABASE_URL="$(node - <<'NODE' "$DATABASE_URL" "$PROXY_PORT"
+const [rawUrl, proxyPort] = process.argv.slice(2);
+const parsed = new URL(rawUrl);
+const socketHost = parsed.searchParams.get("host");
 
-"$PROXY_BIN" "$INSTANCE_CONNECTION_NAME" "$PROXY_AUTH_FLAG" --port "$PROXY_PORT" >/tmp/moads-cloud-sql-proxy.log 2>&1 &
+if (socketHost && socketHost.startsWith("/cloudsql/")) {
+  parsed.hostname = "127.0.0.1";
+  parsed.port = proxyPort;
+  parsed.searchParams.delete("host");
+}
+
+process.stdout.write(parsed.toString());
+NODE
+)"
+export DATABASE_URL
+
+"$PROXY_BIN" "$INSTANCE_CONNECTION_NAME" "$PROXY_AUTH_FLAG" --port "$PROXY_PORT" >"$PROXY_LOG_FILE" 2>&1 &
 PROXY_PID=$!
 
 cleanup() {
@@ -59,22 +75,9 @@ for _ in $(seq 1 30); do
 done
 
 if ! nc -z 127.0.0.1 "$PROXY_PORT" >/dev/null 2>&1; then
-  echo "Cloud SQL Proxy failed to start. Check /tmp/moads-cloud-sql-proxy.log" >&2
+  echo "Cloud SQL Proxy failed to start. Check $PROXY_LOG_FILE" >&2
   exit 1
 fi
 
 cd "$ROOT_DIR"
-DATABASE_URL="$DATABASE_URL" pnpm --filter @moads/db prisma db push "${DB_PUSH_ARGS[@]}"
-DATABASE_URL="$DATABASE_URL" pnpm --filter @moads/db db:seed
-
-if [[ "${RUN_LEGACY_TEMPLATE_SYNC:-0}" == "1" ]]; then
-  (
-    cd "$ROOT_DIR/services/api"
-    MOADS_ENV=dev-cloud \
-      FIREBASE_PROJECT_ID="$PROJECT_ID" \
-      DATABASE_URL="$DATABASE_URL" \
-      pnpm exec tsx ../../infra/scripts/sync-legacy-motrend-templates.ts
-  )
-else
-  echo "Skipping legacy template sync. Run pnpm db:sync:legacy-templates:dev-cloud when you explicitly need Firestore parity."
-fi
+"$@"

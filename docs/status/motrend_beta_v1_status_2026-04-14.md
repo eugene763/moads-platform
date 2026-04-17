@@ -49,6 +49,12 @@ This note freezes the currently usable MoTrend stack as the working **Beta v1** 
 - Runtime mode: `DODO_ENVIRONMENT=live_mode`
 - Current live API revision: `moads-api-00036-fgz`
 
+### Safe QA contour
+- Frontend QA should run on Firebase Hosting preview URLs or other `*.web.app` / `*.firebaseapp.com` hosts, not on `trend.moads.agency`
+- Those Firebase QA hosts should resolve to `https://api-dev.moads.agency`
+- `api-dev` should stay on dev Cloud SQL and `DODO_ENVIRONMENT=test_mode`
+- MoTrend credit packs in dev-cloud should use Dodo test product IDs before checkout QA starts
+
 ### Sharing and downloads
 - Canonical user-facing share links should use `/v/<slug>`
 - `save-video.html` remains the direct/open-safe fallback
