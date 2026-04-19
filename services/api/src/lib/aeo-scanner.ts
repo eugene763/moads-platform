@@ -291,6 +291,34 @@ function extractMetaContent(html: string, name: string, attr = "name"): string |
   return asText(match?.[1] ?? null);
 }
 
+function extractTagAttribute(tag: string, attr: string): string | null {
+  const quoted = new RegExp(`\\b${attr}\\s*=\\s*(["'])([\\s\\S]*?)\\1`, "i").exec(tag);
+  if (quoted?.[2]) {
+    return asText(quoted[2]);
+  }
+
+  const unquoted = new RegExp("\\b" + attr + "\\s*=\\s*([^\\s\"'=<>`]+)", "i").exec(tag);
+  return asText(unquoted?.[1] ?? null);
+}
+
+function extractCanonicalHref(html: string): string | null {
+  const linkTags = html.match(/<link\b[^>]*>/gi) ?? [];
+
+  for (const tag of linkTags) {
+    const rel = extractTagAttribute(tag, "rel");
+    if (!rel?.split(/\s+/).some((value) => value.toLowerCase() === "canonical")) {
+      continue;
+    }
+
+    const href = extractTagAttribute(tag, "href");
+    if (href) {
+      return href;
+    }
+  }
+
+  return null;
+}
+
 function stripHtml(value: string): string {
   return value
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -1037,7 +1065,7 @@ function evaluateAeoHtml(input: {
 }): AeoDeterministicScanResult {
   const title = extractTitle(input.html);
   const description = extractMetaContent(input.html, "description");
-  const canonical = extractMetaContent(input.html, "canonical", "rel");
+  const canonical = extractCanonicalHref(input.html) ?? extractMetaContent(input.html, "canonical", "rel");
   const ogTitle = extractMetaContent(input.html, "og:title", "property") ?? extractMetaContent(input.html, "twitter:title", "name");
 
   const jsonLdNodes = parseJsonLdScripts(input.html);

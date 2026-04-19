@@ -45,6 +45,7 @@ describe("aeo scanner", () => {
     expect(result.status).toBe("completed");
     expect(result.publicScore).toBeGreaterThanOrEqual(70);
     expect(result.issuesJson.find((issue) => issue.code === "aggregate_rating_missing")).toBeUndefined();
+    expect(result.issuesJson.find((issue) => issue.code === "canonical_missing")).toBeUndefined();
   });
 
   it("reports missing aggregate rating", async () => {
