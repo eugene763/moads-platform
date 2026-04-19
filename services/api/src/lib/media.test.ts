@@ -1,6 +1,11 @@
+import {Readable} from "node:stream";
+
 import {describe, expect, it} from "vitest";
 
-import {parseIsoBmffDurationSeconds} from "./media.js";
+import {
+  assertUploadedReferenceVideoIsValid,
+  parseIsoBmffDurationSeconds,
+} from "./media.js";
 
 function u32(value: number): Buffer {
   const buffer = Buffer.alloc(4);
@@ -25,6 +30,25 @@ function mvhdBox(timescale: number, duration: number): Buffer {
   ]));
 }
 
+function ftypBox(): Buffer {
+  return box("ftyp", Buffer.concat([
+    Buffer.from("qt  ", "ascii"),
+    u32(0),
+    Buffer.from("qt  ", "ascii"),
+  ]));
+}
+
+function fakeBucketForBuffer(buffer: Buffer) {
+  return {
+    file: () => ({
+      getMetadata: async () => [{size: String(buffer.length)}],
+      createReadStream: ({start = 0, end = buffer.length - 1}: {start?: number; end?: number} = {}) => {
+        return Readable.from([buffer.subarray(start, Math.min(end + 1, buffer.length))]);
+      },
+    }),
+  };
+}
+
 describe("media duration parsing", () => {
   it("reads mvhd duration from a normal moov box", () => {
     const buffer = box("moov", mvhdBox(1000, 12500));
@@ -40,5 +64,16 @@ describe("media duration parsing", () => {
     ]);
 
     expect(parseIsoBmffDurationSeconds(buffer)).toBe(7);
+  });
+
+  it("accepts an otherwise valid reference video when duration metadata is unavailable", async () => {
+    const buffer = Buffer.concat([
+      ftypBox(),
+      box("mdat", Buffer.alloc(128)),
+    ]);
+
+    await expect(
+      assertUploadedReferenceVideoIsValid(fakeBucketForBuffer(buffer) as never, "reference.mov"),
+    ).resolves.toBeNull();
   });
 });

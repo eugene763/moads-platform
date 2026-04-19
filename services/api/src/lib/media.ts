@@ -301,7 +301,7 @@ export async function assertUploadedPhotoIsValid(bucket: Bucket, storagePath: st
   }
 }
 
-export async function assertUploadedReferenceVideoIsValid(bucket: Bucket, storagePath: string): Promise<number> {
+export async function assertUploadedReferenceVideoIsValid(bucket: Bucket, storagePath: string): Promise<number | null> {
   const [metadata] = await bucket.file(storagePath).getMetadata();
   const size = Number(metadata.size ?? 0);
   if (!Number.isFinite(size) || size <= 0) {
@@ -329,7 +329,7 @@ export async function assertUploadedReferenceVideoIsValid(bucket: Bucket, storag
     }
   }
 
-  throw new PlatformError(400, "reference_video_probe_failed", "Unable to read reference video duration.");
+  return null;
 }
 
 function parseTotalBytesFromHeaders(headers: Headers): number | null {
