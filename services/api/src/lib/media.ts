@@ -9,7 +9,7 @@ import {PlatformError} from "@moads/db";
 
 const MAX_INPUT_IMAGE_BYTES = 40 * 1024 * 1024;
 const MAX_REFERENCE_VIDEO_BYTES = 101 * 1024 * 1024;
-const PROBE_RANGE_BYTES = 2 * 1024 * 1024;
+const PROBE_RANGE_BYTES = 8 * 1024 * 1024;
 const REMOTE_PROBE_BYTES = 2 * 1024 * 1024;
 const DOWNLOAD_FETCH_TIMEOUT_MS = 60_000;
 const MAX_DOWNLOAD_BYTES = 120 * 1024 * 1024;
@@ -202,7 +202,27 @@ function parseMvhdDurationSeconds(buffer: Buffer, boxStart: number, boxEnd: numb
   return null;
 }
 
-function parseIsoBmffDurationSeconds(buffer: Buffer): number | null {
+function isUsableVideoDurationSeconds(value: number | null): value is number {
+  return Number.isFinite(value) && value !== null && value > 0 && value < 24 * 60 * 60;
+}
+
+function parseMvhdDurationSecondsByScan(buffer: Buffer): number | null {
+  let typeOffset = buffer.indexOf("mvhd", 4, "ascii");
+
+  while (typeOffset !== -1) {
+    const boxStart = typeOffset - 4;
+    const duration = parseMvhdDurationSeconds(buffer, boxStart, buffer.length);
+    if (isUsableVideoDurationSeconds(duration)) {
+      return duration;
+    }
+
+    typeOffset = buffer.indexOf("mvhd", typeOffset + 1, "ascii");
+  }
+
+  return null;
+}
+
+export function parseIsoBmffDurationSeconds(buffer: Buffer): number | null {
   for (let offset = 0; offset < buffer.length;) {
     const box = readIsoBox(buffer, offset, buffer.length);
     if (!box) {
@@ -216,7 +236,10 @@ function parseIsoBmffDurationSeconds(buffer: Buffer): number | null {
           break;
         }
         if (innerBox.type === "mvhd") {
-          return parseMvhdDurationSeconds(buffer, innerOffset, box.end);
+          const duration = parseMvhdDurationSeconds(buffer, innerOffset, box.end);
+          if (isUsableVideoDurationSeconds(duration)) {
+            return duration;
+          }
         }
         innerOffset = innerBox.end;
       }
@@ -225,7 +248,7 @@ function parseIsoBmffDurationSeconds(buffer: Buffer): number | null {
     offset = box.end;
   }
 
-  return null;
+  return parseMvhdDurationSecondsByScan(buffer);
 }
 
 export async function storageObjectExists(bucket: Bucket, storagePath: string): Promise<boolean> {
@@ -301,7 +324,7 @@ export async function assertUploadedReferenceVideoIsValid(bucket: Bucket, storag
     }
 
     const durationSec = parseIsoBmffDurationSeconds(buffer);
-    if (durationSec && Number.isFinite(durationSec) && durationSec > 0) {
+    if (isUsableVideoDurationSeconds(durationSec)) {
       return durationSec;
     }
   }
@@ -369,7 +392,7 @@ export async function probeRemoteVideoDurationSeconds(sourceUrl: string): Promis
   }
 
   const headDuration = parseIsoBmffDurationSeconds(headRange.buffer);
-  if (headDuration && Number.isFinite(headDuration) && headDuration > 0) {
+  if (isUsableVideoDurationSeconds(headDuration)) {
     return headDuration;
   }
 
@@ -379,7 +402,7 @@ export async function probeRemoteVideoDurationSeconds(sourceUrl: string): Promis
     if (tailStart > 0) {
       const tailRange = await readRemoteRangeBuffer(sourceUrl, tailStart, totalBytes - 1, REMOTE_PROBE_BYTES);
       const tailDuration = parseIsoBmffDurationSeconds(tailRange.buffer);
-      if (tailDuration && Number.isFinite(tailDuration) && tailDuration > 0) {
+      if (isUsableVideoDurationSeconds(tailDuration)) {
         return tailDuration;
       }
     }
