@@ -1,123 +1,52 @@
-# AEO/LAB Service Status (Git-Anchored)
+# AEO/LAB Service Status — Pre-Beta Update
 
-Snapshot date: 2026-04-14  
+Updated: 2026-04-20  
 Repository: `moads-platform`  
-Branch: `feature/motrend-wallet-fastspring`  
-Current HEAD: `ac04f69`
+Current branch at update time: `codex/fix-reference-video-duration-u5ad86df2c2`  
+Pre-beta source anchor before docs update: `b73fee9`
 
-## 1) Git anchors
+## Canonical document
 
-Important recent commits:
-- `054b4bb` — day-1 scan/dashboard stabilization
-- `99c4035` — free pricing CTA points to checker anchor
-- `d184e17` — product-page sampling hardened for scanner
-- `748e531` — canonical final launch handoff doc added
-- `ac04f69` — current branch head after latest docs/status alignment
+The detailed technical and UX spec is now:
 
-Interpretation rule:
-- runtime behavior should be read from these commits plus the live checks below
-- branch HEAD is ahead of the last verified runtime snapshot; latest post-runtime commits are documentation/status work rather than a newly confirmed runtime rollout
+- `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md`
 
-## 2) Last verified live runtime
+## Current service contract
 
-Last verified Cloud Run revisions:
-- `moads-api` -> `moads-api-00034-h54`
-- `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
-- `moads-lab-web` -> `moads-lab-web-00009-2mr`
+- AEO public scan: free, URL-only, deterministic.
+- AEO report: public score + evidence layer + unlock/account actions.
+- AEO dashboard: free baseline sign-in access, wallet/scans/evidence/AI tips actions.
+- LAB: account and credit-pack billing center.
+- Billing: Dodo Payments only for AEO credit packs.
+- OpenAI: explicit AI tips only, not public score.
 
-Last verified public checks:
-- `https://aeo.moads.agency/` -> `200`
-- `https://lab.moads.agency/` -> `200`
-- `POST https://api.moads.agency/v1/aeo/public-scans` -> working
+## Score contract
 
-## 3) What is live now
+Weighted score blocks:
 
-### AEO
-- landing with URL-only checker
-- public scan -> public token -> public report
-- sign-in gate for account features
-- free dashboard access after sign-in
-- richer report IA:
-  - scored-now block
-  - evidence layer
-  - action plan
-  - prompt kit
+- Access.
+- Basic SEO.
+- Ratings Schema.
 
-### LAB
-- account/billing center
-- pack-first commercial surface
-- coming-soon framing for plans
+Evidence-only blocks:
 
-### Billing
-- Dodo-only AEO pack model
-- Dodo webhook route mounted at:
-  - `POST /v1/billing/webhooks/dodo`
+- crawlability.
+- robots/sitemap.
+- AI bot rules.
+- product-page sample.
+- action plan.
+- prompt kit.
+- connected evidence widgets.
 
-## 4) API coverage currently in code
+## Latest source-side change
 
-### `/v1/aeo`
-- `POST /v1/aeo/public-scans`
-- `GET /v1/aeo/public-scans/:publicToken`
-- `POST /v1/aeo/waitlist`
-- `POST /v1/aeo/scans/:scanId/claim`
-- `GET /v1/aeo/scans`
-- `GET /v1/aeo/scans/:scanId`
-- `POST /v1/aeo/scans/:scanId/generate-ai-tips`
-- `GET /v1/aeo/evidence/ga4`
-- `GET /v1/aeo/realtime/stream`
+Canonical parsing has been fixed at source anchor `b73fee9`:
 
-### `/v1/lab`
-- `GET /v1/lab/center`
-- current order/account center routes used by LAB
+- standard canonical link tags are now parsed correctly.
+- false `canonical_missing` for normal `<link rel="canonical" href="...">` pages should be resolved after API deploy.
 
-### auth / me / wallet
-- `POST /v1/auth/session-login`
-- `POST /v1/auth/session-logout`
-- `GET /v1/auth/me`
-- `GET /v1/me`
-- `GET /v1/wallet/summary`
+## Review risks
 
-## 5) Scanner status
-
-Current scanner characteristics:
-- deterministic
-- raw HTML only
-- browser-like fetch headers
-- one controlled retry
-- evidence-first enrichments:
-  - robots
-  - sitemap
-  - AI bot rules
-  - product-page sample
-  - action plan
-  - prompt kit
-
-Current limitation:
-- no headless browser fallback
-- no paid-provider intelligence inside public scan
-
-Recent hardening:
-- technical sitemap URLs are no longer used as fake product pages
-- if no valid HTML PDP sample is found, report now returns `productPage: none`
-
-## 6) Current blockers / non-blockers
-
-### Non-blocking
-- IAM warnings during Cloud Run deploys still appear, but deploys complete and traffic routes correctly
-
-### Current operational friction
-- `gcloud auth login` may be needed before future deploy/describe commands if token refresh expires
-
-### Not considered blockers for launch baseline
-- live monitored intelligence
-- recurring subscriptions
-- headless render fallback
-
-## 7) Practical truth for implementers
-
-Use this as the current reality:
-- AEO/LAB are live in the current contour
-- score is narrower than the marketing surface and that is intentional
-- evidence layer is broader than the top-line score
-- Dodo is the active payments path
-- public scan still avoids paid provider calls
+- Branch/runtime mismatch is possible because recent work involved rollback branches.
+- Some visual/logo changes may exist in one branch/runtime but not another.
+- Verify current source before declaring frontend visual state final.

@@ -1,3 +1,5 @@
+> Pre-beta update, 2026-04-20: for current AEO/LAB source-of-truth, use `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md`. This older document is retained for historical context and may contain outdated branch/runtime references.
+
 # AEO/LAB Final UX + Architecture + Backend Spec
 
 Date: 2026-04-14  

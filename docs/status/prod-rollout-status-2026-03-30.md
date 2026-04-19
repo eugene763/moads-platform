@@ -1,71 +1,65 @@
-# MO Ads Platform — Production Rollout Status
+# MO Ads Platform — Production / Pre-Beta Status
 
-Snapshot date: 2026-04-14  
+Snapshot updated: 2026-04-20  
 Repository: `moads-platform`  
-Branch: `feature/motrend-wallet-fastspring`  
-Current code anchor: `ac04f69`
+Current branch at update time: `codex/fix-reference-video-duration-u5ad86df2c2`  
+Pre-beta source anchor before docs update: `b73fee9`
 
-## Current rollout state
+## Canonical pre-beta handoff
 
-### Last verified live revisions
-- `moads-api` -> `moads-api-00034-h54`
-- `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
-- `moads-lab-web` -> `moads-lab-web-00009-2mr`
+Use this file for the detailed current specification:
 
-### Last verified public checks
-- `https://aeo.moads.agency/` -> HTTP `200`
-- `https://lab.moads.agency/` -> HTTP `200`
-- uncached `POST https://api.moads.agency/v1/aeo/public-scans` -> working
+- `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md`
 
-## What was rolled forward after the original March rollout
+## Current product interpretation
 
-### Day-1 stabilization
-- checker CTA routing fixed
-- dashboard no longer shows membership-style gate for free baseline
-- landing/report copy aligned with real score model
+AEO/LAB is in pre-beta stabilization:
 
-### Scanner improvements
-- browser-like fetch headers
-- controlled retry
-- crawlability evidence
-- sitemap/robots evidence
-- PDP sampling for root/homepage scans
-- hardened filtering so technical sitemap URLs are no longer treated as product pages
+- AEO public scan is free and deterministic.
+- LAB is the billing/account center.
+- Dodo Payments is the active AEO pack provider.
+- OpenAI is optional for explicit AI tips only.
+- Public scan does not call OpenAI or paid data providers.
 
-### Payments
-- Dodo is the only active AEO pack billing provider
-- FastSpring is no longer part of active AEO pack rollout
+## Historical live runtime note
 
-## Runtime notes
+Previously verified live revisions from older rollout work:
 
-### AEO current behavior
-- URL-only entry
-- deterministic score
-- broader evidence layer
-- no paid provider calls in public scan
+- `moads-api-00034-h54`
+- `moads-aeo-web-00010-fn6`
+- `moads-lab-web-00009-2mr`
 
-### LAB current behavior
-- billing/account center
-- pack-first commercial surface
-- plans remain coming soon
+These should be treated as historical until a fresh deploy/status check is run from the current branch.
 
-## Operations notes
+## Latest source-side fix
 
-### Known non-blocking warnings
-- Cloud Run deploys may show IAM policy warnings while still succeeding and routing traffic correctly
+Canonical false-positive fix:
 
-### Current operator friction
-- `gcloud auth login` may be needed before future deploy or `gcloud run services describe` commands when token refresh expires
+- source commit: `b73fee9`
+- behavior: parse `<link rel="canonical" href="...">` instead of treating canonical as a meta tag.
 
-### Git vs runtime note
-- current branch HEAD is newer than the last verified live runtime snapshot,
-- latest commits after `d184e17` are primarily documentation/status alignment,
-- until a fresh deploy is confirmed, keep the runtime revisions above as the last known live baseline
+## Current QA status
 
-## Practical release interpretation
+Latest checks run:
 
-For current launch work, treat this as the real state:
-- AEO and LAB are live
-- Dodo pack commerce is the intended launch path
-- scanner is stable enough for launch but still conservative on complex sites
-- next meaningful backend iteration is richer content/PDP reading, not a new score philosophy
+```text
+pnpm --filter @moads/api test -- aeo-scanner
+pnpm --filter @moads/api typecheck
+```
+
+Result:
+
+```text
+54 tests passed
+API typecheck passed
+```
+
+## Operational reminder
+
+Before deployment, verify:
+
+- active branch.
+- target Cloud Run service.
+- `gcloud auth login` freshness.
+- Firebase Hosting target.
+- whether source branch contains the expected visual/logo changes.
