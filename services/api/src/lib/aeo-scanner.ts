@@ -10,7 +10,14 @@ const AI_BOTS = [
   {name: "PerplexityBot", agent: "PerplexityBot"},
 ] as const;
 
-type ScoreDimension = "access" | "basic_seo" | "ratings_schema";
+type ScoreDimension =
+  | "ai_crawler_accessibility"
+  | "answer_optimization"
+  | "citation_readiness"
+  | "technical_hygiene"
+  | "access"
+  | "basic_seo"
+  | "ratings_schema";
 
 export interface AeoIssue {
   code: string;
@@ -84,6 +91,8 @@ interface CrawlabilityEvidence {
   sitemapUrl: string | null;
   sitemapExists: boolean;
   sitemapCandidates: string[];
+  llmsTxtExists: boolean;
+  llmGuidancePage: string | null;
   aiBots: Record<string, CrawlabilityBotEvidence>;
 }
 
@@ -349,6 +358,106 @@ function extractOnPageEvidence(html: string): OnPageRatingEvidence {
     ratingValue,
     reviewsCount,
     snippet,
+  };
+}
+
+interface AnswerOptimizationSignals {
+  questionHeadingsCount: number;
+  faqBlockDetected: boolean;
+  qaPairsCount: number;
+  directAnswerCount: number;
+  directAnswerQualityCount: number;
+  bulletsOrStepsOrTablesCount: number;
+  howToHeadingCount: number;
+  faqSchemaCount: number;
+  visibleFaqSchemaMatch: boolean;
+}
+
+function normalizeHeadingText(value: string): string {
+  return stripHtml(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function countWords(value: string): number {
+  return normalizeHeadingText(value).split(/\s+/).filter(Boolean).length;
+}
+
+function isQuestionHeading(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return normalized.endsWith("?")
+    || /^(how|what|why|when|where|can|does|is|are|should|which)\b/.test(normalized);
+}
+
+function extractAnswerOptimizationSignals(input: {
+  html: string;
+  jsonLdNodes: Array<Record<string, unknown>>;
+}): AnswerOptimizationSignals {
+  const headingRegex = /<(h[2-4])\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  const headingMatches = Array.from(input.html.matchAll(headingRegex)).map((match) => ({
+    heading: normalizeHeadingText(match[2] ?? ""),
+    startIndex: match.index ?? 0,
+    endIndex: (match.index ?? 0) + (match[0]?.length ?? 0),
+  })).filter((entry) => Boolean(entry.heading));
+
+  const questionHeadings = headingMatches.filter((entry) => isQuestionHeading(entry.heading));
+  const faqBlockDetected = headingMatches.some((entry) => /\bfaq\b|\bq\s*&\s*a\b/i.test(entry.heading));
+  const howToHeadingCount = headingMatches.filter((entry) => /\bhow\s*to\b/i.test(entry.heading)).length;
+
+  let directAnswerCount = 0;
+  let directAnswerQualityCount = 0;
+  let bulletsOrStepsOrTablesCount = 0;
+
+  for (let i = 0; i < questionHeadings.length; i += 1) {
+    const current = questionHeadings[i];
+    if (!current) {
+      continue;
+    }
+    const nextQuestion = questionHeadings[i + 1];
+    const segment = input.html.slice(
+      current.endIndex,
+      nextQuestion ? Math.max(current.endIndex, nextQuestion.startIndex) : undefined,
+    );
+
+    const firstParagraph = /<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(segment)?.[1] ?? "";
+    const paragraphWords = countWords(firstParagraph);
+    const listMatch = /<(ul|ol)\b[\s\S]*?<\/\1>/i.exec(segment)?.[0] ?? "";
+    const tableMatch = /<table\b[\s\S]*?<\/table>/i.exec(segment)?.[0] ?? "";
+
+    if (paragraphWords > 0 || listMatch || tableMatch) {
+      directAnswerCount += 1;
+    }
+
+    if (paragraphWords >= 40 && paragraphWords <= 80) {
+      directAnswerQualityCount += 1;
+    }
+
+    if (listMatch || tableMatch || /<ol\b[\s\S]*?<\/ol>/i.test(segment)) {
+      bulletsOrStepsOrTablesCount += 1;
+    }
+  }
+
+  const faqSchemaCount = input.jsonLdNodes.reduce((count, node) => {
+    if (hasType(node, "FAQPage")) {
+      const mainEntity = Array.isArray(node.mainEntity) ? node.mainEntity : [];
+      return count + mainEntity.length;
+    }
+    return count;
+  }, 0);
+
+  const qaPairsCount = questionHeadings.length;
+  const visibleFaqSchemaMatch = faqSchemaCount > 0 && qaPairsCount > 0;
+
+  return {
+    questionHeadingsCount: questionHeadings.length,
+    faqBlockDetected,
+    qaPairsCount,
+    directAnswerCount,
+    directAnswerQualityCount,
+    bulletsOrStepsOrTablesCount,
+    howToHeadingCount,
+    faqSchemaCount,
+    visibleFaqSchemaMatch,
   };
 }
 
@@ -640,6 +749,47 @@ async function fetchTextDocument(input: {
   };
 }
 
+async function fetchLlmGuidanceEvidence(input: {
+  baseUrl: string;
+  fetchImpl: typeof fetch;
+}): Promise<{llmsTxtExists: boolean; llmGuidancePage: string | null}> {
+  const candidates = [
+    new URL("/llms.txt", input.baseUrl).toString(),
+    new URL("/llms", input.baseUrl).toString(),
+    new URL("/llm", input.baseUrl).toString(),
+    new URL("/ai", input.baseUrl).toString(),
+  ];
+
+  let llmsTxtExists = false;
+  let llmGuidancePage: string | null = null;
+
+  for (const candidate of candidates) {
+    const response = await fetchTextDocument({
+      url: candidate,
+      fetchImpl: input.fetchImpl,
+      timeoutMs: 4_000,
+    });
+
+    if (!response.ok || !response.text.trim()) {
+      continue;
+    }
+
+    if (candidate.endsWith("/llms.txt")) {
+      llmsTxtExists = true;
+      continue;
+    }
+
+    if (!llmGuidancePage && isLikelyHtmlContentType(response.contentType)) {
+      llmGuidancePage = response.finalUrl ?? candidate;
+    }
+  }
+
+  return {
+    llmsTxtExists,
+    llmGuidancePage,
+  };
+}
+
 async function fetchCrawlabilityEvidence(input: {
   baseUrl: string;
   fetchImpl: typeof fetch;
@@ -692,6 +842,11 @@ async function fetchCrawlabilityEvidence(input: {
     }),
   );
 
+  const llmGuidance = await fetchLlmGuidanceEvidence({
+    baseUrl: input.baseUrl,
+    fetchImpl: input.fetchImpl,
+  });
+
   return {
     robotsUrl,
     robotsExists,
@@ -699,6 +854,8 @@ async function fetchCrawlabilityEvidence(input: {
     sitemapUrl,
     sitemapExists,
     sitemapCandidates,
+    llmsTxtExists: llmGuidance.llmsTxtExists,
+    llmGuidancePage: llmGuidance.llmGuidancePage,
     aiBots: Object.fromEntries(botEntries),
   };
 }
@@ -862,6 +1019,14 @@ async function fetchProductPageEvidence(input: {
 
 function calculateScore(input: {
   httpStatus: number | null;
+  blocked: boolean;
+  responseMs: number;
+  likelyJsHeavy: boolean;
+  robotsExists: boolean;
+  sitemapExists: boolean;
+  llmsTxtExists: boolean;
+  llmGuidancePage: boolean;
+  limitedAIBotCount: number;
   hasTitle: boolean;
   hasDescription: boolean;
   hasCanonical: boolean;
@@ -872,56 +1037,138 @@ function calculateScore(input: {
   validScale: boolean;
   hasVisibleEvidence: boolean;
   consistentEvidence: boolean;
+  answerSignals: AnswerOptimizationSignals;
 }): {
   total: number;
+  aiCrawlerAccessibility: number;
+  answerOptimization: number;
+  citationReadiness: number;
+  technicalHygiene: number;
   access: number;
   basicSeo: number;
   ratingsSchema: number;
 } {
-  let access = 0;
+  let aiCrawlerAccessibility = 0;
   if (input.httpStatus != null) {
     if (input.httpStatus >= 200 && input.httpStatus < 300) {
-      access = 30;
+      aiCrawlerAccessibility += 16;
     } else if (input.httpStatus >= 300 && input.httpStatus < 400) {
-      access = 24;
+      aiCrawlerAccessibility += 12;
     } else if (input.httpStatus >= 400 && input.httpStatus < 500) {
-      access = 8;
+      aiCrawlerAccessibility += 5;
     }
   }
-
-  let basicSeo = 0;
-  if (input.hasTitle) {
-    basicSeo += 8;
+  if (!input.blocked) {
+    aiCrawlerAccessibility += 4;
   }
-  if (input.hasDescription) {
-    basicSeo += 8;
+  if (input.robotsExists) {
+    aiCrawlerAccessibility += 4;
+  }
+  if (input.sitemapExists) {
+    aiCrawlerAccessibility += 4;
   }
   if (input.hasCanonical) {
-    basicSeo += 7;
+    aiCrawlerAccessibility += 3;
   }
-  if (input.hasOgTitle) {
-    basicSeo += 7;
+  if (!input.likelyJsHeavy) {
+    aiCrawlerAccessibility += 2;
   }
+  if (input.llmsTxtExists || input.llmGuidancePage) {
+    aiCrawlerAccessibility += 2;
+  }
+  if (input.limitedAIBotCount > 0) {
+    aiCrawlerAccessibility -= Math.min(4, input.limitedAIBotCount);
+  }
+  aiCrawlerAccessibility = clamp(aiCrawlerAccessibility, 0, 35);
 
-  let ratingsSchema = 0;
+  let answerOptimization = 8;
+  if (input.answerSignals.questionHeadingsCount > 0) {
+    answerOptimization += Math.min(8, input.answerSignals.questionHeadingsCount * 2);
+  }
+  if (input.answerSignals.directAnswerCount > 0) {
+    answerOptimization += Math.min(8, input.answerSignals.directAnswerCount * 2);
+  }
+  if (input.answerSignals.faqBlockDetected) {
+    answerOptimization += 5;
+  }
+  if (input.answerSignals.qaPairsCount >= 6 && input.answerSignals.qaPairsCount <= 12) {
+    answerOptimization += 5;
+  } else if (input.answerSignals.qaPairsCount >= 3) {
+    answerOptimization += 3;
+  }
+  if (input.answerSignals.directAnswerQualityCount > 0) {
+    answerOptimization += Math.min(4, input.answerSignals.directAnswerQualityCount * 2);
+  }
+  if (input.answerSignals.bulletsOrStepsOrTablesCount > 0) {
+    answerOptimization += 3;
+  }
+  if (input.answerSignals.howToHeadingCount > 0) {
+    answerOptimization += 2;
+  }
+  if (input.answerSignals.visibleFaqSchemaMatch) {
+    answerOptimization += 3;
+  }
+  if (input.likelyJsHeavy) {
+    answerOptimization = Math.max(0, answerOptimization - 5);
+  }
+  answerOptimization = clamp(answerOptimization, 0, 35);
+
+  let citationReadiness = 0;
   if (input.hasAggregate) {
-    ratingsSchema += 15;
+    citationReadiness += 10;
   }
   if (input.hasCount) {
-    ratingsSchema += 10;
+    citationReadiness += 5;
   }
   if (input.hasRatingValue && input.validScale) {
-    ratingsSchema += 8;
+    citationReadiness += 4;
   }
   if (input.hasVisibleEvidence) {
-    ratingsSchema += 4;
+    citationReadiness += 3;
   }
   if (input.consistentEvidence) {
-    ratingsSchema += 3;
+    citationReadiness += 3;
   }
+  if (input.hasTitle) {
+    citationReadiness += 3;
+  }
+  if (input.hasDescription) {
+    citationReadiness += 2;
+  }
+  citationReadiness = clamp(citationReadiness, 0, 25);
 
-  const total = clamp(access + basicSeo + ratingsSchema, 0, 100);
-  return {total, access, basicSeo, ratingsSchema};
+  let technicalHygiene = 0;
+  if (input.hasTitle) {
+    technicalHygiene += 2;
+  }
+  if (input.hasDescription) {
+    technicalHygiene += 2;
+  }
+  if (input.hasCanonical) {
+    technicalHygiene += 3;
+  }
+  if (input.hasOgTitle) {
+    technicalHygiene += 1;
+  }
+  if (input.responseMs < 3500) {
+    technicalHygiene += 1;
+  }
+  if (!input.blocked) {
+    technicalHygiene += 1;
+  }
+  technicalHygiene = clamp(technicalHygiene, 0, 10);
+
+  const total = clamp(aiCrawlerAccessibility + answerOptimization + citationReadiness + technicalHygiene, 0, 100);
+  return {
+    total,
+    aiCrawlerAccessibility,
+    answerOptimization,
+    citationReadiness,
+    technicalHygiene,
+    access: aiCrawlerAccessibility,
+    basicSeo: technicalHygiene,
+    ratingsSchema: citationReadiness,
+  };
 }
 
 function buildRecommendations(issues: AeoIssue[]): AeoRecommendation[] {
@@ -989,6 +1236,36 @@ function buildRecommendations(issues: AeoIssue[]): AeoRecommendation[] {
     });
   }
 
+  if (hasIssue("question_headings_missing") || hasIssue("faq_block_missing")) {
+    recommendations.push({
+      id: "add_question_led_sections",
+      title: "Add question-led answer sections",
+      description: "Use clear H2/H3 question headings and visible FAQ blocks to improve answer extraction readiness.",
+      impactScore: 8,
+      priority: "high",
+    });
+  }
+
+  if (hasIssue("qa_pairs_low") || hasIssue("direct_answer_quality_low")) {
+    recommendations.push({
+      id: "expand_qa_depth",
+      title: "Expand Q/A depth and direct answers",
+      description: "Aim for 6-12 Q/A pairs with concise direct answers (about 40-80 words) under each question heading.",
+      impactScore: 7,
+      priority: "high",
+    });
+  }
+
+  if (hasIssue("structured_answer_blocks_missing")) {
+    recommendations.push({
+      id: "add_bullets_steps_tables",
+      title: "Add bullets, steps, or tables",
+      description: "Use structured blocks for key answers so machine parsers can extract implementation guidance reliably.",
+      impactScore: 5,
+      priority: "medium",
+    });
+  }
+
   if (hasIssue("robots_txt_missing")) {
     recommendations.push({
       id: "publish_robots_txt",
@@ -1016,6 +1293,16 @@ function buildRecommendations(issues: AeoIssue[]): AeoRecommendation[] {
       description: "Check robots.txt and CDN/WAF rules for GPTBot, ClaudeBot, Google-Extended, and PerplexityBot so they can reach key pages.",
       impactScore: 6,
       priority: "medium",
+    });
+  }
+
+  if (hasIssue("llm_guidance_missing")) {
+    recommendations.push({
+      id: "publish_llm_guidance",
+      title: "Publish llms.txt or AI guidance page",
+      description: "Add llms.txt or a clear machine guidance page and link it from robots/sitemap context as a positive signal.",
+      impactScore: 4,
+      priority: "low",
     });
   }
 
@@ -1069,8 +1356,16 @@ function evaluateAeoHtml(input: {
   const ogTitle = extractMetaContent(input.html, "og:title", "property") ?? extractMetaContent(input.html, "twitter:title", "name");
 
   const jsonLdNodes = parseJsonLdScripts(input.html);
+  const answerSignals = extractAnswerOptimizationSignals({
+    html: input.html,
+    jsonLdNodes,
+  });
   const aggregate = extractAggregateRating(jsonLdNodes);
   const onPage = extractOnPageEvidence(input.html);
+  const stripped = stripHtml(input.html);
+  const scriptCount = (input.html.match(/<script\b/gi) ?? []).length;
+  const likelyJsHeavy = stripped.length < 700 && scriptCount > 15;
+  const limitedBots = Object.entries(input.crawlability?.aiBots ?? {}).filter(([, state]) => state.allowed === false || state.reachable === false);
   const rootLikeRequest = (() => {
     try {
       const requested = new URL(input.requestedUrl);
@@ -1125,6 +1420,14 @@ function evaluateAeoHtml(input: {
 
   const score = calculateScore({
     httpStatus: input.httpStatus,
+    blocked: input.blocked,
+    responseMs: input.fetchMeta.responseMs,
+    likelyJsHeavy,
+    robotsExists: input.crawlability?.robotsExists ?? false,
+    sitemapExists: input.crawlability?.sitemapExists ?? false,
+    llmsTxtExists: input.crawlability?.llmsTxtExists ?? false,
+    llmGuidancePage: Boolean(input.crawlability?.llmGuidancePage),
+    limitedAIBotCount: limitedBots.length,
     hasTitle: Boolean(title),
     hasDescription: Boolean(description),
     hasCanonical: Boolean(canonical),
@@ -1135,6 +1438,7 @@ function evaluateAeoHtml(input: {
     validScale,
     hasVisibleEvidence,
     consistentEvidence,
+    answerSignals,
   });
 
   const issues: AeoIssue[] = [];
@@ -1143,29 +1447,29 @@ function evaluateAeoHtml(input: {
     issues.push(buildIssue(
       "fetch_blocked",
       "high",
-      "access",
+      "ai_crawler_accessibility",
       30,
       "Page could not be fetched (blocked/challenge/timeout).",
     ));
   }
 
   if (!title) {
-    issues.push(buildIssue("title_missing", "medium", "basic_seo", 8, "Missing <title> tag."));
+    issues.push(buildIssue("title_missing", "medium", "technical_hygiene", 8, "Missing <title> tag."));
   }
 
   if (!description) {
-    issues.push(buildIssue("meta_description_missing", "medium", "basic_seo", 8, "Missing meta description."));
+    issues.push(buildIssue("meta_description_missing", "medium", "technical_hygiene", 8, "Missing meta description."));
   }
 
   if (!canonical) {
-    issues.push(buildIssue("canonical_missing", "low", "basic_seo", 7, "Missing canonical signal."));
+    issues.push(buildIssue("canonical_missing", "low", "technical_hygiene", 7, "Missing canonical signal."));
   }
 
   if (!scoreAggregate) {
     issues.push(buildIssue(
       "aggregate_rating_missing",
       "high",
-      "ratings_schema",
+      "citation_readiness",
       15,
       "AggregateRating data was not found in JSON-LD.",
     ));
@@ -1174,7 +1478,7 @@ function evaluateAeoHtml(input: {
       issues.push(buildIssue(
         "aggregate_count_missing",
         "high",
-        "ratings_schema",
+        "citation_readiness",
         10,
         "AggregateRating has no reviewCount/ratingCount.",
       ));
@@ -1184,7 +1488,7 @@ function evaluateAeoHtml(input: {
       issues.push(buildIssue(
         "aggregate_scale_invalid",
         "high",
-        "ratings_schema",
+        "citation_readiness",
         8,
         "ratingValue is missing or outside the declared rating scale.",
       ));
@@ -1194,24 +1498,80 @@ function evaluateAeoHtml(input: {
       issues.push(buildIssue(
         "aggregate_visible_mismatch",
         "high",
-        "ratings_schema",
+        "citation_readiness",
         6,
         "Structured rating evidence does not match visible page evidence.",
       ));
     }
   }
 
-  const stripped = stripHtml(input.html);
-  const scriptCount = (input.html.match(/<script\b/gi) ?? []).length;
-  const likelyJsHeavy = stripped.length < 700 && scriptCount > 15;
-
   if (likelyJsHeavy) {
     issues.push(buildIssue(
       "js_heavy_low_confidence",
       "medium",
-      "access",
+      "ai_crawler_accessibility",
       3,
       "This page appears client-rendered; score is based on raw HTML snapshot only.",
+    ));
+  }
+
+  if (answerSignals.questionHeadingsCount === 0) {
+    issues.push(buildIssue(
+      "question_headings_missing",
+      "medium",
+      "answer_optimization",
+      8,
+      "No question-style H2/H3/H4 headings were found.",
+    ));
+  }
+
+  if (!answerSignals.faqBlockDetected) {
+    issues.push(buildIssue(
+      "faq_block_missing",
+      "medium",
+      "answer_optimization",
+      6,
+      "Visible FAQ block was not detected in raw HTML.",
+    ));
+  }
+
+  if (answerSignals.qaPairsCount < 6) {
+    issues.push(buildIssue(
+      "qa_pairs_low",
+      "medium",
+      "answer_optimization",
+      5,
+      "Detected fewer than 6 clear Q/A pairs.",
+    ));
+  }
+
+  if (answerSignals.directAnswerQualityCount === 0) {
+    issues.push(buildIssue(
+      "direct_answer_quality_low",
+      "medium",
+      "answer_optimization",
+      4,
+      "No 40-80 word direct answer block was found immediately under question headings.",
+    ));
+  }
+
+  if (answerSignals.bulletsOrStepsOrTablesCount === 0) {
+    issues.push(buildIssue(
+      "structured_answer_blocks_missing",
+      "low",
+      "answer_optimization",
+      2,
+      "No bullet, step, or table structures were found under answer sections.",
+    ));
+  }
+
+  if (!input.blocked && input.crawlability?.llmsTxtExists === false && !input.crawlability?.llmGuidancePage) {
+    issues.push(buildIssue(
+      "llm_guidance_missing",
+      "low",
+      "ai_crawler_accessibility",
+      0,
+      "No llms.txt or machine guidance page was detected.",
     ));
   }
 
@@ -1220,7 +1580,7 @@ function evaluateAeoHtml(input: {
       issues.push(buildIssue(
         "robots_txt_missing",
         "low",
-        "access",
+        "ai_crawler_accessibility",
         0,
         "robots.txt was not found. Bots can still crawl, but crawl guidance is missing.",
       ));
@@ -1230,18 +1590,17 @@ function evaluateAeoHtml(input: {
       issues.push(buildIssue(
         "sitemap_missing",
         "low",
-        "basic_seo",
+        "ai_crawler_accessibility",
         0,
         "sitemap.xml was not detected. Discovery of deeper product URLs may be slower.",
       ));
     }
 
-    const limitedBots = Object.entries(input.crawlability.aiBots).filter(([, state]) => state.allowed === false || state.reachable === false);
     if (limitedBots.length > 0) {
       issues.push(buildIssue(
         "ai_bot_crawl_limited",
         "medium",
-        "access",
+        "ai_crawler_accessibility",
         0,
         `Some AI bots are blocked or unreachable: ${limitedBots.map(([name]) => name).join(", ")}.`,
       ));
@@ -1252,7 +1611,7 @@ function evaluateAeoHtml(input: {
     issues.push(buildIssue(
       "product_page_schema_only",
       "low",
-      "ratings_schema",
+      "citation_readiness",
       0,
       "A sampled product page has rating schema, but the scanned URL does not expose it directly.",
     ));
@@ -1306,13 +1665,19 @@ function evaluateAeoHtml(input: {
   const reportJson = {
     summary: {
       score: score.total,
-      scoreVersion: "aeo_score_v1",
+      scoreVersion: "aeo_score_v2",
+      scoreLabel: "AI Discovery Readiness of page",
+      scope: "single_page",
       status: input.blocked ? "blocked" : "completed",
       ratingSchemaStatus: ratingStatus,
       confidenceLevel,
       scanModeNote: likelyJsHeavy ? "This page appears client-rendered; score is based on raw HTML snapshot only." : null,
     },
     dimensions: {
+      aiCrawlerAccessibility: score.aiCrawlerAccessibility,
+      answerOptimization: score.answerOptimization,
+      citationReadiness: score.citationReadiness,
+      technicalHygiene: score.technicalHygiene,
       access: score.access,
       basicSeo: score.basicSeo,
       ratingsSchema: score.ratingsSchema,
@@ -1324,6 +1689,7 @@ function evaluateAeoHtml(input: {
       onPage,
       crawlability: input.crawlability,
       productPage: input.productPage,
+      answerOptimization: answerSignals,
       notes: [
         "raw_html_mode",
         rootLikeRequest && input.productPage?.sampled ? "product_page_sample_used_for_enrichment" : null,
@@ -1357,12 +1723,14 @@ function evaluateAeoHtml(input: {
     onPage,
     crawlability: input.crawlability,
     productPage: input.productPage,
+    answerOptimization: answerSignals,
   } satisfies Record<string, unknown>;
 
   const signalBlocksJson = {
     ratingSchemaStatus: ratingStatus,
     likelyJsHeavy,
     hasJsonLd: jsonLdNodes.length > 0,
+    scoreModel: "evidence_first_v2",
   } satisfies Record<string, unknown>;
 
   const rawFetchMetaJson = {
@@ -1372,7 +1740,7 @@ function evaluateAeoHtml(input: {
     bytes: input.fetchMeta.bytes,
     finalUrl: input.finalUrl,
     httpStatus: input.httpStatus,
-    parserVersion: "aeo_parser_v3",
+    parserVersion: "aeo_parser_v4",
     usedProductPageEvidence: rootLikeRequest && Boolean(input.productPage?.sampled),
   } satisfies Record<string, unknown>;
 
@@ -1384,8 +1752,8 @@ function evaluateAeoHtml(input: {
     status: input.blocked ? "blocked" : "completed",
     confidenceLevel,
     publicScore: score.total,
-    rulesetVersion: "aeo_rules_v3",
-    promptVersion: "deterministic_v3",
+    rulesetVersion: "aeo_rules_v4",
+    promptVersion: "deterministic_v4",
     reportJson,
     recommendationsJson: recommendations,
     extractedFactsJson,

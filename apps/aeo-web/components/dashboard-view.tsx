@@ -171,6 +171,23 @@ export function DashboardView() {
           <p>Account: {session.account.id}</p>
           <p className="tiny">Credits are the only live paid action in this launch phase.</p>
         </div>
+        <div className="surface-card" style={{marginBottom: "12px"}}>
+          <p className="list-title">Account menu</p>
+          <ul className="meta-list">
+            <li>
+              <span>Billing</span>
+              <strong><a href="https://lab.moads.agency/center" target="_blank" rel="noreferrer">Open</a></strong>
+            </li>
+            <li>
+              <span>Security</span>
+              <strong><a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">Google</a></strong>
+            </li>
+            <li>
+              <span>Personal data</span>
+              <strong><a href="https://moads.agency/privacy" target="_blank" rel="noreferrer">Policy</a></strong>
+            </li>
+          </ul>
+        </div>
         <a className="cta-primary" href="https://lab.moads.agency/center" target="_blank" rel="noreferrer">
           Open Billing Center
         </a>

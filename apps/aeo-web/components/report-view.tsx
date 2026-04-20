@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
@@ -48,7 +47,6 @@ export function ReportView({publicToken}: {publicToken: string}) {
   const [claimBusy, setClaimBusy] = useState(false);
   const [tipsBusy, setTipsBusy] = useState(false);
 
-  const ratingStatus = report?.report.summary?.ratingSchemaStatus ?? "unknown";
   const publicScore = report?.publicScore ?? 0;
 
   useEffect(() => {
@@ -73,7 +71,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
 
   const statusLabel = useMemo(() => {
     if (!report) {
-      return "Loading";
+      return "loading";
     }
     return report.status.replace(/_/g, " ");
   }, [report]);
@@ -91,7 +89,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
           productCode: "aeo",
         }),
       });
-      trackGa4("aeo_auth_success");
+      trackGa4("aeo_auth_success", {source: "report"});
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Sign in failed.");
       throw authError;
@@ -118,7 +116,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
         scan_id: report.scanId,
       });
     } catch {
-      // error is already handled above
+      // handled above
     } finally {
       setClaimBusy(false);
     }
@@ -158,6 +156,19 @@ export function ReportView({publicToken}: {publicToken: string}) {
     }
   }
 
+  async function handleFullSiteIntent(): Promise<void> {
+    if (!report) {
+      return;
+    }
+
+    if (report.recommendationsLocked) {
+      await handleClaim();
+      return;
+    }
+
+    window.location.href = `/dashboard?intent=site-scan&scanId=${encodeURIComponent(report.scanId)}`;
+  }
+
   async function copyLink(): Promise<void> {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -187,46 +198,117 @@ export function ReportView({publicToken}: {publicToken: string}) {
   const crawlability = report.report.evidence?.crawlability;
   const productPage = report.report.evidence?.productPage;
   const actionPlan = report.report.actionPlan;
-  const promptKit = report.report.promptKit?.prompts ?? [];
   const scanModeNote = report.report.summary?.scanModeNote;
+
   const scoredNow = [
-    ["Access", report.report.dimensions?.access],
-    ["Basic SEO", report.report.dimensions?.basicSeo],
-    ["Ratings Schema", report.report.dimensions?.ratingsSchema],
+    ["AI Crawler Accessibility", report.report.dimensions?.aiCrawlerAccessibility],
+    ["Answer Optimization", report.report.dimensions?.answerOptimization],
+    ["Citation Readiness", report.report.dimensions?.citationReadiness],
+    ["Technical Hygiene", report.report.dimensions?.technicalHygiene],
   ] as const;
-  const limitedBots = Object.entries(crawlability?.aiBots ?? {}).filter(([, state]) => state.allowed === false || state.reachable === false);
+
+  const visibleCrawlerRows: Array<{label: string; value: string}> = [
+    {label: "Sitemap", value: crawlability?.sitemapExists ? "found" : "not found"},
+    {label: "Robots.txt", value: crawlability?.robotsExists ? "found" : "not found"},
+    {
+      label: "Pre-rendered text",
+      value: report.confidenceLevel === "low" ? "limited" : "detected",
+    },
+  ];
+
+  const hiddenCrawlerRows: Array<{label: string; value: string}> = [
+    {
+      label: "llms.txt",
+      value: crawlability?.llmsTxtExists ? "found" : "not found",
+    },
+    {
+      label: "LLM guidance page",
+      value: crawlability?.llmGuidancePage ? "found" : "not found",
+    },
+    {
+      label: "Canonical stability",
+      value: report.issues.some((issue) => issue.code === "canonical_missing") ? "needs fix" : "stable",
+    },
+    {
+      label: "Blocked content",
+      value: report.status === "blocked" ? "risk" : "clear",
+    },
+  ];
+
+  const topFixes = (report.report.topFixes?.length ? report.report.topFixes : report.recommendations).slice(0, 5);
 
   return (
     <div className="report-shell">
       <section className="panel score-card">
         <ScoreRing score={publicScore} />
         <div className="score-text-block">
-          <p className="score-kicker">AI Discovery Score (Beta)</p>
+          <p className="score-kicker">AI Discovery Readiness of page</p>
           <h1 className="score-heading">{publicScore}/100</h1>
           <p className="score-summary">
-            Deterministic page-readiness score from fetchable HTML evidence. Current page status:
-            {" "}
-            <strong>{statusLabel}</strong>
-            .
+            Objective readiness snapshot for one page based on server-side parsing.
+            Current page status: <strong>{statusLabel}</strong>.
           </p>
+          <p className="tiny">This result covers one scanned page only, not full site readiness.</p>
           {scanModeNote ? <p className="tiny note-banner">{scanModeNote}</p> : null}
-          <div className="score-badges">
-            <span className="badge badge-score">Schema {ratingStatus}</span>
-            <span className="badge badge-score">Confidence {report.confidenceLevel ?? "unknown"}</span>
-            <span className="badge badge-score">{report.recommendationsLocked ? "Locked report" : "Unlocked report"}</span>
-          </div>
         </div>
         <div className="score-actions">
           <button type="button" className="cta-ghost" onClick={() => window.print()}>Print</button>
           <button type="button" className="cta-ghost" onClick={() => void copyLink()}>Copy Link</button>
-          <Link className="cta-primary" href="/dashboard">Open Dashboard</Link>
+          <button type="button" className="cta-primary" onClick={() => void handleFullSiteIntent()} disabled={authBusy || claimBusy}>
+            {authBusy || claimBusy ? "Unlocking..." : "Scan whole site"}
+          </button>
         </div>
       </section>
 
       <section className="panel">
         <div className="panel-header">
-          <h2>How This Score Works</h2>
-          <span className="badge badge-score">Deterministic</span>
+          <h2>Top Fixes</h2>
+          <span className="badge badge-score">{topFixes.length} visible</span>
+        </div>
+        {actionPlan?.fastestWin ? (
+          <article className="surface-card" style={{marginBottom: "14px"}}>
+            <h3>Fastest win</h3>
+            <p className="list-title">{actionPlan.fastestWin.title}</p>
+            <p className="tiny">{actionPlan.fastestWin.description}</p>
+          </article>
+        ) : null}
+        <ul className="list">
+          {topFixes.map((recommendation) => (
+            <li key={recommendation.id}>
+              <div>
+                <p className="list-title">{recommendation.title}</p>
+                <p className="tiny">{recommendation.description}</p>
+              </div>
+              <span className={`badge ${impactBadgeClass(recommendation.impactScore)}`}>+{recommendation.impactScore}</span>
+            </li>
+          ))}
+        </ul>
+
+        {report.recommendationsLocked ? (
+          <div className="lock-panel">
+            <p>{report.lockedRecommendationsCount} more fixes and deeper diagnostics unlock after sign-in.</p>
+            <button type="button" className="cta-primary" onClick={handleClaim} disabled={authBusy || claimBusy}>
+              {authBusy || claimBusy ? "Unlocking..." : "Sign in and unlock"}
+            </button>
+          </div>
+        ) : (
+          <div className="unlock-panel">
+            <p>Expanded report unlocked. You can now run full-site actions and credit-powered AI tips.</p>
+            <button type="button" className="cta-primary" onClick={handleGenerateTips} disabled={tipsBusy}>
+              {tipsBusy ? "Generating..." : "Generate AI Tips (1 Credit)"}
+            </button>
+            <p className="tiny">
+              Need more credits? {" "}
+              <a href="https://lab.moads.agency/center" target="_blank" rel="noreferrer">Open the billing center</a>.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>AI Crawler Accessibility</h2>
+          <span className="badge badge-score">Scored + locked details</span>
         </div>
         <div className="evidence-grid">
           <article className="surface-card">
@@ -241,131 +323,43 @@ export function ReportView({publicToken}: {publicToken: string}) {
             </ul>
           </article>
           <article className="surface-card">
-            <h3>Evidence layer</h3>
+            <h3>Visible checks</h3>
             <ul className="meta-list">
-              <li><span>Crawlability</span><strong>{crawlability?.robotsExists || crawlability?.sitemapExists ? "Included" : "Checking only if reachable"}</strong></li>
-              <li><span>Product page sample</span><strong>{productPage?.sampled ? "Included" : "Not found"}</strong></li>
-              <li><span>Action plan</span><strong>{actionPlan?.priorityFixes?.length ? "Included" : "Pending"}</strong></li>
-              <li><span>Prompt kit</span><strong>{promptKit.length ? "Included" : "Pending"}</strong></li>
+              {visibleCrawlerRows.map((row) => (
+                <li key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </li>
+              ))}
             </ul>
-          </article>
-        </div>
-        <p className="tiny">Only Access, Basic SEO, and Ratings Schema change the top-line score today. Crawlability, product-page sampling, and prompts help explain the result.</p>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Evidence</h2>
-          <span className="badge badge-score">Raw HTML mode</span>
-        </div>
-        <div className="evidence-grid">
-          <article className="surface-card">
-            <h3>Structured Data</h3>
-            <p>ratingValue: {aggregate?.ratingValue ?? "not found"}</p>
-            <p>reviewCount: {aggregate?.reviewCount ?? aggregate?.ratingCount ?? "not found"}</p>
-            <p className="tiny">Schema visibility is validated against public page evidence only.</p>
-          </article>
-          <article className="surface-card">
-            <h3>On-page Evidence</h3>
-            <p>Visible rating: {onPage?.ratingValue ?? "not found"}</p>
-            <p>Visible reviews: {onPage?.reviewsCount ?? "not found"}</p>
-            <p className="tiny">{onPage?.snippet ?? "No matching snippet found in raw HTML."}</p>
-          </article>
-          <article className="surface-card">
-            <h3>Crawlability</h3>
-            <p>robots.txt: {crawlability?.robotsExists ? "found" : "not found"}</p>
-            <p>sitemap.xml: {crawlability?.sitemapExists ? "found" : "not found"}</p>
-            <p className="tiny">
-              {limitedBots.length ? `Some AI bots are limited: ${limitedBots.map(([name]) => name).join(", ")}.` : "No explicit AI bot block was detected in the evidence layer."}
-            </p>
-          </article>
-          <article className="surface-card">
-            <h3>Product Page Sample</h3>
-            <p>Sampled: {productPage?.sampled ? "yes" : "no"}</p>
-            <p>URL: {productPage?.url ?? "not found"}</p>
-            <p className="tiny">
-              {productPage?.sampled ?
-                `Source: ${productPage.source ?? "unknown"} · Rating: ${productPage.aggregateRating?.ratingValue ?? productPage.onPage?.ratingValue ?? "not found"}` :
-                "If you scanned a homepage, we attempted one richer product-like URL to improve evidence quality."}
-            </p>
-          </article>
-        </div>
-        <p className="tiny">Structured data validity still does not guarantee rich-result display in search surfaces.</p>
-      </section>
-
-      {actionPlan ? (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Priority Action Plan</h2>
-            <span className="badge badge-score">{actionPlan.priorityFixes?.length ?? 0} fixes</span>
-          </div>
-          <div className="evidence-grid">
-            <article className="surface-card">
-              <h3>Top issues</h3>
-              <ul className="meta-list">
-                {(actionPlan.topIssues ?? []).slice(0, 3).map((issue) => (
-                  <li key={issue.code}>
-                    <span>{issue.code}</span>
-                    <strong>{issue.pointsLost ? `-${issue.pointsLost}` : issue.severity}</strong>
+            {report.recommendationsLocked ? (
+              <div className="locked-subset">
+                <p className="tiny">Sign in to unlock additional crawler checks.</p>
+                <ul className="meta-list locked-rows">
+                  {hiddenCrawlerRows.map((row) => (
+                    <li key={row.label}>
+                      <span>{row.label}</span>
+                      <strong>locked</strong>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="cta-ghost" onClick={handleClaim} disabled={authBusy || claimBusy}>
+                  {authBusy || claimBusy ? "Unlocking..." : "Unlock hidden block"}
+                </button>
+              </div>
+            ) : (
+              <ul className="meta-list" style={{marginTop: "10px"}}>
+                {hiddenCrawlerRows.map((row) => (
+                  <li key={row.label}>
+                    <span>{row.label}</span>
+                    <strong>{row.value}</strong>
                   </li>
                 ))}
               </ul>
-            </article>
-            <article className="surface-card">
-              <h3>Fastest win</h3>
-              {actionPlan.fastestWin ? (
-                <>
-                  <p>{actionPlan.fastestWin.title}</p>
-                  <p className="tiny">{actionPlan.fastestWin.description}</p>
-                </>
-              ) : (
-                <p className="tiny">No fastest-win hint was generated for this scan yet.</p>
-              )}
-            </article>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Top Fixes</h2>
-          <span className="badge badge-score">{report.recommendations.length} visible</span>
+            )}
+          </article>
         </div>
-        <ul className="list">
-          {report.recommendations.map((recommendation) => (
-            <li key={recommendation.id}>
-              <div>
-                <p className="list-title">{recommendation.title}</p>
-                <p className="tiny">{recommendation.description}</p>
-              </div>
-              <span className={`badge ${impactBadgeClass(recommendation.impactScore)}`}>
-                +{recommendation.impactScore}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        {report.recommendationsLocked ? (
-          <div className="lock-panel">
-            <p>{report.lockedRecommendationsCount} more fixes unlock after sign-in and scan claim.</p>
-            <button type="button" className="cta-primary" onClick={handleClaim} disabled={authBusy || claimBusy}>
-              {authBusy || claimBusy ? "Unlocking..." : "Sign In and Unlock"}
-            </button>
-          </div>
-        ) : (
-          <div className="unlock-panel">
-            <p>Full report unlocked. AI tips stay explicit and cost 1 credit per run.</p>
-            <button type="button" className="cta-primary" onClick={handleGenerateTips} disabled={tipsBusy}>
-              {tipsBusy ? "Generating..." : "Generate AI Tips (1 Credit)"}
-            </button>
-            <p className="tiny">
-              Need more credits?
-              {" "}
-              <a href="https://lab.moads.agency/center" target="_blank" rel="noreferrer">Open the billing center</a>
-              .
-            </p>
-          </div>
-        )}
+        <p className="tiny">Extra evidence supports prioritization. It does not claim live multi-engine visibility measurement.</p>
       </section>
 
       {report.issues.length ? (
@@ -405,24 +399,6 @@ export function ReportView({publicToken}: {publicToken: string}) {
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-
-      {promptKit.length ? (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Prompt Kit</h2>
-            <span className="badge badge-score">Manual</span>
-          </div>
-          <div className="prompt-grid">
-            {promptKit.map((prompt) => (
-              <article key={prompt.id} className="surface-card">
-                <p className="list-title">{prompt.title}</p>
-                <p className="tiny">Best run in: {prompt.engine}</p>
-                <p className="tiny prompt-copy">{prompt.prompt}</p>
-              </article>
-            ))}
-          </div>
         </section>
       ) : null}
 

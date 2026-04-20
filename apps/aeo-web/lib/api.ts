@@ -25,7 +25,18 @@ export interface PublicScanReport {
       access?: number;
       basicSeo?: number;
       ratingsSchema?: number;
+      aiCrawlerAccessibility?: number;
+      answerOptimization?: number;
+      citationReadiness?: number;
+      technicalHygiene?: number;
     };
+    topFixes?: Array<{
+      id: string;
+      title: string;
+      description: string;
+      impactScore: number;
+      priority: string;
+    }>;
     evidence?: {
       structuredData?: {
         aggregateRating?: {
@@ -42,6 +53,8 @@ export interface PublicScanReport {
       crawlability?: {
         robotsExists?: boolean;
         sitemapExists?: boolean;
+        llmsTxtExists?: boolean;
+        llmGuidancePage?: string | null;
         aiBots?: Record<string, {allowed?: boolean; explicitly?: boolean; reachable?: boolean | null}>;
       };
       productPage?: {

@@ -187,7 +187,7 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       status: scan.status,
       publicScore: scan.publicScore,
       confidenceLevel: scan.confidenceLevel,
-      scoreVersion: "aeo_score_v1",
+      scoreVersion: "aeo_score_v2",
       reportJson: toInputJson(scan.reportJson),
       recommendationsJson: toInputJson(scan.recommendationsJson),
       extractedFactsJson: toInputJson(scan.extractedFactsJson),

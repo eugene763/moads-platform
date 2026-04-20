@@ -14,7 +14,7 @@ const measurementId = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
   title: "MO Ads AEO Checker",
-  description: "AI discovery readiness checker with deterministic scoring and usage-based AEO credit packs.",
+  description: "Free AI discovery readiness checker with one-page scan, auth unlock, and usage-based AEO credit packs.",
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

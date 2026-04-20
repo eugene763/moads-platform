@@ -1,4 +1,5 @@
 import type {CSSProperties} from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 import {AeoTopNav} from "../components/aeo-top-nav";
@@ -6,13 +7,13 @@ import {FeatureTabs} from "../components/feature-tabs";
 import {ScanForm} from "../components/scan-form";
 
 const floatLogos = [
-  {label: "ChatGPT", letter: "C", top: "28%", left: "2%", duration: "4.2s", delay: "0s", color: "#10A37F"},
-  {label: "Perplexity", letter: "P", top: "58%", left: "3%", duration: "3.8s", delay: "0.6s", color: "#0EA5A4"},
-  {label: "DeepSeek", letter: "D", top: "78%", left: "2%", duration: "5s", delay: "1.2s", color: "#2563EB"},
-  {label: "Grok", letter: "G", top: "15%", left: "82%", duration: "4s", delay: "0.3s", color: "#111827"},
-  {label: "Gemini", letter: "G", top: "42%", left: "84%", duration: "4.5s", delay: "0.9s", color: "#7C3AED"},
-  {label: "Claude", letter: "C", top: "68%", left: "81%", duration: "3.6s", delay: "1.5s", color: "#C26D45"},
-];
+  {label: "ChatGPT", src: "/logos/chatgpt.svg", top: "28%", left: "2%", duration: "4.2s", delay: "0s"},
+  {label: "Perplexity", src: "/logos/perplexity.svg", top: "58%", left: "3%", duration: "3.8s", delay: "0.6s"},
+  {label: "DeepSeek", src: "/logos/deepseek.svg", top: "78%", left: "2%", duration: "5s", delay: "1.2s"},
+  {label: "Grok", src: "/logos/grok.svg", top: "15%", left: "82%", duration: "4s", delay: "0.3s"},
+  {label: "Gemini", src: "/logos/gemini.svg", top: "42%", left: "84%", duration: "4.5s", delay: "0.9s"},
+  {label: "Claude", src: "/logos/claude.svg", top: "68%", left: "81%", duration: "3.6s", delay: "1.5s"},
+] as const;
 
 const tickerItems = [
   "ChatGPT Shopping",
@@ -30,28 +31,80 @@ const tickerItems = [
 ];
 
 const dimensionCards = [
-  {title: "Access", weight: "Scored now", description: "Reachability, crawl status, and fetch stability for the scanned URL.", tags: ["HTTP access", "Status", "Raw HTML reachability"]},
-  {title: "Basic SEO", weight: "Scored now", description: "Title, description, canonical, and social title signals parsed from the page source.", tags: ["Title", "Meta description", "Canonical"]},
-  {title: "Ratings Schema", weight: "Scored now", description: "AggregateRating presence, count fields, valid scale, and visible trust evidence.", tags: ["JSON-LD", "Review count", "Visible match"]},
-  {title: "Crawlability", weight: "Evidence layer", description: "robots.txt, sitemap, and AI bot guidance enrich the report without changing the top-line score yet.", tags: ["robots.txt", "Sitemap", "AI bots"]},
-  {title: "Product Page Sample", weight: "Evidence layer", description: "If you scan a homepage, we try one richer product-like URL to avoid under-reading the site.", tags: ["Sample PDP", "Schema carryover", "Trust cues"]},
-  {title: "Content Structure", weight: "Evidence layer", description: "Clear sections, headings, and answer blocks help us frame the action plan and future score expansion.", tags: ["Headings", "Answer blocks", "Sections"]},
-  {title: "Action Plan", weight: "Evidence layer", description: "Priority fixes and the fastest win are generated from measured issues on the page.", tags: ["Top issues", "Fastest win", "Priority fixes"]},
-  {title: "Prompt Kit", weight: "Evidence layer", description: "Manual prompts help teams validate AI discoverability without triggering paid provider calls during the scan.", tags: ["Manual prompts", "Review workflow", "Future bridge"]},
+  {
+    title: "AI Crawler Accessibility",
+    weight: "Scored now",
+    description: "Reachability, crawl directives, bot access, and snapshot confidence for the scanned URL.",
+    tags: ["HTTP access", "Robots", "AI bots"],
+  },
+  {
+    title: "Answer Optimization",
+    weight: "Scored now",
+    description: "Question-led headings, direct answers, FAQs, and structured answer formats on page.",
+    tags: ["Question headings", "Direct answers", "FAQ"],
+  },
+  {
+    title: "Citation Readiness",
+    weight: "Scored now",
+    description: "Trust and citation signals from schema, visible evidence, and consistency checks.",
+    tags: ["Schema", "Visible trust", "Consistency"],
+  },
+  {
+    title: "Technical Hygiene",
+    weight: "Scored now",
+    description: "Canonical, metadata, and response quality needed for stable machine interpretation.",
+    tags: ["Canonical", "Meta tags", "Response quality"],
+  },
+  {
+    title: "Product Page Sample",
+    weight: "Evidence layer",
+    description: "If you scan a homepage, one richer product-like URL is sampled to reduce under-reading.",
+    tags: ["Sample PDP", "Fallback evidence", "Scope note"],
+  },
+  {
+    title: "LLM Guidance Surface",
+    weight: "Evidence layer",
+    description: "Optional /llms.txt and guidance pages are checked as bonus machine-readability signals.",
+    tags: ["llms.txt", "Guidance link", "Bonus"],
+  },
+  {
+    title: "Top Fixes",
+    weight: "Evidence layer",
+    description: "A compact prioritized action list highlights the fastest fix and highest-impact gaps.",
+    tags: ["Priority fixes", "Fastest win", "Impact"],
+  },
+  {
+    title: "Locked Deep Signals",
+    weight: "Post-auth",
+    description: "After sign-in you unlock deeper diagnostics, multi-page context, and credit-powered actions.",
+    tags: ["Unlock", "Site scope", "Workspace"],
+  },
 ];
 
-const pricingCards = [
+interface PricingCard {
+  name: string;
+  price: string;
+  period: string;
+  description: string;
+  features: string[];
+  href: string;
+  cta: string;
+  external?: boolean;
+  popular?: boolean;
+}
+
+const pricingCards: PricingCard[] = [
   {
     name: "Free",
     price: "$0",
     period: "always",
-    description: "Launch with a deterministic score, shareable report, and auth-unlocked visibility details.",
+    description: "Run the first page scan for free and get AI Discovery Readiness of page.",
     features: [
-      "Public AI Discovery Score",
-      "Top evidence and issues",
+      "Single URL free check",
+      "Top fixes preview",
       "Share + print report",
-      "Auth unlock for deeper breakdown",
-      "No credit card required",
+      "Auth unlock for deeper data",
+      "No card required",
     ],
     href: "/#scan",
     cta: "Open Checker",
@@ -60,13 +113,13 @@ const pricingCards = [
     name: "Credit Packs",
     price: "from $4.99",
     period: "one-time",
-    description: "Buy credits only when you need AI tips and usage-based actions. No subscription required.",
+    description: "Buy credits only when needed for usage actions. No recurring subscription required.",
     features: [
-      "Pack S · 30 credits",
-      "Pack M · 80 credits",
-      "Pack L · 200 credits",
-      "1 credit = 1 AI tips run",
-      "Secure checkout via LAB",
+      "Pack S - 30 credits",
+      "Pack M - 80 credits",
+      "Pack L - 200 credits",
+      "AI tips cost 1 credit",
+      "Checkout via LAB",
     ],
     href: "https://lab.moads.agency/center",
     cta: "Open Billing Center",
@@ -77,15 +130,15 @@ const pricingCards = [
     name: "Deep Audit",
     price: "$690",
     period: "one-time",
-    description: "Comprehensive manual + AI analysis with a 30-day roadmap and implementation guidance from the agency team.",
+    description: "Manual AEO implementation plan with specialist support and agency rollout.",
     features: [
       "Manual AEO review",
-      "Top fixes ranked by impact",
-      "30-day action plan",
+      "Priority implementation list",
+      "30-day action roadmap",
       "Competitive context",
-      "Agency implementation path",
+      "Agency delivery support",
     ],
-    href: "https://moads.agency/footer#form",
+    href: "https://moads.agency/#form",
     cta: "Request Audit",
     external: true,
   },
@@ -139,8 +192,8 @@ export default function HomePage() {
         <div className="hero-float-logos" aria-hidden="true">
           {floatLogos.map((item) => (
             <div key={item.label} className="float-logo" style={floatStyle(item)}>
-              <span className="float-logo-mark" style={{backgroundColor: item.color}}>
-                {item.letter}
+              <span className="float-logo-mark svg-mark">
+                <Image src={item.src} alt="" width={18} height={18} />
               </span>
               <span>{item.label}</span>
             </div>
@@ -149,15 +202,14 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
-            <p className="hero-eyebrow-pill">AI Engine Optimization</p>
+            <p className="hero-eyebrow-pill">FREE AEO-CHECK</p>
             <h1>
-              AI is the new search.
+              Check if AI can read this page.
               {" "}
-              <span className="accent-line">Is your brand visible?</span>
+              <span className="accent-line">Start with one free scan.</span>
             </h1>
             <p className="hero-copy">
-              See how your brand shows up on ChatGPT, Perplexity, Gemini, and more.
-              Start with a deterministic score from raw page evidence.
+              Run a free page scan and see how ready your content is for AI discovery, crawling, and direct answers.
             </p>
 
             <div id="scan">
@@ -166,25 +218,25 @@ export default function HomePage() {
 
             <div className="sample-report-card">
               <div className="sample-report-header">
-                <span>Sample AI Visibility Report</span>
-                <span className="live-badge">Live</span>
+                <span>Sample Readiness Snapshot</span>
+                <span className="live-badge">Free</span>
               </div>
               <div className="sample-stats-row">
                 <div className="sample-stat score">
-                  <div className="stat-value">47/100</div>
-                  <div className="stat-label">AI Score</div>
+                  <div className="stat-value">62/100</div>
+                  <div className="stat-label">Readiness of page</div>
                 </div>
                 <div className="sample-stat vis">
-                  <div className="stat-value">2/6</div>
-                  <div className="stat-label">Engines Visible</div>
+                  <div className="stat-value">4</div>
+                  <div className="stat-label">Top fixes</div>
                 </div>
                 <div className="sample-stat fixes">
-                  <div className="stat-value">12</div>
-                  <div className="stat-label">Fixes Found</div>
+                  <div className="stat-value">Locked</div>
+                  <div className="stat-label">Deep blocks</div>
                 </div>
               </div>
               <p className="sample-report-foot">
-                Checked across ChatGPT, Gemini, Perplexity, Claude, Grok, and DeepSeek.
+                First result is one-page readiness only. Sign in to unlock deeper diagnostics and full-site actions.
               </p>
             </div>
           </div>
@@ -206,25 +258,25 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">How It Works</p>
-            <h2 className="section-title">Three steps to understanding your AI discoverability</h2>
+            <h2 className="section-title">Three steps to your first AI readiness result</h2>
             <div className="step-cards">
               <article className="step-card">
                 <span className="step-badge">Step 01</span>
                 {iconForStep("globe")}
-                <h3>Enter Your Store URL</h3>
-                <p>Paste your URL and run a fast deterministic scan with only one required field.</p>
+                <h3>Enter URL</h3>
+                <p>Paste one page URL and run a free check in under a minute.</p>
               </article>
               <article className="step-card">
                 <span className="step-badge">Step 02</span>
                 {iconForStep("chart")}
-                <h3>We Score 3 Blocks + Evidence</h3>
-                <p>Today&apos;s top-line score is deterministic and rules-based. Extra evidence helps explain what to fix next.</p>
+                <h3>Read AI Discovery Readiness of page</h3>
+                <p>Get an objective score and compact top fixes for the scanned page.</p>
               </article>
               <article className="step-card">
                 <span className="step-badge">Step 03</span>
                 {iconForStep("check")}
-                <h3>Get Your Score + Fixes</h3>
-                <p>See the score for free, unlock the deeper breakdown after sign-in, and buy credits only when you need AI tips.</p>
+                <h3>Unlock deeper data</h3>
+                <p>Sign in to unlock hidden blocks, run more scans, and use credit-powered actions.</p>
               </article>
             </div>
           </div>
@@ -235,7 +287,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Why MO ADS</p>
-            <h2 className="section-title">Visibility, intelligence, and action in the age of AI commerce</h2>
+            <h2 className="section-title">Simple launch flow, clear actions, no noise</h2>
             <FeatureTabs />
           </div>
         </div>
@@ -245,7 +297,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Scoring System</p>
-            <h2 className="section-title">Deterministic score now, broader evidence alongside it</h2>
+            <h2 className="section-title">Scored blocks now, deeper evidence after sign-in</h2>
             <div className="dimensions-grid">
               {dimensionCards.map((card, index) => (
                 <article key={card.title} className={`dimension-card accent-${(index % 4) + 1}`}>
@@ -263,14 +315,8 @@ export default function HomePage() {
               ))}
             </div>
             <p className="pricing-note">
-              Top-line score currently weights
-              {" "}
-              <strong>Access</strong>
-              ,{" "}
-              <strong>Basic SEO</strong>
-              , and{" "}
-              <strong>Ratings Schema</strong>
-              . The remaining cards represent evidence and roadmap areas shown in the report.
+              AI Discovery Readiness of page is objective and rules-based.
+              Additional evidence helps prioritize what to fix next without paid provider calls in the free scan.
             </p>
           </div>
         </div>
@@ -280,11 +326,11 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Pricing</p>
-            <h2 className="section-title">Launch with free scoring, then buy credits only when you need them</h2>
+            <h2 className="section-title">Free first check, then packs only when needed</h2>
             <div className="pricing-cards">
               {pricingCards.map((card) => (
                 <article key={card.name} className={`pricing-card${card.popular ? " popular" : ""}`}>
-                  {card.popular ? <span className="popular-badge">Launch Mode</span> : null}
+                  {card.popular ? <span className="popular-badge">Live</span> : null}
                   <p className="pricing-plan-name">{card.name}</p>
                   <p className="pricing-price">
                     {card.price}
@@ -306,15 +352,8 @@ export default function HomePage() {
               ))}
             </div>
             <p className="pricing-note">
-              Starter, Pro, and Store monitoring plans stay in the launch queue for now.
-              {" "}
-              <a href="https://lab.moads.agency" target="_blank" rel="noreferrer">LAB</a>
-              {" "}
-              remains the live billing surface for packs, and
-              {" "}
-              <a href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">Deep Audit</a>
-              {" "}
-              stays lead-based.
+              Starter, Pro, and Store subscriptions stay coming soon.
+              LAB is the live billing surface for packs.
             </p>
           </div>
         </div>
@@ -324,12 +363,11 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="final-cta-card">
             <p className="section-eyebrow section-eyebrow-light">Agency Support</p>
-            <h2>Need implementation help after the score?</h2>
+            <h2>Need implementation help after the scan?</h2>
             <p>
-              Use the main MO ADS form to hand off schema fixes, answer optimization,
-              and broader AEO rollout to the agency team.
+              Use the main MO ADS form to hand off fixes and rollout to the agency team.
             </p>
-            <a className="cta-nav final-cta-button" href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">
+            <a className="cta-nav final-cta-button" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
               Open Agency Lead Form
             </a>
           </div>

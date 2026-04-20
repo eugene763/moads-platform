@@ -14,7 +14,7 @@ export default async function PublicReportPage({params}: {params: Promise<{publi
         <section className="section-block lead-footer lead-footer-light">
           <h2>Want implementation support?</h2>
           <p>Submit your request on the main website and our team will help you deploy fixes after the score.</p>
-          <a className="cta-nav" href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">
+          <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
             Open Agency Lead Form
           </a>
         </section>

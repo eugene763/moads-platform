@@ -464,9 +464,14 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 800;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.float-logo-mark.svg-mark img {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 @keyframes float-bob {
@@ -1177,9 +1182,23 @@ input {
   border: 1px solid var(--line);
 }
 
+.compact-lock {
+  margin-top: 14px;
+}
+
 .lock-panel p,
 .unlock-panel p {
   margin: 0;
+}
+
+.locked-subset {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.locked-rows {
+  opacity: 0.68;
 }
 
 .summary-stack {

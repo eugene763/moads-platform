@@ -12,7 +12,7 @@ export default function DashboardPage() {
         <section className="section-block lead-footer lead-footer-light">
           <h2>Need help implementing fixes?</h2>
           <p>Use the main site form to connect with the MO ADS agency team for rollout and execution.</p>
-          <a className="cta-nav" href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">
+          <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
             Open Agency Lead Form
           </a>
         </section>

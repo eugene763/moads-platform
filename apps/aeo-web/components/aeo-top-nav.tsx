@@ -39,7 +39,7 @@ export function AeoTopNav({
         <Link href="/#how-it-works">How It Works</Link>
         <Link href="/#dimensions">Dimensions</Link>
         <Link href="/#pricing">Pricing</Link>
-        <a href="https://moads.agency/footer#form" target="_blank" rel="noreferrer">Agency</a>
+        <a href="https://moads.agency/#form" target="_blank" rel="noreferrer">Agency</a>
       </nav>
 
       <div className="nav-actions">

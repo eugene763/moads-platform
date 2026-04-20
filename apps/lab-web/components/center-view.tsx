@@ -85,9 +85,23 @@ export function CenterView() {
     setError(null);
 
     try {
+      const landingUrl = (() => {
+        const referrer = typeof document !== "undefined" ? document.referrer : "";
+        if (referrer.includes("aeo.moads.agency")) {
+          return referrer;
+        }
+        return "https://aeo.moads.agency/dashboard";
+      })();
+
       const response = await apiRequest<{redirectUrl: string}>("/v1/lab/starter/checkout", {
         method: "POST",
-        body: JSON.stringify({priceId}),
+        body: JSON.stringify({
+          priceId,
+          attribution: {
+            capturedAtMs: Date.now(),
+            landingUrl,
+          },
+        }),
       });
       trackGa4("lab_checkout_started", {price_id: priceId});
       window.location.href = response.redirectUrl;
