@@ -241,8 +241,7 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
-            <p className="hero-eyebrow-pill">MO AEO CHECKER</p>
-            <h1 className="hero-main-h1">FREE AEO-CHECK UP</h1>
+            <h1 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h1>
             <h2 className="hero-main-h2">Check if AI can read your site</h2>
             <p className="hero-copy">
               Free aeo checker and aeo visibility tool for fast page diagnostics, top fixes, and cleaner AI search visibility analytics.

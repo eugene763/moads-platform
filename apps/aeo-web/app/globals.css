@@ -243,16 +243,6 @@ input {
   margin-bottom: 20px;
 }
 
-.hero-main-h1 {
-  font-size: clamp(1.45rem, 3vw, 2rem);
-  line-height: 1.08;
-  margin: 0 auto 10px;
-  max-width: 780px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--brand);
-}
-
 .hero-main-h2 {
   font-size: clamp(2.4rem, 5vw, 4rem);
   line-height: 1.08;
