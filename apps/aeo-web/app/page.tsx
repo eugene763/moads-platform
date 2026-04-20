@@ -337,7 +337,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Scoring System</p>
-            <h2 className="section-title">Best aeo tracker signals for AI search visibility growth</h2>
+            <h2 className="section-title">Best AEO tracker signals for AI search visibility growth</h2>
             <div className="dimensions-grid">
               {dimensionCards.map((card, index) => (
                 <article key={card.title} className={`dimension-card accent-${(index % 4) + 1}`}>
