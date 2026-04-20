@@ -2,7 +2,8 @@
 
 Date: 2026-04-20  
 Branch: `codex/fix-reference-video-duration-u5ad86df2c2`  
-Source HEAD at implementation start: `b9c9920`
+Source HEAD at implementation start: `b9c9920`  
+Implementation commit: `12a2325`
 
 ## Source of truth
 Priority order used in this implementation pass:
@@ -94,3 +95,24 @@ Priority order used in this implementation pass:
    - `/r/:publicToken` report lock/unlock
    - `/dashboard` sign-in + history + wallet
    - pack checkout redirect starts from LAB
+
+## Deployment outcome snapshot (same day)
+
+### CONFIRMED
+- Frontends deployed in project `gen-lang-client-0651837818`:
+  - `moads-aeo-web` revision `moads-aeo-web-00013-t6b`
+  - `moads-lab-web` revision `moads-lab-web-00012-m92`
+- API deployed to live gateway-backed service:
+  - `moads-api` revision `moads-api-00043-b99`
+- Endpoint smoke:
+  - `https://aeo.moads.agency` -> `200`
+  - `https://lab.moads.agency` -> `200`
+  - `https://api.moads.agency/health` -> `200`
+- Scanner payload in new uncached scans returns:
+  - `scoreVersion: "aeo_score_v2"`
+  - `report.summary.scoreLabel: "AI Discovery Readiness of page"`
+  - `report.summary.scope: "single_page"`
+
+### NEEDS CHECK
+- `cloud-run:deploy:pro` path still fails until `SESSION_COOKIE_SECRET_PRO` exists for `moads-api-pro` stack.
+- Runtime UI parity with browser cache/CDN on all devices.
