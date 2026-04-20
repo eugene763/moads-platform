@@ -1,7 +1,7 @@
 "use client";
 
 import {useRouter} from "next/navigation";
-import {FormEvent, useEffect, useMemo, useState} from "react";
+import {FormEvent, useEffect, useState} from "react";
 
 import {apiRequest, PublicScanResponse} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
@@ -39,18 +39,6 @@ export function ScanForm() {
       }
     })();
   }, []);
-
-  const formHint = useMemo(() => {
-    if (!siteUrl.trim()) {
-      return "First page scan is free. One URL is enough to start.";
-    }
-
-    if (requiresAuth) {
-      return "Sign in to run more scans and unlock deeper data.";
-    }
-
-    return "This first result is page-only. Full-site readiness unlocks after sign-in.";
-  }, [siteUrl, requiresAuth]);
 
   async function signInAndCreateSession(): Promise<void> {
     setAuthBusy(true);
@@ -139,7 +127,7 @@ export function ScanForm() {
         </button>
       </div>
       <div className="hero-trust" aria-label="Trust signals">
-        <span>Free first scan</span>
+        <span>Free page scan</span>
         <span>No card required</span>
         <span>Server-side checks</span>
       </div>
@@ -151,7 +139,6 @@ export function ScanForm() {
           </button>
         </div>
       ) : null}
-      <p className="form-hint">{formHint}</p>
       {error ? <p className="error-text">{error}</p> : null}
     </form>
   );

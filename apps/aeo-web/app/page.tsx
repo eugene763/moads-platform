@@ -16,19 +16,18 @@ const floatLogos = [
 ] as const;
 
 const tickerItems = [
-  "ChatGPT Shopping",
-  "Amazon",
-  "Google AI Overview",
-  "Walmart",
-  "Perplexity",
-  "TikTok Shop",
-  "eBay",
-  "Claude",
-  "Shopee",
-  "Gemini Shopping",
-  "Etsy",
-  "Shopify",
-];
+  {label: "Google AI Overview", src: "/logos/google-shopping.svg"},
+  {label: "Walmart", src: "/logos/walmart.svg"},
+  {label: "Perplexity", src: "/logos/perplexity.svg"},
+  {label: "TikTok Shop", src: "/logos/tiktok.svg"},
+  {label: "eBay", src: "/logos/ebay.svg"},
+  {label: "Claude", src: "/logos/claude.svg"},
+  {label: "Shopee", src: "/logos/shopee.svg"},
+  {label: "Gemini Shopping", src: "/logos/gemini.svg"},
+  {label: "Etsy", src: "/logos/etsy.svg"},
+  {label: "Shopify", src: "/logos/shopify.svg"},
+  {label: "ChatGPT Shopping", src: "/logos/chatgpt.svg"},
+] as const;
 
 const dimensionCards = [
   {
@@ -84,7 +83,7 @@ const dimensionCards = [
 interface PricingCard {
   name: string;
   price: string;
-  period: string;
+  period?: string;
   description: string;
   features: string[];
   href: string;
@@ -97,8 +96,7 @@ const pricingCards: PricingCard[] = [
   {
     name: "Free",
     price: "$0",
-    period: "always",
-    description: "Run the first page scan for free and get AI Discovery Readiness of page.",
+    description: "Free page scan in the MO AEO CHECKER with top fixes and auth unlock.",
     features: [
       "Single URL free check",
       "Top fixes preview",
@@ -113,7 +111,7 @@ const pricingCards: PricingCard[] = [
     name: "Credit Packs",
     price: "from $4.99",
     period: "one-time",
-    description: "Buy credits only when needed for usage actions. No recurring subscription required.",
+    description: "AEO tracker packs to grow AI traffic to your site without recurring billing.",
     features: [
       "Pack S - 30 credits",
       "Pack M - 80 credits",
@@ -143,6 +141,33 @@ const pricingCards: PricingCard[] = [
     external: true,
   },
 ];
+
+const faqEntries = [
+  {
+    question: "What is a free AEO checker?",
+    answer: "A free AEO checker is a tool that scans a page and shows how ready it is for AI discovery. It helps you review key signals such as crawlability, structured data, content clarity, canonicals, and question-and-answer formatting. In practice, it works as a simple starting point for improving AI search visibility before you move to deeper site analysis.",
+  },
+  {
+    question: "What does an AEO tracker do?",
+    answer: "An AEO tracker helps you monitor the signals that affect how pages may be discovered, interpreted, and reused in AI search experiences. It can highlight technical issues, content gaps, and readiness patterns across your pages. A strong AEO tracker gives you a repeatable way to measure progress instead of guessing what to fix first.",
+  },
+  {
+    question: "How is an AEO visibility tool different from traditional SEO tools?",
+    answer: "An AEO visibility tool focuses on whether your content is easy for AI systems to parse, trust, and summarize, while traditional SEO tools mainly focus on rankings, keywords, and search engine indexing. Good SEO still matters, but AEO adds another layer: direct answers, structured Q&A, machine-readable guidance, and content formats that work well in AI-driven discovery.",
+  },
+  {
+    question: "What is the best AEO tracker for early-stage analysis?",
+    answer: "The best AEO tracker for early-stage analysis is one that is fast, clear, and easy to act on. It should show a readable score, explain the most important issues, and help you understand what to fix on a page first. For most teams, the best AEO tracking tool is not the most complex one, but the one that turns signals into useful next steps.",
+  },
+  {
+    question: "What should an AEO analysis tool check on a page?",
+    answer: "A useful AEO analysis tool should check core technical and content signals such as indexable access, canonicals, meta tags, schema markup, FAQ visibility, question-style headings, short direct answers, and clear page structure. It should also review robots and sitemap hygiene. These checks help you see whether a page is ready for AI search visibility analytics and broader AEO monitoring.",
+  },
+  {
+    question: "Why use AI tools for SEO and AEO together?",
+    answer: "AI tools for SEO and AEO work best together because search visibility now depends on both classic search fundamentals and AI-ready content structure. SEO helps pages get discovered and indexed, while AEO helps content become easier to interpret and surface in AI experiences. Using both gives teams a more complete view of visibility, content quality, and technical readiness.",
+  },
+] as const;
 
 function iconForStep(kind: "globe" | "chart" | "check") {
   if (kind === "globe") {
@@ -184,8 +209,22 @@ function floatStyle(item: typeof floatLogos[number]): CSSProperties {
 }
 
 export default function HomePage() {
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqEntries.map((entry) => ({
+      "@type": "Question",
+      name: entry.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: entry.answer,
+      },
+    })),
+  };
+
   return (
     <main>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqJsonLd)}} />
       <AeoTopNav />
 
       <section className="hero" id="top">
@@ -202,14 +241,11 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
-            <p className="hero-eyebrow-pill">FREE AEO-CHECK</p>
-            <h1>
-              Check if AI can read this page.
-              {" "}
-              <span className="accent-line">Start with one free scan.</span>
-            </h1>
+            <p className="hero-eyebrow-pill">MO AEO CHECKER</p>
+            <h1 className="hero-main-h1">FREE AEO-CHECK UP</h1>
+            <h2 className="hero-main-h2">Check if AI can read your site</h2>
             <p className="hero-copy">
-              Run a free page scan and see how ready your content is for AI discovery, crawling, and direct answers.
+              Free aeo checker and aeo visibility tool for fast page diagnostics, top fixes, and cleaner AI search visibility analytics.
             </p>
 
             <div id="scan">
@@ -246,9 +282,10 @@ export default function HomePage() {
       <section className="platform-ticker" aria-label="Supported discovery surfaces">
         <div className="ticker-track">
           {[...tickerItems, ...tickerItems].map((item, index) => (
-            <div key={`${item}-${index}`} className="ticker-item">
+            <div key={`${item.label}-${index}`} className="ticker-item">
               <span className="ticker-dot" />
-              <span>{item}</span>
+              <Image src={item.src} alt="" width={18} height={18} className="ticker-logo" />
+              <span>{item.label}</span>
             </div>
           ))}
         </div>
@@ -258,7 +295,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">How It Works</p>
-            <h2 className="section-title">Three steps to your first AI readiness result</h2>
+            <h2 className="section-title">Free AEO checker workflow in 3 steps</h2>
             <div className="step-cards">
               <article className="step-card">
                 <span className="step-badge">Step 01</span>
@@ -269,13 +306,13 @@ export default function HomePage() {
               <article className="step-card">
                 <span className="step-badge">Step 02</span>
                 {iconForStep("chart")}
-                <h3>Read AI Discovery Readiness of page</h3>
-                <p>Get an objective score and compact top fixes for the scanned page.</p>
+                <h3>Read your aeo visibility tool score</h3>
+                <p>See AI Discovery Readiness of page and compact top fixes for quick action.</p>
               </article>
               <article className="step-card">
                 <span className="step-badge">Step 03</span>
                 {iconForStep("check")}
-                <h3>Unlock deeper data</h3>
+                <h3>Unlock the aeo tracker workspace</h3>
                 <p>Sign in to unlock hidden blocks, run more scans, and use credit-powered actions.</p>
               </article>
             </div>
@@ -286,8 +323,8 @@ export default function HomePage() {
       <section className="features-section">
         <div className="page-shell">
           <div className="section-inner">
-            <p className="section-eyebrow">Why MO ADS</p>
-            <h2 className="section-title">Simple launch flow, clear actions, no noise</h2>
+            <p className="section-eyebrow">Why MO CHECKER</p>
+            <h2 className="section-title">AEO analysis tools with clear next steps, not noise</h2>
             <FeatureTabs />
           </div>
         </div>
@@ -297,7 +334,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Scoring System</p>
-            <h2 className="section-title">Scored blocks now, deeper evidence after sign-in</h2>
+            <h2 className="section-title">Best aeo tracker signals for AI search visibility growth</h2>
             <div className="dimensions-grid">
               {dimensionCards.map((card, index) => (
                 <article key={card.title} className={`dimension-card accent-${(index % 4) + 1}`}>
@@ -314,10 +351,11 @@ export default function HomePage() {
                 </article>
               ))}
             </div>
-            <p className="pricing-note">
-              AI Discovery Readiness of page is objective and rules-based.
-              Additional evidence helps prioritize what to fix next without paid provider calls in the free scan.
-            </p>
+            <div className="dimensions-cta-wrap">
+              <Link className="cta-primary dimensions-auth-cta" href="/dashboard">
+                Открыть все функции
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -326,7 +364,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Pricing</p>
-            <h2 className="section-title">Free first check, then packs only when needed</h2>
+            <h2 className="section-title">Packs to increase AI traffic to your site</h2>
             <div className="pricing-cards">
               {pricingCards.map((card) => (
                 <article key={card.name} className={`pricing-card${card.popular ? " popular" : ""}`}>
@@ -334,8 +372,12 @@ export default function HomePage() {
                   <p className="pricing-plan-name">{card.name}</p>
                   <p className="pricing-price">
                     {card.price}
-                    {" "}
-                    <span>{card.period}</span>
+                    {card.period ? (
+                      <>
+                        {" "}
+                        <span>{card.period}</span>
+                      </>
+                    ) : null}
                   </p>
                   <p className="pricing-desc">{card.description}</p>
                   <ul className="pricing-features">
@@ -351,10 +393,26 @@ export default function HomePage() {
                 </article>
               ))}
             </div>
-            <p className="pricing-note">
-              Starter, Pro, and Store subscriptions stay coming soon.
-              LAB is the live billing surface for packs.
-            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="faq-section" id="faq">
+        <div className="page-shell">
+          <div className="section-inner">
+            <h2 className="faq-title">FAQ</h2>
+            <div className="faq-list">
+              {faqEntries.map((entry) => (
+                <article key={entry.question} className="faq-item" itemScope itemType="https://schema.org/Question">
+                  <div className="faq-question-bubble">
+                    <h3 itemProp="name">{entry.question}</h3>
+                  </div>
+                  <div className="faq-answer-bubble" itemProp="acceptedAnswer" itemScope itemType="https://schema.org/Answer">
+                    <p itemProp="text">{entry.answer}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -363,12 +421,12 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="final-cta-card">
             <p className="section-eyebrow section-eyebrow-light">Agency Support</p>
-            <h2>Need implementation help after the scan?</h2>
+            <h2>Хотите прокачать сайт для AEO? Оставьте заявку</h2>
             <p>
-              Use the main MO ADS form to hand off fixes and rollout to the agency team.
+              Наша команда внедрит приоритетные AEO-правки и соберет план роста AI-трафика для вашего сайта.
             </p>
             <a className="cta-nav final-cta-button" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-              Open Agency Lead Form
+              Оставить заявку
             </a>
           </div>
         </div>

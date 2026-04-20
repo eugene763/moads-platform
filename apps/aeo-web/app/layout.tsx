@@ -13,8 +13,9 @@ const inter = Inter({
 const measurementId = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
-  title: "MO Ads AEO Checker",
-  description: "Free AI discovery readiness checker with one-page scan, auth unlock, and usage-based AEO credit packs.",
+  title: "Free AEO Checker, AEO Tracker & AEO Visibility Tool | MO ADS",
+  description: "Free AEO checker and tracking tool for AI search visibility. Analyze page readiness, monitor AEO signals, and improve discoverability across AI search experiences.",
+  keywords: "free aeo checker, aeo tracker, aeo visibility tool, aeo tool, best aeo tracker, aeo tracking tool, aeo analysis tools, aeo monitoring tool, aeo tools for ai search visibility analytics, ai tools for seo and aeo, tool for aeo",
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
