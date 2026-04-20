@@ -115,7 +115,7 @@ export function ScanForm() {
           id="site-url-input"
           required
           type="text"
-          placeholder="example.com or https://example.com"
+          placeholder="yoursite.com"
           value={siteUrl}
           onChange={(event) => setSiteUrl(event.target.value)}
           autoCapitalize="none"

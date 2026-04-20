@@ -592,6 +592,7 @@ input {
 .step-cards::before {
   content: "";
   position: absolute;
+  z-index: 0;
   top: 44px;
   left: calc(33.33% - 12px);
   width: calc(33.33% + 24px);
@@ -612,6 +613,8 @@ input {
 }
 
 .step-card {
+  position: relative;
+  z-index: 1;
   padding: 28px 24px;
   transition: transform 0.2s, box-shadow 0.2s;
 }
