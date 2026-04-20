@@ -241,13 +241,17 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
+            <div id="scan" className="scan-anchor" aria-hidden="true" />
             <h1 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h1>
-            <h2 className="hero-main-h2">Check if AI can read your site</h2>
+            <h2 className="hero-main-h2">
+              <span>Check if AI can read your site</span>
+              <span className="hero-free-line">for free</span>
+            </h2>
             <p className="hero-copy">
               Free aeo checker and aeo visibility tool for fast page diagnostics and AI search visibility analysis.
             </p>
 
-            <div id="scan">
+            <div>
               <ScanForm />
             </div>
 
@@ -352,7 +356,7 @@ export default function HomePage() {
             </div>
             <div className="dimensions-cta-wrap">
               <Link className="cta-primary dimensions-auth-cta" href="/dashboard">
-                Открыть все функции
+                Open all features
               </Link>
             </div>
           </div>
@@ -420,12 +424,12 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="final-cta-card">
             <p className="section-eyebrow section-eyebrow-light">Agency Support</p>
-            <h2>Хотите прокачать сайт для AEO? Оставьте заявку</h2>
+            <h2>Want to improve your site for AEO? Request a rollout plan</h2>
             <p>
-              Наша команда внедрит приоритетные AEO-правки и соберет план роста AI-трафика для вашего сайта.
+              Our team can implement priority AEO fixes and build a growth plan for AI traffic to your site.
             </p>
             <a className="cta-nav final-cta-button" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-              Оставить заявку
+              Request AEO help
             </a>
           </div>
         </div>

@@ -123,22 +123,11 @@ input {
   text-decoration: none;
 }
 
-.brand-service-name {
-  font-family: "Coolvetica", var(--font-body), sans-serif;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.28em;
-  font-size: 1.34rem;
-  line-height: 0.9;
-  letter-spacing: 0.03em;
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.brand-service-name span:first-child {
-  font-size: 1.72rem;
-  font-weight: 400;
-  letter-spacing: 0;
+.brand-logo-image {
+  display: block;
+  width: auto;
+  height: 52px;
+  object-fit: contain;
 }
 
 .top-nav nav {
@@ -243,12 +232,25 @@ input {
   margin-bottom: 20px;
 }
 
+.scan-anchor {
+  height: 0;
+  scroll-margin-top: 96px;
+}
+
 .hero-main-h2 {
   font-size: clamp(2.4rem, 5vw, 4rem);
   line-height: 1.08;
   margin: 0 auto 16px;
   max-width: 780px;
   color: var(--ink);
+}
+
+.hero-main-h2 span {
+  display: block;
+}
+
+.hero-free-line {
+  color: var(--brand);
 }
 
 .accent-line {
