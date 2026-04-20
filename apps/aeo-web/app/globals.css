@@ -121,21 +121,24 @@ input {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
-  gap: 10px;
-}
-
-.brand-logo-image {
-  display: block;
-  width: auto;
-  height: 36px;
 }
 
 .brand-service-name {
   font-family: "Coolvetica", var(--font-body), sans-serif;
-  font-size: 1rem;
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28em;
+  font-size: 1.34rem;
+  line-height: 0.9;
+  letter-spacing: 0.03em;
   color: var(--ink);
   white-space: nowrap;
+}
+
+.brand-service-name span:first-child {
+  font-size: 1.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .top-nav nav {

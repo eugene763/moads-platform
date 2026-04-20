@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import {useEffect, useState} from "react";
 
@@ -32,8 +31,11 @@ export function AeoTopNav({
   return (
     <header className={`top-nav${scrolled ? " scrolled" : ""}`}>
       <Link href="/" className="brand brand-logo" aria-label="MO AEO CHECKER home">
-        <Image src="/logo-moads.svg" alt="MO AEO CHECKER" width={122} height={44} className="brand-logo-image" priority />
-        <span className="brand-service-name">MO AEO CHECKER</span>
+        <span className="brand-service-name" aria-hidden="true">
+          <span>MO</span>
+          <span>AEO</span>
+          <span>CHECKER</span>
+        </span>
       </Link>
 
       <nav>
