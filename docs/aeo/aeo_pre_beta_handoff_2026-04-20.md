@@ -891,3 +891,66 @@ Avoid in pre-beta:
 - hash-based score fallback.
 - claiming real multi-engine measurement without provider-backed evidence.
 - making subscriptions live before lifecycle handling exists.
+
+## 16. Addendum (2026-04-21): AEO Frontend Fix Pack
+
+Latest source commit for this addendum:
+
+```text
+28a96758dbf457076e5cce2ef08de2d91c640de3
+feat(aeo-web): improve auth flows, gated fixes, tabs, and pack modal UX
+```
+
+This commit is source-complete on branch:
+
+```text
+codex/fix-reference-video-duration-u5ad86df2c2
+```
+
+### What was added in `apps/aeo-web`
+
+- Added a reusable auth modal with:
+  - Google sign-in.
+  - Email/password sign-in.
+  - Email/password sign-up.
+  - Password reset flow.
+- Added credit-pack popup flow in AEO (without LAB redirect-first UX):
+  - fetch packs from existing billing endpoints.
+  - launch checkout from AEO report/dashboard context.
+- Added pre-auth lock behavior:
+  - top 3 fixes visible before auth.
+  - deeper fixes/crawler rows unlock after auth.
+- Added post-auth dashboard UX improvements:
+  - site tabs derived from scan history.
+  - inline "scan another site" tab flow.
+  - account actions duplicated in header menu and dashboard surface.
+- Added CTA/anchor fixes:
+  - checker CTAs route to scanner anchor target.
+  - improved scan-entry scroll landing behavior.
+- Added AEO text/case cleanup in visible UI components.
+- Kept API contracts unchanged (frontend-only pass).
+
+### Product contract preserved
+
+- Public scan remains free and URL-first.
+- Public scan remains deterministic and rules-based.
+- OpenAI is still excluded from the public scan path.
+- AI tips remain explicit, credit-charged action (`1 credit`).
+- Dodo packs remain the live billing path.
+
+### Manual operator prerequisites (still required)
+
+If Google/email auth fails on deployed AEO host, verify Firebase Console:
+
+1. Authorized domains include `aeo.moads.agency`.
+2. Google provider is enabled.
+3. Email/password provider is enabled.
+4. Public Firebase env vars are set for AEO frontend deployment:
+   - `NEXT_PUBLIC_FIREBASE_API_KEY`
+   - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+   - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+   - `NEXT_PUBLIC_FIREBASE_APP_ID`
+
+### Deploy status note
+
+At documentation update time, source is pushed, but latest frontend deploy can remain stale until `gcloud` session re-auth is refreshed in the deployment environment. Treat runtime parity as **NEEDS CHECK** until a fresh deploy and smoke verification are completed.

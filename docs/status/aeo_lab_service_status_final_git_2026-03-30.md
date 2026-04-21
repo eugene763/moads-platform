@@ -1,52 +1,53 @@
-# AEO/LAB Service Status — Pre-Beta Update
+# AEO/LAB Service Status — Final Git Snapshot (Updated)
 
-Updated: 2026-04-20  
+Updated: 2026-04-21  
 Repository: `moads-platform`  
-Current branch at update time: `codex/fix-reference-video-duration-u5ad86df2c2`  
-Pre-beta source anchor before docs update: `b73fee9`
+Branch: `codex/fix-reference-video-duration-u5ad86df2c2`  
+Source HEAD: `28a9675`
 
-## Canonical document
+## Canonical spec
 
-The detailed technical and UX spec is now:
+Primary technical handoff:
 
-- `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md`
+- `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md` (includes 2026-04-21 addendum)
 
-## Current service contract
+Current alignment/status file:
 
-- AEO public scan: free, URL-only, deterministic.
-- AEO report: public score + evidence layer + unlock/account actions.
-- AEO dashboard: free baseline sign-in access, wallet/scans/evidence/AI tips actions.
-- LAB: account and credit-pack billing center.
-- Billing: Dodo Payments only for AEO credit packs.
-- OpenAI: explicit AI tips only, not public score.
+- `docs/status/aeo_mvp_v2_alignment_status_2026-04-20.md`
 
-## Score contract
+## Current source-side contract
 
-Weighted score blocks:
+- AEO public scan is free and URL-first.
+- Public score path is deterministic and does not call OpenAI.
+- AI tips are explicit paid action (`1 credit`).
+- AEO/LAB billing uses Dodo credit packs.
+- LAB remains account/billing center.
+- Subscription plans remain non-live (`coming soon` behavior in UX).
 
-- Access.
-- Basic SEO.
-- Ratings Schema.
+## Latest source update in git
 
-Evidence-only blocks:
+```text
+28a96758dbf457076e5cce2ef08de2d91c640de3
+feat(aeo-web): improve auth flows, gated fixes, tabs, and pack modal UX
+```
 
-- crawlability.
-- robots/sitemap.
-- AI bot rules.
-- product-page sample.
-- action plan.
-- prompt kit.
-- connected evidence widgets.
+Key impact:
+- AEO auth modal expanded (Google + email/password + reset).
+- Top-fixes lock/unlock UX improved.
+- AEO-local pack popup checkout start added.
+- Dashboard tabs/account access improved.
 
-## Latest source-side change
+## Runtime caution
 
-Canonical parsing has been fixed at source anchor `b73fee9`:
+Source was pushed, but runtime may still show previous frontend revisions until fresh deploy is completed with valid `gcloud` auth session.  
+Treat source/runtime parity as **NEEDS CHECK** until post-deploy smoke verifies latest UI.
 
-- standard canonical link tags are now parsed correctly.
-- false `canonical_missing` for normal `<link rel="canonical" href="...">` pages should be resolved after API deploy.
+## Immediate operator checks
 
-## Review risks
-
-- Branch/runtime mismatch is possible because recent work involved rollback branches.
-- Some visual/logo changes may exist in one branch/runtime but not another.
-- Verify current source before declaring frontend visual state final.
+1. Re-auth `gcloud` and ADC in deploy environment.
+2. Deploy frontends.
+3. Verify live auth on `aeo.moads.agency`:
+   - authorized domain in Firebase;
+   - Google provider enabled;
+   - email/password provider enabled.
+4. Verify live AEO pack popup checkout starts correctly.
