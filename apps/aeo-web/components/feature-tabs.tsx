@@ -26,7 +26,7 @@ const FEATURE_TABS: FeatureTabItem[] = [
     cards: [
       {label: "AI Mentions", value: "24 this month", tone: "accent"},
       {label: "Citations", value: "8 linked answers", tone: "brand"},
-      {label: "Confidence", value: "Deterministic", tone: "warning"},
+      {label: "Confidence", value: "Measured signals", tone: "warning"},
     ],
   },
   {
@@ -76,7 +76,7 @@ export function FeatureTabs() {
 
   return (
     <div className="features-layout">
-      <div className="feature-tabs" role="tablist" aria-label="Why MO ADS">
+      <div className="feature-tabs" role="tablist" aria-label="Why MO CHECKER">
         {FEATURE_TABS.map((item) => (
           <button
             key={item.id}

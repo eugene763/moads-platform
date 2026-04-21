@@ -4,6 +4,7 @@ import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
+import {explainIssue, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
@@ -40,6 +41,12 @@ function priorityBadgeClass(priority: string): string {
   return "badge-low";
 }
 
+function formatIssueTitle(code: string): string {
+  return code
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (value) => value.toUpperCase());
+}
+
 export function ReportView({publicToken}: {publicToken: string}) {
   const [report, setReport] = useState<ScanDetail | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -50,6 +57,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
   const [packsOpen, setPacksOpen] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
   const [tipsBusy, setTipsBusy] = useState(false);
+  const [pendingSiteScanIntent, setPendingSiteScanIntent] = useState(false);
+  const [pendingPacksAfterAuth, setPendingPacksAfterAuth] = useState(false);
 
   const publicScore = report?.publicScore ?? 0;
 
@@ -96,22 +105,43 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return report.status.replace(/_/g, " ");
   }, [report]);
 
-  async function handleAuthSuccess(): Promise<void> {
-    await refreshSessionAndWallet();
-    if (report?.recommendationsLocked) {
-      try {
-        setClaimBusy(true);
-        const claimed = await apiRequest<ScanDetail>(`/v1/aeo/scans/${report.scanId}/claim`, {
-          method: "POST",
-        });
-        setReport(claimed);
-      } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
-      } finally {
-        setClaimBusy(false);
-      }
+  async function claimScanIfNeeded(): Promise<void> {
+    if (!report || !report.recommendationsLocked) {
+      return;
     }
-    setAuthOpen(false);
+
+    setClaimBusy(true);
+    try {
+      const claimed = await apiRequest<ScanDetail>(`/v1/aeo/scans/${report.scanId}/claim`, {
+        method: "POST",
+      });
+      setReport(claimed);
+    } finally {
+      setClaimBusy(false);
+    }
+  }
+
+  async function handleAuthSuccess(): Promise<void> {
+    try {
+      await refreshSessionAndWallet();
+      await claimScanIfNeeded();
+
+      if (pendingPacksAfterAuth) {
+        setPacksOpen(true);
+      }
+
+      if (pendingSiteScanIntent && report) {
+        const destination = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
+        window.location.href = destination;
+        return;
+      }
+
+      setAuthOpen(false);
+      setPendingSiteScanIntent(false);
+      setPendingPacksAfterAuth(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
+    }
   }
 
   async function handleClaim(): Promise<void> {
@@ -136,11 +166,21 @@ export function ReportView({publicToken}: {publicToken: string}) {
       trackGa4("aeo_scan_claimed", {
         scan_id: report.scanId,
       });
-    } catch {
-      // handled above
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
     } finally {
       setClaimBusy(false);
     }
+  }
+
+  function openPacksWithAuthGate(): void {
+    if (!isAuthed) {
+      setPendingPacksAfterAuth(true);
+      setAuthOpen(true);
+      return;
+    }
+
+    setPacksOpen(true);
   }
 
   async function handleGenerateTips(): Promise<void> {
@@ -148,8 +188,14 @@ export function ReportView({publicToken}: {publicToken: string}) {
       return;
     }
 
-    if (report.recommendationsLocked) {
+    if (!isAuthed) {
+      setPendingPacksAfterAuth(true);
       setAuthOpen(true);
+      return;
+    }
+
+    if (report.recommendationsLocked) {
+      await handleClaim();
       return;
     }
 
@@ -172,10 +218,10 @@ export function ReportView({publicToken}: {publicToken: string}) {
         },
       );
 
-      setReport((prev) => prev ? {
-        ...prev,
+      setReport((previous) => previous ? {
+        ...previous,
         aiTips: {tips: result.tips},
-      } : prev);
+      } : previous);
       await refreshSessionAndWallet();
 
       trackGa4("aeo_ai_tips_generated", {
@@ -193,25 +239,46 @@ export function ReportView({publicToken}: {publicToken: string}) {
     }
   }
 
-  async function handleFullSiteIntent(): Promise<void> {
+  function handleFullSiteIntent(): void {
     if (!report) {
       return;
     }
 
-    if (report.recommendationsLocked) {
-      await handleClaim();
+    if (!isAuthed) {
+      setPendingSiteScanIntent(true);
+      setAuthOpen(true);
       return;
     }
 
-    window.location.href = `/dashboard?intent=site-scan&scanId=${encodeURIComponent(report.scanId)}`;
+    window.location.href = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
   }
 
-  async function copyLink(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-    } catch {
-      // noop
+  async function copyUrl(): Promise<void> {
+    if (!report) {
+      return;
     }
+
+    const target = report.siteUrl || window.location.href;
+    await navigator.clipboard.writeText(target).catch(() => undefined);
+  }
+
+  async function shareResult(): Promise<void> {
+    if (!report) {
+      return;
+    }
+
+    const sharePayload = {
+      title: "MO AEO CHECKER report",
+      text: `AI Discovery Readiness: ${report.publicScore ?? "--"}/100 for ${normalizeUrlForDisplay(report.siteUrl)}`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      await navigator.share(sharePayload).catch(() => undefined);
+      return;
+    }
+
+    await navigator.clipboard.writeText(window.location.href).catch(() => undefined);
   }
 
   if (loading) {
@@ -233,6 +300,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
   const crawlability = report.report.evidence?.crawlability;
   const actionPlan = report.report.actionPlan;
   const scanModeNote = report.report.summary?.scanModeNote;
+  const displayUrl = normalizeUrlForDisplay(report.siteUrl || report.finalUrl || "");
 
   const scoredNow = [
     ["AI Crawler Accessibility", report.report.dimensions?.aiCrawlerAccessibility],
@@ -270,28 +338,32 @@ export function ReportView({publicToken}: {publicToken: string}) {
   ];
 
   const topFixes = report.report.topFixes?.length ? report.report.topFixes : report.recommendations;
-  const visibleTopFixes = report.recommendationsLocked ? topFixes.slice(0, 3) : topFixes;
+  const topFixesVisibleLimit = report.recommendationsLocked ? 3 : 5;
+  const visibleTopFixes = topFixes.slice(0, topFixesVisibleLimit);
+  const topFixesPreview = topFixes[topFixesVisibleLimit] ?? null;
+
+  const issuesVisibleLimit = report.recommendationsLocked ? 3 : 5;
+  const visibleIssues = report.issues.slice(0, issuesVisibleLimit);
+  const issuesPreview = report.issues[issuesVisibleLimit] ?? null;
 
   return (
     <div className="report-shell">
       <section className="panel score-card">
         <ScoreRing score={publicScore} />
         <div className="score-text-block">
-          <p className="score-kicker">AI Discovery Readiness of page</p>
-          <h1 className="score-heading">{publicScore}/100</h1>
-          <p className="score-summary">
-            Objective readiness snapshot for one page based on server-side parsing.
-            Current page status: <strong>{statusLabel}</strong>.
-          </p>
-          <p className="tiny">This result covers one scanned page only, not full site readiness.</p>
+          <p className="score-kicker">AI DISCOVERY READINESS OF</p>
+          <h1 className="score-url-heading">{displayUrl || "this page"}</h1>
+          <p className={`score-heading ${scoreToneClass(publicScore)}`}>{publicScore}/100</p>
+          <p className={`status-chip ${statusToneClass(statusLabel)}`}>{statusLabel}</p>
+          <p className="warning-line">⚠️ This result covers one scanned page only, not full site readiness.</p>
           {scanModeNote ? <p className="tiny note-banner">{scanModeNote}</p> : null}
         </div>
         <div className="score-actions">
-          <button type="button" className="cta-ghost" onClick={() => window.print()}>Print</button>
-          <button type="button" className="cta-ghost" onClick={() => void copyLink()}>Copy Link</button>
-          <button type="button" className="cta-primary" onClick={() => void handleFullSiteIntent()} disabled={claimBusy || tipsBusy}>
-            {claimBusy ? "Unlocking..." : "Scan whole site"}
+          <button type="button" className="cta-primary" onClick={handleFullSiteIntent} disabled={claimBusy || tipsBusy}>
+            {claimBusy ? "Unlocking..." : "Scan all site pages"}
           </button>
+          <button type="button" className="cta-ghost" onClick={() => void copyUrl()}>Copy URL</button>
+          <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
         </div>
       </section>
 
@@ -317,22 +389,33 @@ export function ReportView({publicToken}: {publicToken: string}) {
               <span className={`badge ${impactBadgeClass(recommendation.impactScore)}`}>+{recommendation.impactScore}</span>
             </li>
           ))}
+          {topFixesPreview ? (
+            <li className="blur-preview">
+              <div>
+                <p className="list-title">{topFixesPreview.title}</p>
+                <p className="tiny">{topFixesPreview.description}</p>
+              </div>
+              <span className={`badge ${impactBadgeClass(topFixesPreview.impactScore)}`}>+{topFixesPreview.impactScore}</span>
+            </li>
+          ) : null}
         </ul>
 
         {report.recommendationsLocked ? (
           <div className="lock-panel">
             <p>{report.lockedRecommendationsCount} more fixes and deeper diagnostics unlock after sign-in.</p>
-            <button type="button" className="cta-primary" onClick={handleClaim} disabled={claimBusy}>
+            <button type="button" className="cta-primary" onClick={() => setAuthOpen(true)} disabled={claimBusy}>
               {claimBusy ? "Unlocking..." : "Unlock all fixes"}
             </button>
           </div>
         ) : (
           <div className="unlock-panel">
-            <p>Expanded report unlocked. You can now run full-site actions and credit-powered AI tips.</p>
-            <button type="button" className="cta-primary" onClick={handleGenerateTips} disabled={tipsBusy}>
+            <p>Need deeper recommendations for this URL? Use 1 credit to unlock extended report depth.</p>
+            <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
+              Buy more credits
+            </button>
+            <button type="button" className="cta-primary" onClick={() => void handleGenerateTips()} disabled={tipsBusy}>
               {tipsBusy ? "Generating..." : "Get Tips to Boost Your AEO (1 credit)"}
             </button>
-            <p className="tiny">Need more credits? Open packs and continue in this AEO workspace.</p>
           </div>
         )}
       </section>
@@ -375,8 +458,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
                     </li>
                   ))}
                 </ul>
-                <button type="button" className="cta-ghost" onClick={handleClaim} disabled={claimBusy}>
-                  {claimBusy ? "Unlocking..." : "Unlock hidden block"}
+                <button type="button" className="cta-ghost" onClick={() => setAuthOpen(true)} disabled={claimBusy}>
+                  Unlock hidden block
                 </button>
               </div>
             ) : (
@@ -391,7 +474,6 @@ export function ReportView({publicToken}: {publicToken: string}) {
             )}
           </article>
         </div>
-        <p className="tiny">Extra evidence supports prioritization. It does not claim live multi-engine visibility measurement.</p>
       </section>
 
       {report.issues.length ? (
@@ -401,16 +483,40 @@ export function ReportView({publicToken}: {publicToken: string}) {
             <span className="badge badge-score">{report.issues.length} signals</span>
           </div>
           <ul className="list">
-            {report.issues.map((issue) => (
+            {visibleIssues.map((issue) => (
               <li key={issue.code}>
                 <div>
-                  <p className="list-title">{issue.code}</p>
-                  <p className="tiny">{issue.message}</p>
+                  <p className="list-title">{formatIssueTitle(issue.code)}</p>
+                  <p className="tiny">{explainIssue(issue.code, issue.message)}</p>
                 </div>
                 <span className={`badge ${priorityBadgeClass(issue.severity)}`}>{issue.severity}</span>
               </li>
             ))}
+            {issuesPreview ? (
+              <li className="blur-preview">
+                <div>
+                  <p className="list-title">{formatIssueTitle(issuesPreview.code)}</p>
+                  <p className="tiny">{explainIssue(issuesPreview.code, issuesPreview.message)}</p>
+                </div>
+                <span className={`badge ${priorityBadgeClass(issuesPreview.severity)}`}>{issuesPreview.severity}</span>
+              </li>
+            ) : null}
           </ul>
+          {report.recommendationsLocked ? (
+            <div className="lock-panel">
+              <p>{Math.max(0, report.issues.length - visibleIssues.length)} more issue diagnostics unlock after sign-in.</p>
+              <button type="button" className="cta-primary" onClick={() => setAuthOpen(true)}>
+                Sign in to unlock
+              </button>
+            </div>
+          ) : report.issues.length > visibleIssues.length ? (
+            <div className="unlock-panel">
+              <p>Use 1 credit to unlock full issue diagnostics for this site and priority actions.</p>
+              <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
+                Buy more credits
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -434,10 +540,22 @@ export function ReportView({publicToken}: {publicToken: string}) {
         </section>
       ) : null}
 
+      <section className="section-block lead-footer lead-footer-light">
+        <h2>Want us to implement these improvements for you?</h2>
+        <p>Submit your request and our team will help deploy the fixes to improve your visibility in ChatGPT and other LLM experiences.</p>
+        <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
+          Submit request
+        </a>
+      </section>
+
       {error ? <p className="error-text">{error}</p> : null}
       <AuthModal
         open={authOpen}
-        onClose={() => setAuthOpen(false)}
+        onClose={() => {
+          setAuthOpen(false);
+          setPendingSiteScanIntent(false);
+          setPendingPacksAfterAuth(false);
+        }}
         onSuccess={handleAuthSuccess}
         source="report_unlock"
       />

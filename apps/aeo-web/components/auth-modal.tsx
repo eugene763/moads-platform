@@ -18,6 +18,7 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
   source: string;
+  initialMode?: AuthMode;
 }
 
 async function createAeoSession(idToken: string): Promise<void> {
@@ -30,8 +31,8 @@ async function createAeoSession(idToken: string): Promise<void> {
   });
 }
 
-export function AuthModal({open, onClose, onSuccess, source}: AuthModalProps) {
-  const [mode, setMode] = useState<AuthMode>("signin");
+export function AuthModal({open, onClose, onSuccess, source, initialMode = "signin"}: AuthModalProps) {
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,12 +41,18 @@ export function AuthModal({open, onClose, onSuccess, source}: AuthModalProps) {
 
   useEffect(() => {
     if (!open) {
-      setMode("signin");
+      setMode(initialMode);
       setPassword("");
       setMessage(null);
       setError(null);
     }
-  }, [open]);
+  }, [initialMode, open]);
+
+  useEffect(() => {
+    if (open) {
+      setMode(initialMode);
+    }
+  }, [initialMode, open]);
 
   useEffect(() => {
     function onEsc(event: KeyboardEvent) {

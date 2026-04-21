@@ -10,6 +10,9 @@ export interface PublicScanResponse {
 
 export interface PublicScanReport {
   scanId: string;
+  siteUrl: string;
+  normalizedUrl?: string | null;
+  finalUrl?: string | null;
   publicToken: string;
   publicScore: number | null;
   status: string;

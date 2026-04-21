@@ -1,13 +1,13 @@
 import {AeoTopNav} from "../../components/aeo-top-nav";
-import {DashboardView} from "../../components/dashboard-view";
+import {ScansView} from "../../components/scans-view";
 
-export default function DashboardPage() {
+export default function ScansPage() {
   return (
     <main>
       <AeoTopNav />
 
       <div className="page-shell report-page">
-        <DashboardView />
+        <ScansView />
       </div>
     </main>
   );

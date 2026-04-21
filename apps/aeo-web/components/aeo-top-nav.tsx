@@ -2,32 +2,25 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useState} from "react";
 
 import {apiRequest} from "../lib/api";
+import {AuthModal} from "./auth-modal";
 
-interface AeoTopNavProps {
-  secondaryLabel?: string;
-  secondaryHref?: string;
-  ctaLabel?: string;
-  ctaHref?: string;
-}
+type AuthMode = "signin" | "signup";
 
 interface SessionSnapshot {
   user: {email: string | null};
 }
 
-export function AeoTopNav({
-  secondaryLabel = "Log In",
-  secondaryHref = "/dashboard",
-  ctaLabel = "Open Checker",
-  ctaHref = "/#scan-target",
-}: AeoTopNavProps) {
+export function AeoTopNav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const [credits, setCredits] = useState<number | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("signin");
 
   useEffect(() => {
     const handler = () => {
@@ -39,35 +32,41 @@ export function AeoTopNav({
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
+  async function refreshSession() {
+    try {
+      const [session, wallet] = await Promise.all([
+        apiRequest<SessionSnapshot>("/v1/me"),
+        apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary"),
+      ]);
+      setIsAuthed(true);
+      setEmail(session.user.email);
+      setCredits(wallet.wallet.balance);
+    } catch {
+      setIsAuthed(false);
+      setEmail(null);
+      setCredits(null);
+    }
+  }
+
   useEffect(() => {
-    void (async () => {
-      try {
-        const [session, wallet] = await Promise.all([
-          apiRequest<SessionSnapshot>("/v1/me"),
-          apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary"),
-        ]);
-        setIsAuthed(true);
-        setEmail(session.user.email);
-        setCredits(wallet.wallet.balance);
-      } catch {
-        setIsAuthed(false);
-        setEmail(null);
-        setCredits(null);
-      }
-    })();
+    void refreshSession();
   }, []);
 
-  const resolvedSecondaryLabel = useMemo(() => {
-    if (secondaryLabel !== "Log In") {
-      return secondaryLabel;
-    }
-    return isAuthed ? "Dashboard" : "Log In";
-  }, [isAuthed, secondaryLabel]);
+  async function handleAuthSuccess() {
+    await refreshSession();
+    setAuthOpen(false);
+  }
+
+  function openAuth(mode: AuthMode) {
+    setAuthMode(mode);
+    setAuthOpen(true);
+    setMenuOpen(false);
+  }
 
   return (
     <header className={`top-nav${scrolled ? " scrolled" : ""}`}>
       <Link href="/" className="brand brand-logo" aria-label="MO AEO CHECKER home">
-        <Image src="/logo-mo-aeo-checker.png" alt="MO AEO CHECKER" width={1260} height={680} className="brand-logo-image" priority />
+        <Image src="/logo-mo-aeo-checker.png" alt="MO AEO CHECKER" width={577} height={433} className="brand-logo-image" priority />
       </Link>
 
       <nav>
@@ -78,12 +77,17 @@ export function AeoTopNav({
       </nav>
 
       <div className="nav-actions">
-        <Link href={secondaryHref} className="nav-login">
-          {resolvedSecondaryLabel}
-        </Link>
-        <Link href={ctaHref} className="cta-nav">
-          {ctaLabel}
-        </Link>
+        {isAuthed ? (
+          <>
+            <Link href="/scans" className="nav-login">Scans</Link>
+            <Link href="/dashboard" className="cta-nav">Account</Link>
+          </>
+        ) : (
+          <>
+            <button type="button" className="nav-text-button" onClick={() => openAuth("signin")}>Log In</button>
+            <button type="button" className="cta-nav" onClick={() => openAuth("signup")}>Sign Up</button>
+          </>
+        )}
         <button
           type="button"
           className="burger-button"
@@ -99,8 +103,9 @@ export function AeoTopNav({
         <div className="burger-panel">
           <div className="burger-group">
             <strong>Navigation</strong>
-            <Link href="/#scan-target" onClick={() => setMenuOpen(false)}>Open Checker</Link>
-            <Link href="/dashboard" onClick={() => setMenuOpen(false)}>Dashboard</Link>
+            <Link href="/#scan" onClick={() => setMenuOpen(false)}>Checker</Link>
+            <Link href="/scans" onClick={() => setMenuOpen(false)}>Scans</Link>
+            <Link href="/dashboard" onClick={() => setMenuOpen(false)}>Account</Link>
             <a href="https://moads.agency/#form" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Agency Form</a>
           </div>
           <div className="burger-group">
@@ -109,17 +114,25 @@ export function AeoTopNav({
               <>
                 <p className="tiny">{email ?? "signed user"}</p>
                 <p className="tiny">{credits ?? "--"} credits</p>
-                <Link href="/dashboard" onClick={() => setMenuOpen(false)}>Cabinet</Link>
-                <Link href="/dashboard#billing" onClick={() => setMenuOpen(false)}>Billing</Link>
-                <a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Security</a>
-                <a href="https://moads.agency/privacy" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Personal data</a>
+                <Link href="/dashboard#billing" onClick={() => setMenuOpen(false)}>Buy more credits</Link>
               </>
             ) : (
-              <p className="tiny">Sign in to view account data and credits.</p>
+              <div className="burger-auth-actions">
+                <button type="button" className="cta-ghost" onClick={() => openAuth("signin")}>Log In</button>
+                <button type="button" className="cta-primary" onClick={() => openAuth("signup")}>Sign Up</button>
+              </div>
             )}
           </div>
         </div>
       ) : null}
+
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onSuccess={handleAuthSuccess}
+        source="top_nav"
+        initialMode={authMode}
+      />
     </header>
   );
 }

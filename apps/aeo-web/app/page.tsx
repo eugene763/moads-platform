@@ -104,8 +104,8 @@ const pricingCards: PricingCard[] = [
       "Auth unlock for deeper data",
       "No card required",
     ],
-    href: "/#scan-target",
-    cta: "Open Checker",
+    href: "/#scan",
+    cta: "Start free scan",
   },
   {
     name: "Credit Packs",
@@ -119,7 +119,7 @@ const pricingCards: PricingCard[] = [
       "AI tips cost 1 credit",
       "Checkout in AEO workspace",
     ],
-    href: "/dashboard#billing",
+    href: "/scans?intent=buy-credits",
     cta: "Buy credits",
     popular: true,
   },
@@ -242,14 +242,14 @@ export default function HomePage() {
           <div className="section-inner">
             <h1 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h1>
             <h2 className="hero-main-h2">
-              <span>Check if AI can read your site</span>
-              <span className="hero-free-line">for free</span>
+              <span>Check if AI can read</span>
+              <span><span className="accent-line">your site</span></span>
             </h2>
             <p className="hero-copy">
               Free AEO checker and AEO visibility tool for fast page diagnostics and AI search visibility analysis.
             </p>
 
-            <div id="scan-target" className="scan-anchor">
+            <div id="scan" className="scan-anchor">
               <ScanForm />
             </div>
 
@@ -284,7 +284,6 @@ export default function HomePage() {
         <div className="ticker-track">
           {[...tickerItems, ...tickerItems].map((item, index) => (
             <div key={`${item.label}-${index}`} className="ticker-item">
-              <span className="ticker-dot" />
               <Image src={item.src} alt="" width={18} height={18} className="ticker-logo" />
               <span>{item.label}</span>
             </div>
@@ -353,7 +352,7 @@ export default function HomePage() {
               ))}
             </div>
             <div className="dimensions-cta-wrap">
-              <Link className="cta-primary dimensions-auth-cta" href="/dashboard">
+              <Link className="cta-primary dimensions-auth-cta" href="/scans">
                 Open all features
               </Link>
             </div>
