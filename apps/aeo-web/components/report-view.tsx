@@ -4,7 +4,8 @@ import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
-import {signInForAeoSession} from "../lib/firebase";
+import {AuthModal} from "./auth-modal";
+import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
 
 interface ScanDetail extends PublicScanReport {
@@ -41,9 +42,12 @@ function priorityBadgeClass(priority: string): string {
 
 export function ReportView({publicToken}: {publicToken: string}) {
   const [report, setReport] = useState<ScanDetail | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [isAuthed, setIsAuthed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [packsOpen, setPacksOpen] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
   const [tipsBusy, setTipsBusy] = useState(false);
 
@@ -69,6 +73,22 @@ export function ReportView({publicToken}: {publicToken: string}) {
     })();
   }, [publicToken]);
 
+  async function refreshSessionAndWallet(): Promise<void> {
+    try {
+      await apiRequest("/v1/me");
+      setIsAuthed(true);
+      const wallet = await apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary");
+      setWalletBalance(wallet.wallet.balance);
+    } catch {
+      setIsAuthed(false);
+      setWalletBalance(null);
+    }
+  }
+
+  useEffect(() => {
+    void refreshSessionAndWallet();
+  }, []);
+
   const statusLabel = useMemo(() => {
     if (!report) {
       return "loading";
@@ -76,26 +96,22 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return report.status.replace(/_/g, " ");
   }, [report]);
 
-  async function loginAndCreateSession(): Promise<void> {
-    setAuthBusy(true);
-    setError(null);
-
-    try {
-      const idToken = await signInForAeoSession();
-      await apiRequest("/v1/auth/session-login", {
-        method: "POST",
-        body: JSON.stringify({
-          idToken,
-          productCode: "aeo",
-        }),
-      });
-      trackGa4("aeo_auth_success", {source: "report"});
-    } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Sign in failed.");
-      throw authError;
-    } finally {
-      setAuthBusy(false);
+  async function handleAuthSuccess(): Promise<void> {
+    await refreshSessionAndWallet();
+    if (report?.recommendationsLocked) {
+      try {
+        setClaimBusy(true);
+        const claimed = await apiRequest<ScanDetail>(`/v1/aeo/scans/${report.scanId}/claim`, {
+          method: "POST",
+        });
+        setReport(claimed);
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
+      } finally {
+        setClaimBusy(false);
+      }
     }
+    setAuthOpen(false);
   }
 
   async function handleClaim(): Promise<void> {
@@ -103,15 +119,20 @@ export function ReportView({publicToken}: {publicToken: string}) {
       return;
     }
 
+    if (!isAuthed) {
+      setAuthOpen(true);
+      return;
+    }
+
     setClaimBusy(true);
     setError(null);
 
     try {
-      await loginAndCreateSession();
       const claimed = await apiRequest<ScanDetail>(`/v1/aeo/scans/${report.scanId}/claim`, {
         method: "POST",
       });
       setReport(claimed);
+      await refreshSessionAndWallet();
       trackGa4("aeo_scan_claimed", {
         scan_id: report.scanId,
       });
@@ -124,6 +145,16 @@ export function ReportView({publicToken}: {publicToken: string}) {
 
   async function handleGenerateTips(): Promise<void> {
     if (!report) {
+      return;
+    }
+
+    if (report.recommendationsLocked) {
+      setAuthOpen(true);
+      return;
+    }
+
+    if ((walletBalance ?? 0) <= 0) {
+      setPacksOpen(true);
       return;
     }
 
@@ -145,12 +176,18 @@ export function ReportView({publicToken}: {publicToken: string}) {
         ...prev,
         aiTips: {tips: result.tips},
       } : prev);
+      await refreshSessionAndWallet();
 
       trackGa4("aeo_ai_tips_generated", {
         scan_id: report.scanId,
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "AI tips failed.");
+      const message = requestError instanceof Error ? requestError.message : "AI tips failed.";
+      if (/insufficient|credit/i.test(message)) {
+        setPacksOpen(true);
+      } else {
+        setError(message);
+      }
     } finally {
       setTipsBusy(false);
     }
@@ -193,10 +230,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return <div className="state-card">Report not found.</div>;
   }
 
-  const aggregate = report.report.evidence?.structuredData?.aggregateRating;
-  const onPage = report.report.evidence?.onPage;
   const crawlability = report.report.evidence?.crawlability;
-  const productPage = report.report.evidence?.productPage;
   const actionPlan = report.report.actionPlan;
   const scanModeNote = report.report.summary?.scanModeNote;
 
@@ -235,7 +269,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
     },
   ];
 
-  const topFixes = (report.report.topFixes?.length ? report.report.topFixes : report.recommendations).slice(0, 5);
+  const topFixes = report.report.topFixes?.length ? report.report.topFixes : report.recommendations;
+  const visibleTopFixes = report.recommendationsLocked ? topFixes.slice(0, 3) : topFixes;
 
   return (
     <div className="report-shell">
@@ -254,8 +289,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
         <div className="score-actions">
           <button type="button" className="cta-ghost" onClick={() => window.print()}>Print</button>
           <button type="button" className="cta-ghost" onClick={() => void copyLink()}>Copy Link</button>
-          <button type="button" className="cta-primary" onClick={() => void handleFullSiteIntent()} disabled={authBusy || claimBusy}>
-            {authBusy || claimBusy ? "Unlocking..." : "Scan whole site"}
+          <button type="button" className="cta-primary" onClick={() => void handleFullSiteIntent()} disabled={claimBusy || tipsBusy}>
+            {claimBusy ? "Unlocking..." : "Scan whole site"}
           </button>
         </div>
       </section>
@@ -263,7 +298,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
       <section className="panel">
         <div className="panel-header">
           <h2>Top Fixes</h2>
-          <span className="badge badge-score">{topFixes.length} visible</span>
+          <span className="badge badge-score">{visibleTopFixes.length} visible</span>
         </div>
         {actionPlan?.fastestWin ? (
           <article className="surface-card" style={{marginBottom: "14px"}}>
@@ -273,7 +308,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
           </article>
         ) : null}
         <ul className="list">
-          {topFixes.map((recommendation) => (
+          {visibleTopFixes.map((recommendation) => (
             <li key={recommendation.id}>
               <div>
                 <p className="list-title">{recommendation.title}</p>
@@ -287,20 +322,17 @@ export function ReportView({publicToken}: {publicToken: string}) {
         {report.recommendationsLocked ? (
           <div className="lock-panel">
             <p>{report.lockedRecommendationsCount} more fixes and deeper diagnostics unlock after sign-in.</p>
-            <button type="button" className="cta-primary" onClick={handleClaim} disabled={authBusy || claimBusy}>
-              {authBusy || claimBusy ? "Unlocking..." : "Sign in and unlock"}
+            <button type="button" className="cta-primary" onClick={handleClaim} disabled={claimBusy}>
+              {claimBusy ? "Unlocking..." : "Unlock all fixes"}
             </button>
           </div>
         ) : (
           <div className="unlock-panel">
             <p>Expanded report unlocked. You can now run full-site actions and credit-powered AI tips.</p>
             <button type="button" className="cta-primary" onClick={handleGenerateTips} disabled={tipsBusy}>
-              {tipsBusy ? "Generating..." : "Generate AI Tips (1 Credit)"}
+              {tipsBusy ? "Generating..." : "Get Tips to Boost Your AEO (1 credit)"}
             </button>
-            <p className="tiny">
-              Need more credits? {" "}
-              <a href="https://lab.moads.agency/center" target="_blank" rel="noreferrer">Open the billing center</a>.
-            </p>
+            <p className="tiny">Need more credits? Open packs and continue in this AEO workspace.</p>
           </div>
         )}
       </section>
@@ -343,8 +375,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
                     </li>
                   ))}
                 </ul>
-                <button type="button" className="cta-ghost" onClick={handleClaim} disabled={authBusy || claimBusy}>
-                  {authBusy || claimBusy ? "Unlocking..." : "Unlock hidden block"}
+                <button type="button" className="cta-ghost" onClick={handleClaim} disabled={claimBusy}>
+                  {claimBusy ? "Unlocking..." : "Unlock hidden block"}
                 </button>
               </div>
             ) : (
@@ -403,6 +435,17 @@ export function ReportView({publicToken}: {publicToken: string}) {
       ) : null}
 
       {error ? <p className="error-text">{error}</p> : null}
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onSuccess={handleAuthSuccess}
+        source="report_unlock"
+      />
+      <CreditPacksModal
+        open={packsOpen && isAuthed}
+        onClose={() => setPacksOpen(false)}
+        source="report_ai_tips"
+      />
     </div>
   );
 }

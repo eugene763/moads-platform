@@ -10,10 +10,10 @@ export default function DashboardPage() {
         <DashboardView />
 
         <section className="section-block lead-footer lead-footer-light">
-          <h2>Need help implementing fixes?</h2>
-          <p>Use the main site form to connect with the MO ADS agency team for rollout and execution.</p>
+          <h2>Want to improve your site for AEO? Request a rollout plan</h2>
+          <p>Our team can implement priority AEO fixes and build a growth plan for AI traffic to your site.</p>
           <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-            Open Agency Lead Form
+            Request AEO help
           </a>
         </section>
       </div>

@@ -12,10 +12,10 @@ export default async function PublicReportPage({params}: {params: Promise<{publi
         <ReportView publicToken={resolved.publicToken} />
 
         <section className="section-block lead-footer lead-footer-light">
-          <h2>Want implementation support?</h2>
-          <p>Submit your request on the main website and our team will help you deploy fixes after the score.</p>
+          <h2>Want to improve your site for AEO? Request a rollout plan</h2>
+          <p>Our team can implement priority AEO fixes and build a growth plan for AI traffic to your site.</p>
           <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-            Open Agency Lead Form
+            Request AEO help
           </a>
         </section>
       </div>

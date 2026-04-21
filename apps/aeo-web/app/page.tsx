@@ -104,7 +104,7 @@ const pricingCards: PricingCard[] = [
       "Auth unlock for deeper data",
       "No card required",
     ],
-    href: "/#scan",
+    href: "/#scan-target",
     cta: "Open Checker",
   },
   {
@@ -117,11 +117,10 @@ const pricingCards: PricingCard[] = [
       "Pack M - 80 credits",
       "Pack L - 200 credits",
       "AI tips cost 1 credit",
-      "Checkout via LAB",
+      "Checkout in AEO workspace",
     ],
-    href: "https://lab.moads.agency/center",
-    cta: "Open Billing Center",
-    external: true,
+    href: "/dashboard#billing",
+    cta: "Buy credits",
     popular: true,
   },
   {
@@ -241,17 +240,16 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
-            <div id="scan" className="scan-anchor" aria-hidden="true" />
             <h1 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h1>
             <h2 className="hero-main-h2">
               <span>Check if AI can read your site</span>
               <span className="hero-free-line">for free</span>
             </h2>
             <p className="hero-copy">
-              Free aeo checker and aeo visibility tool for fast page diagnostics and AI search visibility analysis.
+              Free AEO checker and AEO visibility tool for fast page diagnostics and AI search visibility analysis.
             </p>
 
-            <div>
+            <div id="scan-target" className="scan-anchor">
               <ScanForm />
             </div>
 
@@ -309,13 +307,13 @@ export default function HomePage() {
               <article className="step-card">
                 <span className="step-badge">Step 02</span>
                 {iconForStep("chart")}
-                <h3>Read your aeo visibility tool score</h3>
+                <h3>Read your AEO visibility tool score</h3>
                 <p>See AI Discovery Readiness of page and compact top fixes for quick action.</p>
               </article>
               <article className="step-card">
                 <span className="step-badge">Step 03</span>
                 {iconForStep("check")}
-                <h3>Unlock the aeo tracker workspace</h3>
+                <h3>Unlock the AEO tracker workspace</h3>
                 <p>Sign in to unlock hidden blocks, run more scans, and use credit-powered actions.</p>
               </article>
             </div>

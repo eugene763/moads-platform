@@ -5,7 +5,7 @@ import {FormEvent, useEffect, useState} from "react";
 
 import {apiRequest, PublicScanResponse} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
-import {signInForAeoSession} from "../lib/firebase";
+import {AuthModal} from "./auth-modal";
 
 const SCAN_COUNT_KEY = "aeo_public_scan_count_v1";
 
@@ -24,43 +24,29 @@ export function ScanForm() {
   const router = useRouter();
   const [siteUrl, setSiteUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [authBusy, setAuthBusy] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [requiresAuth, setRequiresAuth] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  async function refreshSession(): Promise<void> {
+    try {
+      await apiRequest("/v1/me");
+      setIsAuthed(true);
+    } catch {
+      setIsAuthed(false);
+    }
+  }
+
   useEffect(() => {
-    void (async () => {
-      try {
-        await apiRequest("/v1/me");
-        setIsAuthed(true);
-      } catch {
-        setIsAuthed(false);
-      }
-    })();
+    void refreshSession();
   }, []);
 
-  async function signInAndCreateSession(): Promise<void> {
-    setAuthBusy(true);
-    setError(null);
-
-    try {
-      const idToken = await signInForAeoSession();
-      await apiRequest("/v1/auth/session-login", {
-        method: "POST",
-        body: JSON.stringify({
-          idToken,
-          productCode: "aeo",
-        }),
-      });
-      setIsAuthed(true);
-      setRequiresAuth(false);
-      trackGa4("aeo_auth_gate_success", {source: "scan_form"});
-    } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Sign in failed.");
-    } finally {
-      setAuthBusy(false);
-    }
+  async function onAuthSuccess(): Promise<void> {
+    await refreshSession();
+    setRequiresAuth(false);
+    setAuthOpen(false);
+    trackGa4("aeo_auth_gate_success", {source: "scan_form"});
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -76,6 +62,7 @@ export function ScanForm() {
     const currentCount = Number(globalThis.localStorage?.getItem(SCAN_COUNT_KEY) ?? "0");
     if (!isAuthed && currentCount >= 1) {
       setRequiresAuth(true);
+      setAuthOpen(true);
       trackGa4("aeo_scan_auth_gate_shown", {reason: "second_scan"});
       return;
     }
@@ -134,12 +121,18 @@ export function ScanForm() {
       {requiresAuth ? (
         <div className="lock-panel compact-lock">
           <p>Free first scan used. Sign in to run the next scan and unlock hidden blocks.</p>
-          <button type="button" className="cta-primary" onClick={() => void signInAndCreateSession()} disabled={authBusy}>
-            {authBusy ? "Signing in..." : "Sign in to continue"}
+          <button type="button" className="cta-primary" onClick={() => setAuthOpen(true)}>
+            Sign in to continue
           </button>
         </div>
       ) : null}
       {error ? <p className="error-text">{error}</p> : null}
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onSuccess={onAuthSuccess}
+        source="scan_form"
+      />
     </form>
   );
 }
