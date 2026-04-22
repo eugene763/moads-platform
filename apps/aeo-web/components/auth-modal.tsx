@@ -80,6 +80,10 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
     try {
       const idToken = await signInForAeoSession();
       await createAeoSession(idToken);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("aeo_authed_hint", String(Date.now()));
+        window.dispatchEvent(new Event("aeo-auth-changed"));
+      }
       trackGa4("aeo_auth_success", {source, method: "google"});
       await onSuccess();
       onClose();
@@ -121,6 +125,10 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
         await signInWithEmailForAeoSession(email, password);
 
       await createAeoSession(idToken);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("aeo_authed_hint", String(Date.now()));
+        window.dispatchEvent(new Event("aeo-auth-changed"));
+      }
       trackGa4("aeo_auth_success", {source, method: mode});
       await onSuccess();
       onClose();
@@ -152,6 +160,33 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
         <p className="tiny auth-subtitle">
           Unlock hidden blocks, run more scans, and use credit-powered actions.
         </p>
+
+        <div className="auth-mode-switch">
+          <button
+            type="button"
+            className={`auth-mode-button${mode === "signup" ? " active" : ""}`}
+            onClick={() => setMode("signup")}
+            disabled={busy}
+          >
+            Create account
+          </button>
+          <button
+            type="button"
+            className={`auth-mode-button${mode === "signin" ? " active" : ""}`}
+            onClick={() => setMode("signin")}
+            disabled={busy}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            className={`auth-mode-button${mode === "reset" ? " active" : ""}`}
+            onClick={() => setMode("reset")}
+            disabled={busy}
+          >
+            Forgot password?
+          </button>
+        </div>
 
         <button type="button" className="cta-primary modal-google" onClick={() => void handleGoogle()} disabled={busy}>
           {busy ? "Please wait..." : "Continue with Google"}
@@ -194,21 +229,7 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
         </form>
 
         <div className="auth-links">
-          {mode !== "signin" ? (
-            <button type="button" className="auth-link" onClick={() => setMode("signin")} disabled={busy}>
-              Back to sign in
-            </button>
-          ) : null}
-          {mode !== "signup" ? (
-            <button type="button" className="auth-link" onClick={() => setMode("signup")} disabled={busy}>
-              Create account
-            </button>
-          ) : null}
-          {mode !== "reset" ? (
-            <button type="button" className="auth-link" onClick={() => setMode("reset")} disabled={busy}>
-              Forgot password?
-            </button>
-          ) : null}
+          {mode !== "signin" ? <button type="button" className="auth-link" onClick={() => setMode("signin")} disabled={busy}>Back to sign in</button> : null}
         </div>
 
         <p className="tiny auth-legal">

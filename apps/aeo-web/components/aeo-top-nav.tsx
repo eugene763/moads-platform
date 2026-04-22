@@ -35,13 +35,16 @@ export function AeoTopNav() {
 
   async function refreshSession() {
     try {
-      const [session, wallet] = await Promise.all([
-        apiRequest<SessionSnapshot>("/v1/me"),
-        apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary"),
-      ]);
+      const session = await apiRequest<SessionSnapshot>("/v1/me");
       setIsAuthed(true);
       setEmail(session.user.email);
-      setCredits(wallet.wallet.balance);
+
+      try {
+        const wallet = await apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary");
+        setCredits(wallet.wallet.balance);
+      } catch {
+        setCredits(null);
+      }
     } catch {
       setIsAuthed(false);
       setEmail(null);
@@ -50,10 +53,43 @@ export function AeoTopNav() {
   }
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const authHint = window.localStorage.getItem("aeo_authed_hint");
+      if (authHint) {
+        setIsAuthed(true);
+      }
+    }
+
     void refreshSession();
+
+    function onVisibility() {
+      if (!document.hidden) {
+        void refreshSession();
+      }
+    }
+
+    function onFocus() {
+      void refreshSession();
+    }
+
+    function onAuthChanged() {
+      void refreshSession();
+    }
+
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("aeo-auth-changed", onAuthChanged);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("aeo-auth-changed", onAuthChanged);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   async function handleAuthSuccess() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("aeo_authed_hint", String(Date.now()));
+    }
     await refreshSession();
     setAuthOpen(false);
   }
@@ -81,6 +117,9 @@ export function AeoTopNav() {
     setEmail(null);
     setCredits(null);
     setMenuOpen(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("aeo_authed_hint");
+    }
     window.location.href = "/";
   }
 

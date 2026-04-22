@@ -1656,15 +1656,16 @@ input {
   inset: 0;
   background: rgba(15, 16, 53, 0.42);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 16px;
+  padding: calc(88px + env(safe-area-inset-top, 0px)) 16px 24px;
+  overflow-y: auto;
   z-index: 500;
 }
 
 .modal-card {
   width: min(680px, 100%);
-  max-height: min(92vh, 760px);
+  max-height: min(calc(100vh - 120px), 760px);
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -1672,6 +1673,7 @@ input {
   box-shadow: var(--shadow-pop);
   padding: 22px;
   position: relative;
+  margin: 0 auto;
 }
 
 .packs-modal {
@@ -1697,6 +1699,30 @@ input {
 
 .auth-subtitle {
   margin: 0 0 14px;
+}
+
+.auth-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.auth-mode-button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-mode-button.active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
 }
 
 .modal-google {

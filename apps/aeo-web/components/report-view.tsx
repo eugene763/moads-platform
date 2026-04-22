@@ -174,16 +174,6 @@ export function ReportView({publicToken}: {publicToken: string}) {
     }
   }
 
-  function openPacksWithAuthGate(): void {
-    if (!isAuthed) {
-      setPendingPacksAfterAuth(true);
-      setAuthOpen(true);
-      return;
-    }
-
-    setPacksOpen(true);
-  }
-
   async function handleGenerateTips(): Promise<void> {
     if (!report) {
       return;
@@ -238,6 +228,14 @@ export function ReportView({publicToken}: {publicToken: string}) {
     } finally {
       setTipsBusy(false);
     }
+  }
+
+  async function handleUnblockAllTips(): Promise<void> {
+    if (!report) {
+      return;
+    }
+
+    await handleGenerateTips();
   }
 
   function handleFullSiteIntent(): void {
@@ -404,15 +402,12 @@ export function ReportView({publicToken}: {publicToken: string}) {
             </button>
           </div>
         ) : (
-            <div className="unlock-panel">
-              <p>Need deeper recommendations for this URL? Use 1 credit to unlock extended report depth.</p>
-              <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
-                Unblock all tips
-              </button>
-              <button type="button" className="cta-primary" onClick={() => void handleGenerateTips()} disabled={tipsBusy}>
-                {tipsBusy ? "Generating..." : "Get Tips to Boost Your AEO (1 credit)"}
-              </button>
-            </div>
+          <div className="unlock-panel">
+            <p>Need deeper recommendations for this URL? Use 1 credit to unlock extended report depth.</p>
+            <button type="button" className="cta-primary" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
+              {tipsBusy ? "Unblocking..." : "Unblock all tips"}
+            </button>
+          </div>
         )}
       </section>
 
@@ -510,8 +505,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
           ) : report.issues.length > visibleIssues.length ? (
             <div className="unlock-panel">
               <p>Use 1 credit to unlock full issue diagnostics for this site and priority actions.</p>
-              <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
-                Unblock all tips
+              <button type="button" className="cta-primary" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
+                {tipsBusy ? "Unblocking..." : "Unblock all tips"}
               </button>
             </div>
           ) : null}

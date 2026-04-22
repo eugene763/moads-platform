@@ -36,6 +36,12 @@ interface ScanDetail extends PublicScanReport {
   };
 }
 
+const AUTO_UNLOCK_KEY_PREFIX = "aeo_auto_unlock_tips_v1";
+
+function autoUnlockStorageKey(accountId: string): string {
+  return `${AUTO_UNLOCK_KEY_PREFIX}:${accountId}`;
+}
+
 function sortByDateDesc(scans: ScanItem[]): ScanItem[] {
   return [...scans].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
@@ -82,6 +88,7 @@ export function ScansView() {
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [selectedScanDetail, setSelectedScanDetail] = useState<ScanDetail | null>(null);
   const [queryApplied, setQueryApplied] = useState(false);
+  const [autoUnlockEnabled, setAutoUnlockEnabled] = useState(false);
 
   const groupedSites = useMemo(() => {
     const groups = new Map<string, {key: string; label: string; scans: ScanItem[]}>();
@@ -138,6 +145,10 @@ export function ScansView() {
       setSession(sessionSnapshot);
       setWalletBalance(wallet.wallet.balance);
       setScans(sortByDateDesc(scanList.scans));
+      if (typeof window !== "undefined") {
+        const enabled = window.localStorage.getItem(autoUnlockStorageKey(sessionSnapshot.account.id)) === "1";
+        setAutoUnlockEnabled(enabled);
+      }
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Failed to load scans workspace.";
       if (!/session|membership required|product membership/i.test(message)) {
@@ -148,6 +159,7 @@ export function ScansView() {
       setSelectedSiteKey(null);
       setSelectedScanId(null);
       setSelectedScanDetail(null);
+      setAutoUnlockEnabled(false);
     } finally {
       setLoading(false);
     }
@@ -210,6 +222,10 @@ export function ScansView() {
       try {
         const detail = await apiRequest<ScanDetail>(`/v1/aeo/scans/${selectedScan.scanId}`);
         setSelectedScanDetail(detail);
+        if (detail.aiTips?.tips?.length && session && typeof window !== "undefined") {
+          window.localStorage.setItem(autoUnlockStorageKey(session.account.id), "1");
+          setAutoUnlockEnabled(true);
+        }
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Failed to load selected scan.");
       }
@@ -293,6 +309,9 @@ export function ScansView() {
       return;
     }
 
+    const previousScansCount = scans.length;
+    const shouldAutoUnlock = autoUnlockEnabled || previousScansCount > 0;
+
     setScanBusy(true);
     setError(null);
 
@@ -303,6 +322,18 @@ export function ScansView() {
       });
 
       await apiRequest(`/v1/aeo/scans/${created.scanId}/claim`, {method: "POST"});
+
+      if (shouldAutoUnlock && walletBalance > 0) {
+        await apiRequest(`/v1/aeo/scans/${created.scanId}/generate-ai-tips`, {
+          method: "POST",
+          body: JSON.stringify({planCode: "free"}),
+        });
+        if (session && typeof window !== "undefined") {
+          window.localStorage.setItem(autoUnlockStorageKey(session.account.id), "1");
+          setAutoUnlockEnabled(true);
+        }
+      }
+
       await loadWorkspace();
 
       setSelectedSiteKey(candidateSiteKey);
@@ -330,8 +361,8 @@ export function ScansView() {
     setPacksOpen(true);
   }
 
-  async function handleGenerateTips(): Promise<void> {
-    if (!session || !selectedScan) {
+  async function unlockTipsForScan(scanId: string): Promise<void> {
+    if (!session) {
       return;
     }
 
@@ -344,18 +375,22 @@ export function ScansView() {
     setError(null);
 
     try {
-      await apiRequest(`/v1/aeo/scans/${selectedScan.scanId}/generate-ai-tips`, {
+      await apiRequest(`/v1/aeo/scans/${scanId}/generate-ai-tips`, {
         method: "POST",
         body: JSON.stringify({planCode: "free"}),
       });
 
       const [wallet, detail] = await Promise.all([
         apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary"),
-        apiRequest<ScanDetail>(`/v1/aeo/scans/${selectedScan.scanId}`),
+        apiRequest<ScanDetail>(`/v1/aeo/scans/${scanId}`),
       ]);
 
       setWalletBalance(wallet.wallet.balance);
       setSelectedScanDetail(detail);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(autoUnlockStorageKey(session.account.id), "1");
+      }
+      setAutoUnlockEnabled(true);
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Failed to generate tips.";
       if (/insufficient|credit/i.test(message)) {
@@ -366,6 +401,15 @@ export function ScansView() {
     } finally {
       setTipsBusy(false);
     }
+  }
+
+  async function handleUnblockAllTips(): Promise<void> {
+    if (!selectedScan) {
+      openPacks();
+      return;
+    }
+
+    await unlockTipsForScan(selectedScan.scanId);
   }
 
   if (loading) {
@@ -400,12 +444,15 @@ export function ScansView() {
     selectedScanDetail.report.topFixes :
     selectedScanDetail?.recommendations ?? [];
 
-  const visibleTopFixes = topFixes.slice(0, 5);
-  const topFixesPreview = topFixes[5] ?? null;
+  const tipsUnlocked = Boolean(selectedScanDetail?.aiTips?.tips?.length);
+  const topFixesVisibleLimit = tipsUnlocked ? topFixes.length : 5;
+  const visibleTopFixes = topFixes.slice(0, topFixesVisibleLimit);
+  const topFixesPreview = tipsUnlocked ? null : topFixes[5] ?? null;
 
   const issues = selectedScanDetail?.issues ?? [];
-  const visibleIssues = issues.slice(0, 5);
-  const issuesPreview = issues[5] ?? null;
+  const issuesVisibleLimit = tipsUnlocked ? issues.length : 5;
+  const visibleIssues = issues.slice(0, issuesVisibleLimit);
+  const issuesPreview = tipsUnlocked ? null : issues[5] ?? null;
 
   const aiTips = selectedScanDetail?.aiTips?.tips ?? [];
   const selectedUrl = normalizeUrlForDisplay(selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "");
@@ -414,7 +461,7 @@ export function ScansView() {
     <div className="dashboard-grid">
       <section className="panel full scans-form-panel">
         <div className="panel-header">
-          <h2>AEO site checker</h2>
+          <h2>AI DISCOVERY READINESS CHECK</h2>
           <span className="badge badge-score">{walletBalance} credits</span>
         </div>
         <form className="inline-scan-form" onSubmit={(event) => void runFullCheck(event)}>
@@ -430,7 +477,9 @@ export function ScansView() {
           <button type="submit" className="cta-primary" disabled={scanBusy}>
             {scanBusy ? "Scanning..." : "Run full check"}
           </button>
-          <button type="button" className="cta-ghost" onClick={openPacks}>Unblock all tips</button>
+          <button type="button" className="cta-ghost" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
+            {tipsBusy ? "Unblocking..." : "Unblock all tips"}
+          </button>
         </form>
         <p className="tiny">1 credit unlocks one site check for up to 5 pages in launch mode.</p>
       </section>
@@ -510,7 +559,9 @@ export function ScansView() {
               {topFixesPreview ? (
                 <div className="unlock-panel">
                   <p>1 credit unlocks full report depth for this site.</p>
-                  <button type="button" className="cta-primary" onClick={openPacks}>Unblock all tips</button>
+                  <button type="button" className="cta-primary" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
+                    {tipsBusy ? "Unblocking..." : "Unblock all tips"}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -545,14 +596,12 @@ export function ScansView() {
               {issuesPreview ? (
                 <div className="unlock-panel">
                   <p>1 credit unlocks full issue diagnostics for this site.</p>
-                  <button type="button" className="cta-primary" onClick={openPacks}>Unblock all tips</button>
+                  <button type="button" className="cta-primary" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
+                    {tipsBusy ? "Unblocking..." : "Unblock all tips"}
+                  </button>
                 </div>
               ) : null}
             </div>
-
-            <button type="button" className="cta-primary" onClick={() => void handleGenerateTips()} disabled={tipsBusy}>
-              {tipsBusy ? "Generating..." : "Get Tips to Boost Your AEO (1 credit)"}
-            </button>
 
             {aiTips.length ? (
               <div className="surface-card selected-scan-card">
