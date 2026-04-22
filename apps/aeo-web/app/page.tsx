@@ -15,7 +15,7 @@ const floatLogos = [
   {label: "Claude", src: "/logos/claude.svg", top: "68%", left: "81%", duration: "3.6s", delay: "1.5s"},
 ] as const;
 
-const tickerItems = [
+const allTickerItems = [
   {label: "Google AI Overview", src: "/logos/google-shopping.svg"},
   {label: "Walmart", src: "/logos/walmart.svg"},
   {label: "Perplexity", src: "/logos/perplexity.svg"},
@@ -27,7 +27,24 @@ const tickerItems = [
   {label: "Etsy", src: "/logos/etsy.svg"},
   {label: "Shopify", src: "/logos/shopify.svg"},
   {label: "ChatGPT Shopping", src: "/logos/chatgpt.svg"},
+  {label: "ChatGPT", src: "/logos/chatgpt.svg"},
+  {label: "Gemini", src: "/logos/gemini.svg"},
+  {label: "Grok", src: "/logos/grok.svg"},
+  {label: "DeepSeek", src: "/logos/deepseek.svg"},
 ] as const;
+
+const tickerVisibleOrder = [
+  "Claude",
+  "Gemini",
+  "ChatGPT",
+  "Gemini",
+  "Grok",
+  "DeepSeek",
+] as const;
+
+const tickerItems = tickerVisibleOrder
+  .map((label) => allTickerItems.find((item) => item.label === label))
+  .filter((item): item is typeof allTickerItems[number] => Boolean(item));
 
 const dimensionCards = [
   {
@@ -240,14 +257,14 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
-            <h1 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h1>
-            <h2 className="hero-main-h2">
+            <h2 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h2>
+            <p className="hero-main-h2">
               <span>Check if AI can read</span>
               <span><span className="accent-line">your site</span></span>
-            </h2>
-            <p className="hero-copy">
-              Free AEO checker and AEO visibility tool for fast page diagnostics and AI search visibility analysis.
             </p>
+            <h1 className="hero-copy hero-copy-h1">
+              Free AEO checker and AEO visibility tool for fast page diagnostics and AI search visibility analysis.
+            </h1>
 
             <div id="scan" className="scan-anchor">
               <ScanForm />
@@ -421,12 +438,12 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="final-cta-card">
             <p className="section-eyebrow section-eyebrow-light">Agency Support</p>
-            <h2>Want to improve your site for AEO? Request a rollout plan</h2>
+            <h2>Need help implementing AEO fixes?</h2>
             <p>
-              Our team can implement priority AEO fixes and build a growth plan for AI traffic to your site.
+              Submit your request and our team will deploy priority fixes to improve your visibility in ChatGPT and other LLM experiences.
             </p>
             <a className="cta-nav final-cta-button" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-              Request AEO help
+              Submit request
             </a>
           </div>
         </div>

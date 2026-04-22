@@ -4,7 +4,7 @@ import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
-import {explainIssue, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
+import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
@@ -253,13 +253,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
     window.location.href = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
   }
 
-  async function copyUrl(): Promise<void> {
-    if (!report) {
-      return;
-    }
-
-    const target = report.siteUrl || window.location.href;
-    await navigator.clipboard.writeText(target).catch(() => undefined);
+  function printReport(): void {
+    window.print();
   }
 
   async function shareResult(): Promise<void> {
@@ -362,7 +357,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
           <button type="button" className="cta-primary" onClick={handleFullSiteIntent} disabled={claimBusy || tipsBusy}>
             {claimBusy ? "Unlocking..." : "Scan all site pages"}
           </button>
-          <button type="button" className="cta-ghost" onClick={() => void copyUrl()}>Copy URL</button>
+          <button type="button" className="cta-ghost" onClick={printReport}>Print</button>
           <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
         </div>
       </section>
@@ -408,15 +403,15 @@ export function ReportView({publicToken}: {publicToken: string}) {
             </button>
           </div>
         ) : (
-          <div className="unlock-panel">
-            <p>Need deeper recommendations for this URL? Use 1 credit to unlock extended report depth.</p>
-            <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
-              Buy more credits
-            </button>
-            <button type="button" className="cta-primary" onClick={() => void handleGenerateTips()} disabled={tipsBusy}>
-              {tipsBusy ? "Generating..." : "Get Tips to Boost Your AEO (1 credit)"}
-            </button>
-          </div>
+            <div className="unlock-panel">
+              <p>Need deeper recommendations for this URL? Use 1 credit to unlock extended report depth.</p>
+              <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
+                Unblock all tips
+              </button>
+              <button type="button" className="cta-primary" onClick={() => void handleGenerateTips()} disabled={tipsBusy}>
+                {tipsBusy ? "Generating..." : "Get Tips to Boost Your AEO (1 credit)"}
+              </button>
+            </div>
         )}
       </section>
 
@@ -488,6 +483,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
                 <div>
                   <p className="list-title">{formatIssueTitle(issue.code)}</p>
                   <p className="tiny">{explainIssue(issue.code, issue.message)}</p>
+                  <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issue.code)}</p>
                 </div>
                 <span className={`badge ${priorityBadgeClass(issue.severity)}`}>{issue.severity}</span>
               </li>
@@ -497,6 +493,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
                 <div>
                   <p className="list-title">{formatIssueTitle(issuesPreview.code)}</p>
                   <p className="tiny">{explainIssue(issuesPreview.code, issuesPreview.message)}</p>
+                  <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issuesPreview.code)}</p>
                 </div>
                 <span className={`badge ${priorityBadgeClass(issuesPreview.severity)}`}>{issuesPreview.severity}</span>
               </li>
@@ -513,7 +510,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
             <div className="unlock-panel">
               <p>Use 1 credit to unlock full issue diagnostics for this site and priority actions.</p>
               <button type="button" className="cta-primary" onClick={openPacksWithAuthGate}>
-                Buy more credits
+                Unblock all tips
               </button>
             </div>
           ) : null}
@@ -541,8 +538,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
       ) : null}
 
       <section className="section-block lead-footer lead-footer-light">
-        <h2>Want us to implement these improvements for you?</h2>
-        <p>Submit your request and our team will help deploy the fixes to improve your visibility in ChatGPT and other LLM experiences.</p>
+        <h2>Need help implementing AEO fixes?</h2>
+        <p>Submit your request and our team will deploy priority fixes to improve your visibility in ChatGPT and other LLM experiences.</p>
         <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
           Submit request
         </a>

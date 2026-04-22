@@ -19,8 +19,24 @@ const ISSUE_EXPLANATIONS: Record<string, string> = {
     "No sitemap was detected, which can slow discovery for deeper pages. Add and maintain a valid sitemap.xml so crawlers can map your content quickly.",
 };
 
+const ISSUE_ACTIONS: Record<string, string> = {
+  canonical_missing: "Set one canonical URL for this page and keep it consistent across duplicate variants.",
+  aggregate_rating_missing: "Add valid Product/AggregateRating JSON-LD with ratingValue and ratingCount or reviewCount.",
+  qa_pairs_low: "Add at least 6 concise question-answer pairs that match real buyer intent.",
+  direct_answer_quality_low: "Place a clear 40-80 word direct answer immediately under each question heading.",
+  structured_answer_blocks_missing: "Use bullets, steps, or simple tables inside answer sections for clearer parsing.",
+  llm_guidance_missing: "Publish llms.txt or a machine guidance page and reference it from robots or sitemap context.",
+  meta_description_missing: "Write a specific meta description that states what the page offers and who it helps.",
+  robots_missing: "Create robots.txt with User-agent rules and a sitemap URL for cleaner crawler guidance.",
+  sitemap_missing: "Publish sitemap.xml and keep it updated so crawlers can discover key URLs faster.",
+};
+
 export function explainIssue(code: string, fallbackMessage: string): string {
   return ISSUE_EXPLANATIONS[code] ?? fallbackMessage;
+}
+
+export function issueAction(code: string): string {
+  return ISSUE_ACTIONS[code] ?? "Apply the recommended fix in this block and rerun the scan to validate the improvement.";
 }
 
 export function toSiteLabel(siteUrl: string): string {

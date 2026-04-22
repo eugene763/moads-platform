@@ -4,7 +4,7 @@ import {useRouter} from "next/navigation";
 import {FormEvent, useEffect, useMemo, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
-import {explainIssue, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
+import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 
@@ -429,7 +429,7 @@ export function ScansView() {
           <button type="submit" className="cta-primary" disabled={scanBusy}>
             {scanBusy ? "Scanning..." : "Run full check"}
           </button>
-          <button type="button" className="cta-ghost" onClick={openPacks}>Buy more credits</button>
+          <button type="button" className="cta-ghost" onClick={openPacks}>Unblock all tips</button>
         </form>
         <p className="tiny">Launch preview: this action currently runs a page-level scan and preserves your site workspace continuity.</p>
       </section>
@@ -481,24 +481,6 @@ export function ScansView() {
               </div>
             </article>
 
-            <ul className="list scan-list compact-list">
-              {selectedSiteScans.map((scan) => (
-                <li key={scan.scanId}>
-                  <button
-                    type="button"
-                    className={`scan-item${selectedScan.scanId === scan.scanId ? " active" : ""}`}
-                    onClick={() => setSelectedScanId(scan.scanId)}
-                  >
-                    <span className="scan-item-title">{normalizeUrlForDisplay(scan.siteUrl)}</span>
-                    <span className="scan-item-side">
-                      <span className={`score-pill ${scoreToneClass(scan.publicScore)}`}>{scan.publicScore ?? "--"}</span>
-                      <span className="tiny">{new Date(scan.createdAt).toLocaleDateString()}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-
             <div className="surface-card selected-scan-card">
               <div className="panel-header compact">
                 <h3>Top Fixes</h3>
@@ -527,7 +509,7 @@ export function ScansView() {
               {topFixesPreview ? (
                 <div className="unlock-panel">
                   <p>1 credit unlocks full report depth for this site.</p>
-                  <button type="button" className="cta-primary" onClick={openPacks}>Buy more credits</button>
+                  <button type="button" className="cta-primary" onClick={openPacks}>Unblock all tips</button>
                 </div>
               ) : null}
             </div>
@@ -543,6 +525,7 @@ export function ScansView() {
                     <div>
                       <p className="list-title">{formatIssueTitle(issue.code)}</p>
                       <p className="tiny">{explainIssue(issue.code, issue.message)}</p>
+                      <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issue.code)}</p>
                     </div>
                     <span className={`badge ${priorityBadgeClass(issue.severity)}`}>{issue.severity}</span>
                   </li>
@@ -552,6 +535,7 @@ export function ScansView() {
                     <div>
                       <p className="list-title">{formatIssueTitle(issuesPreview.code)}</p>
                       <p className="tiny">{explainIssue(issuesPreview.code, issuesPreview.message)}</p>
+                      <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issuesPreview.code)}</p>
                     </div>
                     <span className={`badge ${priorityBadgeClass(issuesPreview.severity)}`}>{issuesPreview.severity}</span>
                   </li>
@@ -560,7 +544,7 @@ export function ScansView() {
               {issuesPreview ? (
                 <div className="unlock-panel">
                   <p>1 credit unlocks full issue diagnostics for this site.</p>
-                  <button type="button" className="cta-primary" onClick={openPacks}>Buy more credits</button>
+                  <button type="button" className="cta-primary" onClick={openPacks}>Unblock all tips</button>
                 </div>
               ) : null}
             </div>

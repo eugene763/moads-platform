@@ -42,6 +42,7 @@
 
 html {
   scroll-behavior: smooth;
+  font-size: 18px;
 }
 
 body {
@@ -104,7 +105,7 @@ input {
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid transparent;
   padding: 0 32px;
-  height: 60px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -126,7 +127,7 @@ input {
 .brand-logo-image {
   display: block;
   width: auto;
-  height: 52px;
+  height: 58px;
   object-fit: contain;
 }
 
@@ -275,6 +276,11 @@ input {
   max-width: 620px;
   margin: 0 auto 28px;
   line-height: 1.55;
+}
+
+.hero-copy-h1 {
+  font-family: var(--font-body), Inter, "Segoe UI", sans-serif;
+  font-weight: 500;
 }
 
 .scan-form {
@@ -550,6 +556,11 @@ input {
   white-space: nowrap;
 }
 
+.ticker-item::before,
+.ticker-item::after {
+  content: none !important;
+}
+
 .ticker-logo {
   width: 18px;
   height: 18px;
@@ -558,11 +569,7 @@ input {
 }
 
 .ticker-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #a3a9cb;
-  flex-shrink: 0;
+  display: none;
 }
 
 .how-section,
@@ -606,7 +613,7 @@ input {
   content: "";
   position: absolute;
   z-index: 0;
-  top: 76px;
+  top: 96px;
   left: calc(33.33% - 12px);
   width: calc(33.33% + 24px);
   border-top: 2px dashed #c8cae8;
@@ -1062,7 +1069,7 @@ input {
 }
 
 .faq-answer-bubble {
-  background: #ececef;
+  background: #ffffff;
   color: #101112;
 }
 
@@ -1075,7 +1082,7 @@ input {
   height: 0;
   border-right: 20px solid transparent;
   border-left: 0 solid transparent;
-  border-top: 18px solid #ececef;
+  border-top: 18px solid #ffffff;
 }
 
 .faq-question-bubble h3,
@@ -1352,6 +1359,10 @@ input {
   font-weight: 700;
 }
 
+.issue-action {
+  color: #3f4466;
+}
+
 .prompt-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1593,7 +1604,7 @@ input {
 .burger-panel {
   position: absolute;
   right: 20px;
-  top: 58px;
+  top: 68px;
   min-width: 260px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -1885,7 +1896,7 @@ input {
   .top-nav {
     padding: 0 16px;
     height: auto;
-    min-height: 60px;
+    min-height: 72px;
     flex-wrap: wrap;
   }
 
