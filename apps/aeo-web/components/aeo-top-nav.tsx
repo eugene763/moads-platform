@@ -5,6 +5,7 @@ import Link from "next/link";
 import {useEffect, useState} from "react";
 
 import {apiRequest} from "../lib/api";
+import {signOutFromAeoFirebase} from "../lib/firebase";
 import {AuthModal} from "./auth-modal";
 
 type AuthMode = "signin" | "signup";
@@ -63,6 +64,26 @@ export function AeoTopNav() {
     setMenuOpen(false);
   }
 
+  async function handleLogout(): Promise<void> {
+    try {
+      await apiRequest("/v1/auth/session-logout", {method: "POST"});
+    } catch {
+      // Ignore stale session errors and continue local sign-out.
+    }
+
+    try {
+      await signOutFromAeoFirebase();
+    } catch {
+      // Ignore local firebase sign-out errors.
+    }
+
+    setIsAuthed(false);
+    setEmail(null);
+    setCredits(null);
+    setMenuOpen(false);
+    window.location.href = "/";
+  }
+
   return (
     <header className={`top-nav${scrolled ? " scrolled" : ""}`}>
       <Link href="/" className="brand brand-logo" aria-label="MO AEO CHECKER home">
@@ -115,6 +136,9 @@ export function AeoTopNav() {
                 <p className="tiny">{email ?? "signed user"}</p>
                 <p className="tiny">{credits ?? "--"} credits</p>
                 <Link href="/dashboard#billing" onClick={() => setMenuOpen(false)}>Buy more credits</Link>
+                <button type="button" className="auth-link" onClick={() => void handleLogout()}>
+                  Log out
+                </button>
               </>
             ) : (
               <div className="burger-auth-actions">

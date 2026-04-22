@@ -3,6 +3,7 @@
 import {useMemo, useState} from "react";
 
 interface FeatureCard {
+  label: string;
   value: string;
   tone: "brand" | "accent" | "warning" | "danger";
 }
@@ -19,51 +20,51 @@ interface FeatureTabItem {
 const FEATURE_TABS: FeatureTabItem[] = [
   {
     id: "visibility",
-    label: "Real Page Signals",
-    title: "Real Page Signals",
+    label: "Data-Driven AEO Score",
+    title: "Data-Driven AEO Score",
     description:
-      "We check the page itself - not just model guesses. Structure, schema, visible facts, and trust signals go into one explainable score.",
+      "A fast page-level check built on real page signals. We parse HTML, headings, schema, and visible trust elements to show what AI can read and where discovery breaks.",
     cards: [
-      {value: "HTML", tone: "accent"},
-      {value: "SCHEMA", tone: "brand"},
-      {value: "FACTS", tone: "warning"},
+      {label: "REAL SIGNALS", value: "HTML + JSON-LD", tone: "accent"},
+      {label: "EXPLAINABLE", value: "No black box", tone: "brand"},
+      {label: "PAGE-LEVEL", value: "Fast to run", tone: "warning"},
     ],
   },
   {
     id: "optimization",
-    label: "Practical Fixes",
-    title: "Practical Fixes",
+    label: "Clear Next Steps",
+    title: "Clear Next Steps",
     description:
-      "See what to fix first. Each recommendation is tied to a real issue found on the page.",
+      "Every issue maps to a visible signal and a concrete fix. Start with deterministic improvements before moving into deeper AEO work.",
     cards: [
-      {value: "ACCESS", tone: "danger"},
-      {value: "CLARITY", tone: "warning"},
-      {value: "TRUST", tone: "accent"},
+      {label: "CRAWL", value: "Access issues", tone: "danger"},
+      {label: "CLARITY", value: "Content structure", tone: "warning"},
+      {label: "TRUST", value: "Schema and policy signals", tone: "accent"},
     ],
   },
   {
     id: "marketplace",
-    label: "AI Tips for Marketplaces",
-    title: "AI Tips for Marketplaces",
+    label: "Marketplace AI Tips",
+    title: "AI Tips for Marketplace Pages",
     description:
-      "Planned recommendations for product and category pages on marketplace surfaces.",
+      "Planned guidance for product and category pages across major commerce surfaces. Focus: stronger AI-readable copy, cleaner structure, and better trust signals.",
     cards: [
-      {value: "PRODUCT", tone: "accent"},
-      {value: "CATEGORY", tone: "brand"},
-      {value: "REVIEWS", tone: "warning"},
+      {label: "PRODUCT COPY", value: "AI-readable wording", tone: "accent"},
+      {label: "STRUCTURE", value: "Cleaner PDP signals", tone: "brand"},
+      {label: "TRUST", value: "Policy and review context", tone: "warning"},
     ],
     comingSoon: true,
   },
   {
     id: "competitive",
-    label: "Marketplace Score",
-    title: "Marketplace Score",
+    label: "Marketplace AEO Score",
+    title: "Marketplace AEO Score",
     description:
-      "A future score and tip layer for marketplace discovery quality.",
+      "A future score layer for marketplace presence. Designed to combine structured page signals with marketplace-specific tips for product discovery.",
     cards: [
-      {value: "SCORE", tone: "danger"},
-      {value: "SIGNALS", tone: "accent"},
-      {value: "NEXT STEPS", tone: "brand"},
+      {label: "CATEGORY FIT", value: "Discovery signals", tone: "danger"},
+      {label: "CONSISTENCY", value: "Feed and content quality", tone: "accent"},
+      {label: "TIPS", value: "Next actions by page type", tone: "brand"},
     ],
     comingSoon: true,
   },
@@ -78,7 +79,7 @@ export function FeatureTabs() {
 
   return (
     <div className="features-layout">
-      <div className="feature-tabs" role="tablist" aria-label="Why MO CHECKER">
+      <div className="feature-tabs" role="tablist" aria-label="Why MO AEO CHECKER">
         {FEATURE_TABS.map((item) => (
           <button
             key={item.id}
@@ -104,7 +105,8 @@ export function FeatureTabs() {
 
         <div className="feature-widget">
           {activeTab.cards.map((card, index) => (
-            <article key={`${card.value}-${index}`} className={`feature-widget-card tone-${card.tone}`}>
+            <article key={`${card.label}-${index}`} className={`feature-widget-card tone-${card.tone}`}>
+              <p className="feature-widget-label">{card.label}</p>
               <p className="feature-widget-value">{card.value}</p>
             </article>
           ))}

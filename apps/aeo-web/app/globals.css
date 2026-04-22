@@ -49,7 +49,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-body), Inter, "Segoe UI", sans-serif;
+  font-family: "Coolvetica", var(--font-body), "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -279,7 +279,7 @@ input {
 }
 
 .hero-copy-h1 {
-  font-family: var(--font-body), Inter, "Segoe UI", sans-serif;
+  font-family: "Coolvetica", var(--font-body), "Segoe UI", sans-serif;
   font-weight: 500;
 }
 
@@ -527,9 +527,9 @@ input {
 
 .ticker-track {
   display: flex;
-  gap: 28px;
+  gap: 36px;
   width: max-content;
-  animation: ticker-scroll 28s linear infinite;
+  animation: ticker-scroll 34s linear infinite;
 }
 
 .platform-ticker:hover .ticker-track {
@@ -798,6 +798,10 @@ input {
   border-radius: var(--radius);
   padding: 18px;
   border: 1px solid var(--line);
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .feature-widget-card.tone-brand {
@@ -818,17 +822,19 @@ input {
 
 .feature-widget-label {
   margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 0.8rem;
+  color: var(--ink);
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  font-weight: 700;
 }
 
 .feature-widget-value {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--ink);
+  font-size: 1.02rem;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .dimensions-grid {
@@ -1147,6 +1153,10 @@ input {
 
 .dashboard-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-wide {
+  grid-column: 1 / -1;
 }
 
 .panel,
@@ -1664,6 +1674,10 @@ input {
   position: relative;
 }
 
+.packs-modal {
+  overflow: visible;
+}
+
 .modal-close {
   position: absolute;
   top: 12px;
@@ -1767,6 +1781,7 @@ input {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  margin-top: 14px;
 }
 
 .pack-item {
@@ -1793,9 +1808,8 @@ input {
   color: var(--muted);
 }
 
-.pack-item.popular {
-  border-color: var(--brand);
-  box-shadow: var(--shadow-card);
+.pack-item.pack-disabled {
+  opacity: 0.7;
 }
 
 .panel-header.compact {
@@ -1929,6 +1943,10 @@ input {
   }
 
   .panel.full {
+    grid-column: span 1;
+  }
+
+  .dashboard-wide {
     grid-column: span 1;
   }
 

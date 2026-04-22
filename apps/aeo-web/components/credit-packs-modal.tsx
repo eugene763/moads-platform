@@ -11,6 +11,7 @@ interface PackItem {
   creditsAmount: number;
   amountMinor: number;
   currencyCode: string;
+  checkoutConfigured?: boolean;
 }
 
 interface CreditPacksModalProps {
@@ -64,6 +65,12 @@ export function CreditPacksModal({open, onClose, source}: CreditPacksModalProps)
   }, [open, onClose]);
 
   async function startCheckout(priceId: string): Promise<void> {
+    const selectedPack = packs.find((pack) => pack.priceId === priceId);
+    if (selectedPack?.checkoutConfigured === false) {
+      setError("Checkout for this pack is not available yet. Please try another pack or retry shortly.");
+      return;
+    }
+
     setCheckoutBusy(priceId);
     setError(null);
 
@@ -82,7 +89,12 @@ export function CreditPacksModal({open, onClose, source}: CreditPacksModalProps)
       trackGa4("aeo_pack_checkout_started", {source, price_id: priceId});
       window.location.href = response.redirectUrl;
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Checkout failed.");
+      const message = requestError instanceof Error ? requestError.message : "Checkout failed.";
+      if (/not configured|unavailable/i.test(message)) {
+        setError("Checkout for this pack is not available yet. Please retry in a few minutes.");
+      } else {
+        setError(message);
+      }
       setCheckoutBusy(null);
     }
   }
@@ -110,9 +122,8 @@ export function CreditPacksModal({open, onClose, source}: CreditPacksModalProps)
           <div className="skeleton-pulse" />
         ) : (
           <div className="packs-grid">
-            {packs.map((pack, index) => (
-              <article key={pack.priceId} className={`pack-item${index === 1 ? " popular" : ""}`}>
-                {index === 1 ? <span className="popular-badge">Most Popular</span> : null}
+            {packs.map((pack) => (
+              <article key={pack.priceId} className={`pack-item${pack.checkoutConfigured === false ? " pack-disabled" : ""}`}>
                 <h4>{pack.name}</h4>
                 <p className="pack-price">
                   ${(pack.amountMinor / 100).toFixed(2)}
@@ -124,15 +135,15 @@ export function CreditPacksModal({open, onClose, source}: CreditPacksModalProps)
                   type="button"
                   className="cta-primary"
                   onClick={() => void startCheckout(pack.priceId)}
-                  disabled={checkoutBusy === pack.priceId}
+                  disabled={checkoutBusy === pack.priceId || pack.checkoutConfigured === false}
                 >
-                  {checkoutBusy === pack.priceId ? "Opening..." : "Buy pack"}
+                  {checkoutBusy === pack.priceId ? "Opening..." : pack.checkoutConfigured === false ? "Unavailable" : "Buy pack"}
                 </button>
               </article>
             ))}
           </div>
         )}
-        {error ? <p className="error-text">{error}</p> : null}
+        {error ? <p className="tiny">{error}</p> : null}
       </section>
     </div>
   );

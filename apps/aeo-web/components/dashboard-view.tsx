@@ -5,6 +5,7 @@ import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest} from "../lib/api";
 import {scoreToneClass, statusToneClass, toSiteLabel} from "../lib/aeo-ui";
+import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 
@@ -162,6 +163,8 @@ export function DashboardView() {
           </div>
         )}
       </section>
+
+      <AgencySupportBlock className="dashboard-wide" />
 
       {error ? <p className="error-text">{error}</p> : null}
       <AuthModal

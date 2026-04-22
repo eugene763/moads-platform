@@ -8,6 +8,7 @@ import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statu
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
+import {AgencySupportBlock} from "./agency-support-block";
 
 interface ScanDetail extends PublicScanReport {
   aiTips?: {
@@ -357,8 +358,8 @@ export function ReportView({publicToken}: {publicToken: string}) {
           <button type="button" className="cta-primary" onClick={handleFullSiteIntent} disabled={claimBusy || tipsBusy}>
             {claimBusy ? "Unlocking..." : "Scan all site pages"}
           </button>
-          <button type="button" className="cta-ghost" onClick={printReport}>Print</button>
           <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
+          <button type="button" className="cta-ghost" onClick={printReport}>Print</button>
         </div>
       </section>
 
@@ -537,13 +538,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
         </section>
       ) : null}
 
-      <section className="section-block lead-footer lead-footer-light">
-        <h2>Need help implementing AEO fixes?</h2>
-        <p>Submit your request and our team will deploy priority fixes to improve your visibility in ChatGPT and other LLM experiences.</p>
-        <a className="cta-nav" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-          Submit request
-        </a>
-      </section>
+      <AgencySupportBlock />
 
       {error ? <p className="error-text">{error}</p> : null}
       <AuthModal

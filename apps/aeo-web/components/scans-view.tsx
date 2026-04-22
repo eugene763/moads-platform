@@ -5,6 +5,7 @@ import {FormEvent, useEffect, useMemo, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
+import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 
@@ -413,7 +414,7 @@ export function ScansView() {
     <div className="dashboard-grid">
       <section className="panel full scans-form-panel">
         <div className="panel-header">
-          <h2>Run full check</h2>
+          <h2>AEO site checker</h2>
           <span className="badge badge-score">{walletBalance} credits</span>
         </div>
         <form className="inline-scan-form" onSubmit={(event) => void runFullCheck(event)}>
@@ -431,13 +432,13 @@ export function ScansView() {
           </button>
           <button type="button" className="cta-ghost" onClick={openPacks}>Unblock all tips</button>
         </form>
-        <p className="tiny">Launch preview: this action currently runs a page-level scan and preserves your site workspace continuity.</p>
+        <p className="tiny">1 credit unlocks one site check for up to 5 pages in launch mode.</p>
       </section>
 
       <section className="panel full">
         <div className="panel-header">
           <h2>Scans</h2>
-          <span className="badge badge-score">{scans.length} reports</span>
+          <span className="badge badge-score">{scans.length} scans</span>
         </div>
 
         <div className="site-tabs tabs-wrap-two-rows">
@@ -577,6 +578,8 @@ export function ScansView() {
           </div>
         )}
       </section>
+
+      <AgencySupportBlock className="dashboard-wide" />
 
       {error ? <p className="error-text">{error}</p> : null}
       <AuthModal

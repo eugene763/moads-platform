@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   sendPasswordResetEmail,
+  signOut as firebaseSignOut,
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
@@ -105,4 +106,12 @@ export async function getAeoSessionIdToken(): Promise<string> {
   }
 
   return await currentUser.getIdToken(true);
+}
+
+export async function signOutFromAeoFirebase(): Promise<void> {
+  const app = ensureFirebaseApp();
+  const auth = getAuth(app);
+  if (auth.currentUser) {
+    await firebaseSignOut(auth);
+  }
 }

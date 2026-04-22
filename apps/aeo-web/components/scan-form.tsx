@@ -28,6 +28,7 @@ export function ScanForm() {
   const [requiresAuth, setRequiresAuth] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localScanCount, setLocalScanCount] = useState(0);
 
   async function refreshSession(): Promise<void> {
     try {
@@ -37,6 +38,11 @@ export function ScanForm() {
       setIsAuthed(false);
     }
   }
+
+  useEffect(() => {
+    const count = Number(globalThis.localStorage?.getItem(SCAN_COUNT_KEY) ?? "0");
+    setLocalScanCount(Number.isFinite(count) ? count : 0);
+  }, []);
 
   useEffect(() => {
     void refreshSession();
@@ -82,7 +88,9 @@ export function ScanForm() {
       });
 
       if (!isAuthed) {
-        globalThis.localStorage?.setItem(SCAN_COUNT_KEY, String(currentCount + 1));
+        const nextCount = currentCount + 1;
+        globalThis.localStorage?.setItem(SCAN_COUNT_KEY, String(nextCount));
+        setLocalScanCount(nextCount);
       }
 
       router.push(`/r/${result.publicToken}`);
@@ -110,7 +118,7 @@ export function ScanForm() {
           spellCheck={false}
         />
         <button className="cta-primary" type="submit" disabled={loading}>
-          {loading ? "Scanning..." : "Run free check"}
+          {loading ? "Scanning..." : (isAuthed || localScanCount > 0 ? "Run check" : "Run free check")}
         </button>
       </div>
       <div className="hero-trust" aria-label="Trust signals">

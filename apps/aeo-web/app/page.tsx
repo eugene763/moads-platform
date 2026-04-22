@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import {AeoTopNav} from "../components/aeo-top-nav";
+import {AgencySupportBlock} from "../components/agency-support-block";
 import {FeatureTabs} from "../components/feature-tabs";
 import {ScanForm} from "../components/scan-form";
 
@@ -15,36 +16,16 @@ const floatLogos = [
   {label: "Claude", src: "/logos/claude.svg", top: "68%", left: "81%", duration: "3.6s", delay: "1.5s"},
 ] as const;
 
-const allTickerItems = [
-  {label: "Google AI Overview", src: "/logos/google-shopping.svg"},
-  {label: "Walmart", src: "/logos/walmart.svg"},
-  {label: "Perplexity", src: "/logos/perplexity.svg"},
-  {label: "TikTok Shop", src: "/logos/tiktok.svg"},
-  {label: "eBay", src: "/logos/ebay.svg"},
+const tickerBaseItems = [
   {label: "Claude", src: "/logos/claude.svg"},
-  {label: "Shopee", src: "/logos/shopee.svg"},
-  {label: "Gemini Shopping", src: "/logos/gemini.svg"},
-  {label: "Etsy", src: "/logos/etsy.svg"},
-  {label: "Shopify", src: "/logos/shopify.svg"},
-  {label: "ChatGPT Shopping", src: "/logos/chatgpt.svg"},
+  {label: "Gemini", src: "/logos/gemini.svg"},
   {label: "ChatGPT", src: "/logos/chatgpt.svg"},
   {label: "Gemini", src: "/logos/gemini.svg"},
   {label: "Grok", src: "/logos/grok.svg"},
   {label: "DeepSeek", src: "/logos/deepseek.svg"},
 ] as const;
 
-const tickerVisibleOrder = [
-  "Claude",
-  "Gemini",
-  "ChatGPT",
-  "Gemini",
-  "Grok",
-  "DeepSeek",
-] as const;
-
-const tickerItems = tickerVisibleOrder
-  .map((label) => allTickerItems.find((item) => item.label === label))
-  .filter((item): item is typeof allTickerItems[number] => Boolean(item));
+const tickerItems = [...tickerBaseItems, ...tickerBaseItems, ...tickerBaseItems];
 
 const dimensionCards = [
   {
@@ -257,13 +238,13 @@ export default function HomePage() {
 
         <div className="page-shell hero-content">
           <div className="section-inner">
-            <h2 className="hero-eyebrow-pill">FREE AEO-CHECK UP</h2>
+            <h2 className="hero-eyebrow-pill">FREE AEO CHECK UP</h2>
             <p className="hero-main-h2">
               <span>Check if AI can read</span>
               <span><span className="accent-line">your site</span></span>
             </p>
             <h1 className="hero-copy hero-copy-h1">
-              Free AEO checker and AEO visibility tool for fast page diagnostics and AI search visibility analysis.
+              AEO visibility tool for fast page diagnostics and AI search visibility analysis.
             </h1>
 
             <div id="scan" className="scan-anchor">
@@ -340,7 +321,7 @@ export default function HomePage() {
       <section className="features-section">
         <div className="page-shell">
           <div className="section-inner">
-            <p className="section-eyebrow">Why MO CHECKER</p>
+            <p className="section-eyebrow">Why MO AEO CHECKER</p>
             <h2 className="section-title">AEO checks built on real signals, with clear next steps</h2>
             <FeatureTabs />
           </div>
@@ -436,16 +417,7 @@ export default function HomePage() {
 
       <section className="final-cta">
         <div className="page-shell">
-          <div className="final-cta-card">
-            <p className="section-eyebrow section-eyebrow-light">Agency Support</p>
-            <h2>Need help implementing AEO fixes?</h2>
-            <p>
-              Submit your request and our team will deploy priority fixes to improve your visibility in ChatGPT and other LLM experiences.
-            </p>
-            <a className="cta-nav final-cta-button" href="https://moads.agency/#form" target="_blank" rel="noreferrer">
-              Submit request
-            </a>
-          </div>
+          <AgencySupportBlock className="final-cta-card" />
         </div>
       </section>
     </main>
