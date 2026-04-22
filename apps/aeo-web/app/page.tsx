@@ -324,7 +324,7 @@ export default function HomePage() {
         <div className="page-shell">
           <div className="section-inner">
             <p className="section-eyebrow">Why MO CHECKER</p>
-            <h2 className="section-title">AEO analysis tools with clear next steps, not noise</h2>
+            <h2 className="section-title">AEO checks built on real signals, with clear next steps</h2>
             <FeatureTabs />
           </div>
         </div>

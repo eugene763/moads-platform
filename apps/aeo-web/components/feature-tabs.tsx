@@ -3,7 +3,6 @@
 import {useMemo, useState} from "react";
 
 interface FeatureCard {
-  label: string;
   value: string;
   tone: "brand" | "accent" | "warning" | "danger";
 }
@@ -14,56 +13,59 @@ interface FeatureTabItem {
   title: string;
   description: string;
   cards: FeatureCard[];
+  comingSoon?: boolean;
 }
 
 const FEATURE_TABS: FeatureTabItem[] = [
   {
     id: "visibility",
-    label: "AI Visibility Intelligence",
-    title: "AI Visibility Intelligence",
+    label: "Real Page Signals",
+    title: "Real Page Signals",
     description:
-      "See exactly how AI assistants and answer engines interpret your brand. Track mentions, citations, and discovery patterns across the surfaces that matter most.",
+      "We check the page itself - not just model guesses. Structure, schema, visible facts, and trust signals go into one explainable score.",
     cards: [
-      {label: "AI Mentions", value: "24 this month", tone: "accent"},
-      {label: "Citations", value: "8 linked answers", tone: "brand"},
-      {label: "Confidence", value: "Measured signals", tone: "warning"},
+      {value: "HTML", tone: "accent"},
+      {value: "SCHEMA", tone: "brand"},
+      {value: "FACTS", tone: "warning"},
     ],
   },
   {
     id: "optimization",
-    label: "Actionable Optimization",
-    title: "Actionable Optimization",
+    label: "Practical Fixes",
+    title: "Practical Fixes",
     description:
-      "Every score comes with concrete fixes you can implement immediately. Prioritize high-impact improvements before you spend on broader AEO or marketplace work.",
+      "See what to fix first. Each recommendation is tied to a real issue found on the page.",
     cards: [
-      {label: "High Priority", value: "Schema consistency", tone: "danger"},
-      {label: "Medium Priority", value: "Answer blocks", tone: "warning"},
-      {label: "Quick Win", value: "Meta cleanup", tone: "accent"},
+      {value: "ACCESS", tone: "danger"},
+      {value: "CLARITY", tone: "warning"},
+      {value: "TRUST", tone: "accent"},
     ],
   },
   {
     id: "marketplace",
-    label: "Marketplace Scale",
-    title: "Marketplace Scale",
+    label: "AI Tips for Marketplaces",
+    title: "AI Tips for Marketplaces",
     description:
-      "Use one decision surface for your storefront and marketplace presence. Monitor readiness, identify missing signals, and keep discovery consistent across channels.",
+      "Planned recommendations for product and category pages on marketplace surfaces.",
     cards: [
-      {label: "Shopify", value: "Ready", tone: "accent"},
-      {label: "Amazon", value: "Upcoming adapter", tone: "brand"},
-      {label: "TikTok Shop", value: "Launch queue", tone: "warning"},
+      {value: "PRODUCT", tone: "accent"},
+      {value: "CATEGORY", tone: "brand"},
+      {value: "REVIEWS", tone: "warning"},
     ],
+    comingSoon: true,
   },
   {
     id: "competitive",
-    label: "Competitive Intelligence",
-    title: "Competitive Intelligence",
+    label: "Marketplace Score",
+    title: "Marketplace Score",
     description:
-      "Understand where competitors outrank you in citations, trust signals, and structured data quality before you commit to deeper monitoring packages.",
+      "A future score and tip layer for marketplace discovery quality.",
     cards: [
-      {label: "Gap Signal", value: "Schema depth", tone: "danger"},
-      {label: "Opportunity", value: "Answer formatting", tone: "accent"},
-      {label: "Watchlist", value: "Competitor velocity", tone: "brand"},
+      {value: "SCORE", tone: "danger"},
+      {value: "SIGNALS", tone: "accent"},
+      {value: "NEXT STEPS", tone: "brand"},
     ],
+    comingSoon: true,
   },
 ];
 
@@ -81,27 +83,28 @@ export function FeatureTabs() {
           <button
             key={item.id}
             type="button"
-            className={`feature-tab${item.id === activeTab.id ? " active" : ""}`}
+            className={`feature-tab${item.id === activeTab.id ? " active" : ""}${item.comingSoon ? " coming-soon" : ""}`}
             onClick={() => setActiveId(item.id)}
             role="tab"
             aria-selected={item.id === activeTab.id}
           >
             {item.label}
+            {item.comingSoon ? <span className="coming-soon-pill">Coming soon</span> : null}
           </button>
         ))}
       </div>
 
-      <div className="feature-content" role="tabpanel" aria-live="polite">
+      <div className={`feature-content${activeTab.comingSoon ? " coming-soon" : ""}`} role="tabpanel" aria-live="polite">
         <div className="feature-content-title">
           <span className="feature-dot" />
           <span>{activeTab.title}</span>
+          {activeTab.comingSoon ? <span className="coming-soon-pill">Coming soon</span> : null}
         </div>
         <p>{activeTab.description}</p>
 
         <div className="feature-widget">
-          {activeTab.cards.map((card) => (
-            <article key={card.label} className={`feature-widget-card tone-${card.tone}`}>
-              <p className="feature-widget-label">{card.label}</p>
+          {activeTab.cards.map((card, index) => (
+            <article key={`${card.value}-${index}`} className={`feature-widget-card tone-${card.tone}`}>
               <p className="feature-widget-value">{card.value}</p>
             </article>
           ))}

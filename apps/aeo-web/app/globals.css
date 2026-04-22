@@ -689,6 +689,10 @@ input {
   border: none;
   text-align: left;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font: inherit;
   font-size: 0.95rem;
   font-weight: 600;
@@ -708,6 +712,11 @@ input {
   color: var(--brand);
 }
 
+.feature-tab.coming-soon:not(.active) {
+  color: #8084a7;
+  background: #f2f3fb;
+}
+
 .feature-content {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -721,6 +730,7 @@ input {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
   font-size: 1.15rem;
   font-weight: 700;
@@ -739,6 +749,36 @@ input {
   line-height: 1.6;
   margin: 0 0 20px;
   font-size: 0.95rem;
+}
+
+.feature-content.coming-soon {
+  filter: grayscale(0.2) saturate(0.75);
+}
+
+.feature-content.coming-soon .feature-dot {
+  background: #8b8ea9;
+}
+
+.coming-soon-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid #c7c9df;
+  background: #f3f4fb;
+  color: #525883;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.feature-tab.active .coming-soon-pill {
+  border-color: #9ca3db;
+  background: #4a4f9d;
+  color: #eef0ff;
 }
 
 .feature-widget {
