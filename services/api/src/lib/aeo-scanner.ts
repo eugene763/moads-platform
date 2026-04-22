@@ -75,6 +75,7 @@ interface FetchMetadata {
   redirected: boolean;
   contentType: string | null;
   bytes: number;
+  linkHeader: string | null;
 }
 
 interface CrawlabilityBotEvidence {
@@ -322,6 +323,41 @@ function extractCanonicalHref(html: string): string | null {
     const href = extractTagAttribute(tag, "href");
     if (href) {
       return href;
+    }
+  }
+
+  return null;
+}
+
+function extractCanonicalFromLinkHeader(linkHeader: string | null, baseUrl: string): string | null {
+  if (!linkHeader) {
+    return null;
+  }
+
+  const segments = linkHeader
+    .split(/,(?=\s*<)/g)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  for (const segment of segments) {
+    const targetMatch = /^<([^>]+)>/.exec(segment);
+    const relMatch = /;\s*rel\s*=\s*("?)([^";,]+)\1/i.exec(segment);
+    const target = asText(targetMatch?.[1] ?? null);
+    const rel = asText(relMatch?.[2] ?? null);
+
+    if (!target || !rel) {
+      continue;
+    }
+
+    const relTokens = rel.split(/\s+/).map((token) => token.toLowerCase());
+    if (!relTokens.includes("canonical")) {
+      continue;
+    }
+
+    try {
+      return new URL(target, baseUrl).toString();
+    } catch {
+      return target;
     }
   }
 
@@ -688,6 +724,7 @@ async function fetchTextDocument(input: {
   finalUrl: string | null;
   redirected: boolean;
   contentType: string | null;
+  linkHeader: string | null;
 }> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
@@ -715,6 +752,7 @@ async function fetchTextDocument(input: {
         finalUrl: response.url || input.url,
         redirected: response.redirected,
         contentType: response.headers.get("content-type"),
+        linkHeader: response.headers.get("link"),
       };
 
       if (attempt === 0 && isRetryableStatus(payload.status)) {
@@ -733,6 +771,7 @@ async function fetchTextDocument(input: {
         finalUrl: null,
         redirected: false,
         contentType: null,
+        linkHeader: null,
       };
     } finally {
       clearTimeout(timeout);
@@ -746,6 +785,7 @@ async function fetchTextDocument(input: {
     finalUrl: null,
     redirected: false,
     contentType: null,
+    linkHeader: null,
   };
 }
 
@@ -1352,7 +1392,9 @@ function evaluateAeoHtml(input: {
 }): AeoDeterministicScanResult {
   const title = extractTitle(input.html);
   const description = extractMetaContent(input.html, "description");
-  const canonical = extractCanonicalHref(input.html) ?? extractMetaContent(input.html, "canonical", "rel");
+  const canonical = extractCanonicalHref(input.html)
+    ?? extractMetaContent(input.html, "canonical", "rel")
+    ?? extractCanonicalFromLinkHeader(input.fetchMeta.linkHeader, input.finalUrl ?? input.requestedUrl);
   const ogTitle = extractMetaContent(input.html, "og:title", "property") ?? extractMetaContent(input.html, "twitter:title", "name");
 
   const jsonLdNodes = parseJsonLdScripts(input.html);
@@ -1738,6 +1780,7 @@ function evaluateAeoHtml(input: {
     redirected: input.fetchMeta.redirected,
     contentType: input.fetchMeta.contentType,
     bytes: input.fetchMeta.bytes,
+    linkHeader: input.fetchMeta.linkHeader,
     finalUrl: input.finalUrl,
     httpStatus: input.httpStatus,
     parserVersion: "aeo_parser_v4",
@@ -1804,6 +1847,7 @@ export async function runAeoDeterministicScan(input: {
         redirected: false,
         contentType: null,
         bytes: 0,
+        linkHeader: null,
       },
     });
   }
@@ -1845,6 +1889,7 @@ export async function runAeoDeterministicScan(input: {
       redirected: primaryDocument.redirected,
       contentType,
       bytes: Buffer.byteLength(html),
+      linkHeader: primaryDocument.linkHeader,
     },
   });
 }

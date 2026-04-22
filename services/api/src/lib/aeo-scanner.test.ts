@@ -77,6 +77,38 @@ describe("aeo scanner", () => {
     expect(result.issuesJson.some((issue) => issue.code === "aggregate_rating_missing")).toBe(true);
   });
 
+  it("accepts canonical from HTTP Link header", async () => {
+    const html = `
+      <html>
+        <head>
+          <title>Header Canonical Product</title>
+          <meta name="description" content="Product with canonical in headers" />
+          <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Product","name":"Header Canonical","aggregateRating":{"@type":"AggregateRating","ratingValue":4.7,"reviewCount":56}}
+          </script>
+        </head>
+        <body>
+          <h1>Header Canonical Product</h1>
+          <p>Rated 4.7 out of 5 stars from 56 reviews.</p>
+        </body>
+      </html>
+    `;
+
+    const result = await runAeoDeterministicScan({
+      siteUrl: "https://example.com/header-canonical",
+      fetchImpl: async () => new Response(html, {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          link: "<https://example.com/products/header-canonical>; rel=\"canonical\"",
+        },
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.issuesJson.find((issue) => issue.code === "canonical_missing")).toBeUndefined();
+  });
+
   it("uses nested sitemap product URLs instead of sitemap index files", async () => {
     const homepageHtml = `
       <html>
