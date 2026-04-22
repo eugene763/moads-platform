@@ -20,6 +20,7 @@ const tickerBaseItems = [
   {label: "Claude", src: "/logos/claude.svg"},
   {label: "Gemini", src: "/logos/gemini.svg"},
   {label: "ChatGPT", src: "/logos/chatgpt.svg"},
+  {label: "Perplexity", src: "/logos/perplexity.svg"},
   {label: "Gemini", src: "/logos/gemini.svg"},
   {label: "Grok", src: "/logos/grok.svg"},
   {label: "DeepSeek", src: "/logos/deepseek.svg"},
