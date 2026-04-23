@@ -490,9 +490,9 @@ export function ScansView() {
     );
   }
 
-  const topFixes = selectedScanDetail?.report.topFixes?.length ?
-    selectedScanDetail.report.topFixes :
-    selectedScanDetail?.recommendations ?? [];
+  const reportTopFixes = selectedScanDetail?.report?.topFixes ?? [];
+  const legacyRecommendations = selectedScanDetail?.recommendations ?? [];
+  const topFixes = reportTopFixes.length ? reportTopFixes : legacyRecommendations;
 
   const tipsUnlocked = Boolean(selectedScanDetail?.aiTips?.tips?.length);
   const topFixesVisibleLimit = tipsUnlocked ? topFixes.length : 5;
