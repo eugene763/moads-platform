@@ -26,6 +26,10 @@ function sortByDateDesc(scans: ScanItem[]): ScanItem[] {
   return [...scans].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+function scanCostLabel(scanId: string, firstScanId: string | null): string {
+  return scanId === firstScanId ? "Free" : "1 credit";
+}
+
 export function DashboardView() {
   const router = useRouter();
   const [session, setSession] = useState<SessionSnapshot | null>(null);
@@ -37,6 +41,7 @@ export function DashboardView() {
   const [packsOpen, setPacksOpen] = useState(false);
 
   const scansCount = useMemo(() => scans.length, [scans]);
+  const firstScanId = scans.length ? scans[scans.length - 1]?.scanId ?? null : null;
 
   async function loadDashboard(): Promise<void> {
     setLoading(true);
@@ -147,6 +152,7 @@ export function DashboardView() {
                     <p className="list-title">{toSiteLabel(scan.siteUrl)}</p>
                     <p className="tiny">{scan.siteUrl}</p>
                     <p className="tiny">{new Date(scan.createdAt).toLocaleString()}</p>
+                    <p className="tiny scan-cost-line">Scan cost: {scanCostLabel(scan.scanId, firstScanId)}</p>
                   </div>
                   <div className="scan-item-side">
                     <span className={`score-pill ${scoreToneClass(scan.publicScore)}`}>{scan.publicScore ?? "--"}/100</span>

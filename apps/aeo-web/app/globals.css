@@ -1293,6 +1293,12 @@ input {
   flex-direction: column;
   gap: 10px;
   min-width: 180px;
+  align-items: stretch;
+}
+
+.score-actions .cta-ghost,
+.score-actions .cta-primary {
+  width: 100%;
 }
 
 .evidence-grid {
@@ -1858,6 +1864,11 @@ input {
 .scan-item-main {
   display: grid;
   gap: 4px;
+}
+
+.scan-cost-line {
+  margin-top: 4px;
+  font-weight: 600;
 }
 
 .scan-item-side {

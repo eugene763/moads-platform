@@ -64,6 +64,10 @@ function formatIssueTitle(code: string): string {
     .replace(/\b\w/g, (value) => value.toUpperCase());
 }
 
+function scanCostLabel(scanId: string, firstScanId: string | null): string {
+  return scanId === firstScanId ? "Free" : "1 credit";
+}
+
 export function ScansView() {
   const router = useRouter();
   const [queryScanId, setQueryScanId] = useState<string | null>(null);
@@ -126,6 +130,7 @@ export function ScansView() {
   }, [selectedSiteKey, sitesByKey, visibleTabs]);
 
   const selectedSiteScans = selectedSite?.scans ?? [];
+  const firstScanId = scans.length ? scans[scans.length - 1]?.scanId ?? null : null;
 
   const selectedScan = useMemo(() => {
     const fromCurrent = selectedSiteScans.find((scan) => scan.scanId === selectedScanId) ?? null;
@@ -294,10 +299,8 @@ export function ScansView() {
     }
   }
 
-  async function runFullCheck(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-
-    const candidate = newSiteUrl.trim();
+  async function runFullCheckByUrl(candidateRaw: string): Promise<void> {
+    const candidate = candidateRaw.trim();
     if (!candidate) {
       setError("Enter URL first.");
       return;
@@ -349,6 +352,11 @@ export function ScansView() {
     } finally {
       setScanBusy(false);
     }
+  }
+
+  async function runFullCheck(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    await runFullCheckByUrl(newSiteUrl);
   }
 
   function openPacks(): void {
@@ -411,6 +419,17 @@ export function ScansView() {
     }
 
     await unlockTipsForScan(selectedScan.scanId);
+  }
+
+  async function repeatSelectedScan(): Promise<void> {
+    const sourceUrl = selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "";
+    const candidate = sourceUrl.trim();
+    if (!candidate) {
+      setError("No selected site URL to rescan.");
+      return;
+    }
+    setNewSiteUrl(normalizeUrlForDisplay(candidate));
+    await runFullCheckByUrl(candidate);
   }
 
   async function shareSelectedReport(): Promise<void> {
@@ -488,6 +507,7 @@ export function ScansView() {
   const selectedUrl = normalizeUrlForDisplay(selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "");
   const selectedScore = selectedScan.publicScore ?? 0;
   const selectedStatusLabel = selectedScan.status.replace(/_/g, " ");
+  const selectedScanCost = scanCostLabel(selectedScan.scanId, firstScanId);
 
   return (
     <div className="dashboard-grid">
@@ -508,9 +528,6 @@ export function ScansView() {
           />
           <button type="submit" className="cta-primary" disabled={scanBusy}>
             {scanBusy ? "Scanning..." : "Run full check"}
-          </button>
-          <button type="button" className="cta-ghost" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
-            {tipsBusy ? "Unblocking..." : "Unblock all tips"}
           </button>
         </form>
         <p className="tiny">1 credit unlocks one site check for up to 5 pages in launch mode.</p>
@@ -561,8 +578,12 @@ export function ScansView() {
                 <h3 className="score-url-heading">{selectedUrl || "this site"}</h3>
                 <p className={`score-heading ${scoreToneClass(selectedScan.publicScore)}`}>{selectedScan.publicScore ?? "--"}/100</p>
                 <p className={`status-chip ${statusToneClass(selectedStatusLabel)}`}>{selectedStatusLabel}</p>
+                <p className="tiny scan-cost-line">Scan cost: {selectedScanCost}</p>
               </div>
               <div className="score-actions">
+                <button type="button" className="cta-ghost" onClick={() => void repeatSelectedScan()} disabled={scanBusy}>
+                  {scanBusy ? "Scanning..." : "Repeat scanning"}
+                </button>
                 <button type="button" className="cta-ghost" onClick={() => void shareSelectedReport()}>Share</button>
                 <button type="button" className="cta-ghost" onClick={printSelectedReport}>Print</button>
               </div>
