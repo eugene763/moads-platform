@@ -30,12 +30,14 @@ export function ScanForm() {
   const [error, setError] = useState<string | null>(null);
   const [localScanCount, setLocalScanCount] = useState(0);
 
-  async function refreshSession(): Promise<void> {
+  async function refreshSession(): Promise<boolean> {
     try {
       await apiRequest("/v1/me");
       setIsAuthed(true);
+      return true;
     } catch {
       setIsAuthed(false);
+      return false;
     }
   }
 
@@ -46,6 +48,21 @@ export function ScanForm() {
 
   useEffect(() => {
     void refreshSession();
+
+    function onAuthChanged() {
+      void refreshSession();
+    }
+
+    function onFocus() {
+      void refreshSession();
+    }
+
+    window.addEventListener("aeo-auth-changed", onAuthChanged);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("aeo-auth-changed", onAuthChanged);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   async function onAuthSuccess(): Promise<void> {
@@ -66,7 +83,13 @@ export function ScanForm() {
     }
 
     const currentCount = Number(globalThis.localStorage?.getItem(SCAN_COUNT_KEY) ?? "0");
-    if (!isAuthed && currentCount >= 1) {
+    let authedNow = isAuthed;
+
+    if (!authedNow && currentCount >= 1) {
+      authedNow = await refreshSession();
+    }
+
+    if (!authedNow && currentCount >= 1) {
       setRequiresAuth(true);
       setAuthOpen(true);
       trackGa4("aeo_scan_auth_gate_shown", {reason: "second_scan"});
@@ -78,7 +101,7 @@ export function ScanForm() {
     try {
       trackGa4("aeo_scan_submit", {
         has_url: Boolean(normalizedInput),
-        authed: isAuthed,
+        authed: authedNow,
         scan_count: currentCount,
       });
 
@@ -87,7 +110,7 @@ export function ScanForm() {
         body: JSON.stringify({siteUrl: normalizedInput}),
       });
 
-      if (!isAuthed) {
+      if (!authedNow) {
         const nextCount = currentCount + 1;
         globalThis.localStorage?.setItem(SCAN_COUNT_KEY, String(nextCount));
         setLocalScanCount(nextCount);
