@@ -1662,17 +1662,21 @@ input {
   inset: 0;
   background: rgba(15, 16, 53, 0.42);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: calc(88px + env(safe-area-inset-top, 0px)) 16px 24px;
+  padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 16px));
+  padding-right: 16px;
+  padding-bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  padding-left: 16px;
   overflow-y: auto;
   z-index: 500;
 }
 
 .modal-card {
   width: min(680px, 100%);
-  max-height: min(calc(100vh - 120px), 760px);
-  overflow: auto;
+  max-height: min(calc(100dvh - 32px), 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--surface);

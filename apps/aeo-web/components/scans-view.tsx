@@ -505,9 +505,9 @@ export function ScansView() {
   const issuesPreview = tipsUnlocked ? null : issues[5] ?? null;
 
   const selectedUrl = normalizeUrlForDisplay(selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "");
-  const selectedScore = selectedScan.publicScore ?? 0;
-  const selectedStatusLabel = selectedScan.status.replace(/_/g, " ");
-  const selectedScanCost = scanCostLabel(selectedScan.scanId, firstScanId);
+  const selectedScore = selectedScan?.publicScore ?? 0;
+  const selectedStatusLabel = (selectedScan?.status ?? "pending").replace(/_/g, " ");
+  const selectedScanCost = selectedScan ? scanCostLabel(selectedScan.scanId, firstScanId) : "Free";
 
   return (
     <div className="dashboard-grid">

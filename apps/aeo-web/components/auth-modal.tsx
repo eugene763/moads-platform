@@ -1,6 +1,6 @@
 "use client";
 
-import {FormEvent, useEffect, useState} from "react";
+import {FormEvent, useEffect, useRef, useState} from "react";
 
 import {apiRequest} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
@@ -32,6 +32,7 @@ async function createAeoSession(idToken: string): Promise<void> {
 }
 
 export function AuthModal({open, onClose, onSuccess, source, initialMode = "signin"}: AuthModalProps) {
+  const modalRef = useRef<HTMLElement | null>(null);
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,6 +52,9 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
   useEffect(() => {
     if (open) {
       setMode(initialMode);
+      if (modalRef.current) {
+        modalRef.current.scrollTop = 0;
+      }
     }
   }, [initialMode, open]);
 
@@ -147,6 +151,7 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section
         className="modal-card auth-modal"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="AEO sign in"
