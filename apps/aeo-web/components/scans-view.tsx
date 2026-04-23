@@ -494,7 +494,7 @@ export function ScansView() {
   const legacyRecommendations = selectedScanDetail?.recommendations ?? [];
   const topFixes = reportTopFixes.length ? reportTopFixes : legacyRecommendations;
 
-  const tipsUnlocked = Boolean(selectedScanDetail?.aiTips?.tips?.length);
+  const tipsUnlocked = Boolean(session);
   const topFixesVisibleLimit = tipsUnlocked ? topFixes.length : 5;
   const visibleTopFixes = topFixes.slice(0, topFixesVisibleLimit);
   const topFixesPreview = tipsUnlocked ? null : topFixes[5] ?? null;
