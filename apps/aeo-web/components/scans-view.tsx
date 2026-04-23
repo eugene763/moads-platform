@@ -8,6 +8,7 @@ import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statu
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
+import {ScoreRing} from "./score-ring";
 
 type AuthMode = "signin" | "signup";
 
@@ -412,6 +413,36 @@ export function ScansView() {
     await unlockTipsForScan(selectedScan.scanId);
   }
 
+  async function shareSelectedReport(): Promise<void> {
+    const shareUrl = selectedScanDetail?.publicToken ?
+      `${window.location.origin}/r/${selectedScanDetail.publicToken}` :
+      (selectedUrl || window.location.href);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "MO AEO CHECKER result",
+          text: `AEO scan result for ${selectedUrl || "site"}`,
+          url: shareUrl,
+        });
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert("Share link copied.");
+    } catch {
+      alert("Share is not available in this browser.");
+    }
+  }
+
+  function printSelectedReport(): void {
+    window.print();
+  }
+
   if (loading) {
     return (
       <div className="panel">
@@ -454,8 +485,9 @@ export function ScansView() {
   const visibleIssues = issues.slice(0, issuesVisibleLimit);
   const issuesPreview = tipsUnlocked ? null : issues[5] ?? null;
 
-  const aiTips = selectedScanDetail?.aiTips?.tips ?? [];
   const selectedUrl = normalizeUrlForDisplay(selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "");
+  const selectedScore = selectedScan.publicScore ?? 0;
+  const selectedStatusLabel = selectedScan.status.replace(/_/g, " ");
 
   return (
     <div className="dashboard-grid">
@@ -522,12 +554,17 @@ export function ScansView() {
 
         {selectedScan ? (
           <>
-            <article className="surface-card selected-scan-card">
-              <p className="score-kicker">AI DISCOVERY READINESS OF</p>
-              <h3 className="score-url-heading">{selectedUrl || "this page"}</h3>
-              <div className="scan-inline-metrics">
-                <span className={`score-pill ${scoreToneClass(selectedScan.publicScore)}`}>{selectedScan.publicScore ?? "--"}/100</span>
-                <span className={`status-chip ${statusToneClass(selectedScan.status)}`}>{selectedScan.status.replace(/_/g, " ")}</span>
+            <article className="surface-card selected-scan-card score-card site-score-card">
+              <ScoreRing score={selectedScore} />
+              <div className="score-text-block">
+                <p className="score-kicker">AI DISCOVERY READINESS OF SITE</p>
+                <h3 className="score-url-heading">{selectedUrl || "this site"}</h3>
+                <p className={`score-heading ${scoreToneClass(selectedScan.publicScore)}`}>{selectedScan.publicScore ?? "--"}/100</p>
+                <p className={`status-chip ${statusToneClass(selectedStatusLabel)}`}>{selectedStatusLabel}</p>
+              </div>
+              <div className="score-actions">
+                <button type="button" className="cta-ghost" onClick={() => void shareSelectedReport()}>Share</button>
+                <button type="button" className="cta-ghost" onClick={printSelectedReport}>Print</button>
               </div>
             </article>
 
@@ -603,22 +640,6 @@ export function ScansView() {
               ) : null}
             </div>
 
-            {aiTips.length ? (
-              <div className="surface-card selected-scan-card">
-                <p className="list-title">AI Tips</p>
-                <ul className="list compact">
-                  {aiTips.map((tip, index) => (
-                    <li key={`${tip.title}-${index}`}>
-                      <div>
-                        <p className="list-title">{tip.title}</p>
-                        <p className="tiny">{tip.detail}</p>
-                      </div>
-                      <span className={`badge ${priorityBadgeClass(tip.priority)}`}>{tip.priority}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
           </>
         ) : (
           <div className="surface-card selected-scan-card">
