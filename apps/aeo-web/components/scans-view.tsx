@@ -320,12 +320,10 @@ export function ScansView() {
     setError(null);
 
     try {
-      const created = await apiRequest<{scanId: string; publicToken: string}>("/v1/aeo/public-scans", {
+      const created = await apiRequest<{scanId: string; publicToken: string}>("/v1/aeo/site-scans", {
         method: "POST",
-        body: JSON.stringify({siteUrl: candidate}),
+        body: JSON.stringify({siteUrl: candidate, maxPages: 5}),
       });
-
-      await apiRequest(`/v1/aeo/scans/${created.scanId}/claim`, {method: "POST"});
 
       if (shouldAutoUnlock && walletBalance > 0) {
         await apiRequest(`/v1/aeo/scans/${created.scanId}/generate-ai-tips`, {
@@ -527,10 +525,10 @@ export function ScansView() {
             spellCheck={false}
           />
           <button type="submit" className="cta-primary" disabled={scanBusy}>
-            {scanBusy ? "Scanning..." : "Run full check"}
+            {scanBusy ? "Scanning..." : "Run key-page site scan"}
           </button>
         </form>
-        <p className="tiny">1 credit unlocks one site check for up to 5 pages in launch mode.</p>
+        <p className="tiny">Scans the homepage and key discovery pages selected from sitemap, robots.txt and internal links.</p>
       </section>
 
       <section className="panel full">

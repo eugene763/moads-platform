@@ -1,6 +1,7 @@
 import {PlatformError} from "@moads/db";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
+const DEFAULT_SITE_SCAN_MAX_PAGES = 5;
 const DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 const DEFAULT_ACCEPT_LANGUAGE = "en-US,en;q=0.9";
 const AI_BOTS = [
@@ -52,6 +53,19 @@ export interface AeoDeterministicScanResult {
   issuesJson: AeoIssue[];
   signalBlocksJson: Record<string, unknown>;
   rawFetchMetaJson: Record<string, unknown>;
+}
+
+export interface AeoFullSiteScanResult extends AeoDeterministicScanResult {
+  scannedPages: AeoDeterministicScanResult[];
+}
+
+interface AeoSiteDiscoveryEvidence {
+  robotsFound: boolean;
+  sitemapsFound: string[];
+  aiFilesFound: string[];
+  candidateUrlsCount: number;
+  selectedUrls: string[];
+  selectionReasonByUrl: Record<string, string>;
 }
 
 interface AggregateRatingEvidence {
@@ -620,6 +634,53 @@ function dedupeUrls(urls: string[]): string[] {
   }
 
   return output;
+}
+
+function sameOriginPageUrl(candidate: URL, origin: string): string | null {
+  if (candidate.origin !== origin || isTechnicalDiscoveryUrl(candidate)) {
+    return null;
+  }
+
+  candidate.hash = "";
+  candidate.search = "";
+  return candidate.toString();
+}
+
+function findSameOriginPageCandidates(html: string, baseUrl: string): string[] {
+  const base = new URL(baseUrl);
+  const candidates: string[] = [];
+
+  for (const match of html.matchAll(/href=["']([^"']+)["']/gi)) {
+    const rawCandidate = match[1];
+    if (!rawCandidate) {
+      continue;
+    }
+
+    try {
+      const candidate = new URL(decodeHtmlEntities(rawCandidate), baseUrl);
+      const normalized = sameOriginPageUrl(candidate, base.origin);
+      if (normalized) {
+        candidates.push(normalized);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return dedupeUrls(candidates);
+}
+
+function sameOriginSitemapUrl(candidate: string, origin: string): string | null {
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.origin !== origin || !isTechnicalDiscoveryUrl(parsed)) {
+      return null;
+    }
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 function extractSitemapLocs(sitemapText: string, baseUrl: string): string[] {
@@ -1891,6 +1952,403 @@ export async function runAeoDeterministicScan(input: {
       bytes: Buffer.byteLength(html),
       linkHeader: primaryDocument.linkHeader,
     },
+  });
+}
+
+function confidenceRank(value: AeoDeterministicScanResult["confidenceLevel"]): number {
+  if (value === "high") {
+    return 3;
+  }
+  if (value === "medium") {
+    return 2;
+  }
+  return 1;
+}
+
+function lowestConfidence(results: AeoDeterministicScanResult[]): AeoDeterministicScanResult["confidenceLevel"] {
+  return results.reduce<AeoDeterministicScanResult["confidenceLevel"]>((lowest, result) => (
+    confidenceRank(result.confidenceLevel) < confidenceRank(lowest) ? result.confidenceLevel : lowest
+  ), "high");
+}
+
+function uniqueBy<T>(items: T[], keyFor: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const output: T[] = [];
+
+  for (const item of items) {
+    const key = keyFor(item);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(item);
+  }
+
+  return output;
+}
+
+function buildFullSiteResult(input: {
+  requestedUrl: string;
+  normalizedUrl: string;
+  pages: AeoDeterministicScanResult[];
+  maxPages: number;
+  discovery: AeoSiteDiscoveryEvidence;
+}): AeoFullSiteScanResult {
+  const pages = input.pages.length ? input.pages : [runBlockedSiteFallback(input.requestedUrl, input.normalizedUrl)];
+  const completedPages = pages.filter((page) => page.status === "completed");
+  const averageScore = Math.round(pages.reduce((sum, page) => sum + page.publicScore, 0) / pages.length);
+  const pageSummaries = pages.map((page) => ({
+    url: page.finalUrl ?? page.requestedUrl,
+    requestedUrl: page.requestedUrl,
+    status: page.status,
+    score: page.publicScore,
+    confidenceLevel: page.confidenceLevel,
+    issuesCount: page.issuesJson.length,
+  }));
+  const issues = uniqueBy(
+    pages.flatMap((page) => page.issuesJson.map((issue) => ({
+      ...issue,
+      message: `${issue.message} (${new URL(page.finalUrl ?? page.requestedUrl).pathname || "/"})`,
+    }))),
+    (issue) => `${issue.code}:${issue.message}`,
+  );
+  const recommendations = uniqueBy(
+    pages.flatMap((page) => page.recommendationsJson),
+    (recommendation) => recommendation.id,
+  ).slice(0, 8);
+  const topFixes = recommendations.slice(0, 5);
+  const representative = pages[0];
+
+  return {
+    requestedUrl: input.requestedUrl,
+    normalizedUrl: input.normalizedUrl,
+    finalUrl: representative?.finalUrl ?? input.requestedUrl,
+    httpStatus: representative?.httpStatus ?? null,
+    status: completedPages.length > 0 ? "completed" : "blocked",
+    confidenceLevel: lowestConfidence(pages),
+    publicScore: averageScore,
+    rulesetVersion: "aeo_rules_v4",
+    promptVersion: "deterministic_site_v1",
+    reportJson: {
+      summary: {
+        score: averageScore,
+        scoreVersion: "aeo_score_v2",
+        scoreLabel: "AI Discovery Readiness of site",
+        scope: "site",
+        status: completedPages.length > 0 ? "completed" : "blocked",
+        confidenceLevel: lowestConfidence(pages),
+        scannedPages: pages.length,
+        maxPages: input.maxPages,
+        scanModeNote: `Key-page site scan sampled ${pages.length} page${pages.length === 1 ? "" : "s"} in launch mode.`,
+      },
+      dimensions: representative?.reportJson.dimensions ?? {},
+      discovery: input.discovery,
+      evidence: {
+        pages: pageSummaries,
+        sampledUrls: pageSummaries.map((page) => page.url),
+      },
+      actionPlan: {
+        topIssues: issues.slice(0, 5).map((issue) => ({
+          code: issue.code,
+          message: issue.message,
+          severity: issue.severity,
+          dimension: issue.dimension,
+          pointsLost: issue.pointsLost,
+        })),
+        fastestWin: topFixes[0] ?? null,
+        priorityFixes: topFixes.slice(0, 3),
+      },
+      promptKit: {
+        mode: "manual",
+        prompts: [],
+      },
+      topFixes,
+    },
+    recommendationsJson: recommendations,
+    extractedFactsJson: {
+      scope: "site",
+      scannedPages: pageSummaries,
+      discovery: input.discovery,
+    },
+    issuesJson: issues,
+    signalBlocksJson: {
+      scoreModel: "evidence_first_site_v1",
+      sampledPages: pages.length,
+      maxPages: input.maxPages,
+    },
+    rawFetchMetaJson: {
+      parserVersion: "aeo_parser_v4",
+      scope: "site",
+      sampledUrls: pageSummaries.map((page) => page.url),
+    },
+    scannedPages: pages,
+  };
+}
+
+function runBlockedSiteFallback(requestedUrl: string, normalizedUrl: string): AeoDeterministicScanResult {
+  return {
+    requestedUrl,
+    normalizedUrl,
+    finalUrl: null,
+    httpStatus: null,
+    status: "blocked",
+    confidenceLevel: "low",
+    publicScore: 0,
+    rulesetVersion: "aeo_rules_v4",
+    promptVersion: "deterministic_v4",
+    reportJson: {},
+    recommendationsJson: [],
+    extractedFactsJson: {},
+    issuesJson: [],
+    signalBlocksJson: {},
+    rawFetchMetaJson: {},
+  };
+}
+
+async function discoverSitemapPageUrls(input: {
+  baseUrl: string;
+  robotsText: string | null;
+  fetchImpl: typeof fetch;
+  timeoutMs: number;
+}): Promise<{sitemapsFound: string[]; candidateUrls: string[]}> {
+  const base = new URL(input.baseUrl);
+  const origin = base.origin;
+  const sitemapSeeds = input.robotsText ?
+    extractSitemapUrls(input.robotsText).map((url) => sameOriginSitemapUrl(url, origin)).filter((url): url is string => Boolean(url)) :
+    [];
+  const queue = (sitemapSeeds.length ? sitemapSeeds : [
+    new URL("/sitemap.xml", origin).toString(),
+    new URL("/sitemap_index.xml", origin).toString(),
+  ]).map((url) => sameOriginSitemapUrl(url, origin)).filter((url): url is string => Boolean(url));
+  const seenSitemaps = new Set<string>();
+  const sitemapsFound: string[] = [];
+  const candidateUrls: string[] = [];
+
+  while (queue.length && seenSitemaps.size < 3 && candidateUrls.length < 200) {
+    const sitemapUrl = queue.shift();
+    if (!sitemapUrl || seenSitemaps.has(sitemapUrl)) {
+      continue;
+    }
+    seenSitemaps.add(sitemapUrl);
+
+    const response = await fetchTextDocument({
+      url: sitemapUrl,
+      fetchImpl: input.fetchImpl,
+      timeoutMs: Math.min(input.timeoutMs, 6_000),
+    });
+    if (!response.ok || !/<(urlset|sitemapindex)\b/i.test(response.text)) {
+      continue;
+    }
+
+    sitemapsFound.push(sitemapUrl);
+    const locs = extractSitemapLocs(response.text, origin);
+    for (const loc of locs) {
+      if (candidateUrls.length >= 200) {
+        break;
+      }
+      const parsed = new URL(loc);
+      if (isTechnicalDiscoveryUrl(parsed)) {
+        const nested = sameOriginSitemapUrl(loc, origin);
+        if (nested && !seenSitemaps.has(nested) && queue.length + seenSitemaps.size < 3) {
+          queue.push(nested);
+        }
+        continue;
+      }
+
+      const normalized = sameOriginPageUrl(parsed, origin);
+      if (normalized) {
+        candidateUrls.push(normalized);
+      }
+    }
+  }
+
+  return {
+    sitemapsFound,
+    candidateUrls: dedupeUrls(candidateUrls).slice(0, 200),
+  };
+}
+
+async function discoverAiFiles(input: {
+  baseUrl: string;
+  fetchImpl: typeof fetch;
+}): Promise<string[]> {
+  const origin = new URL(input.baseUrl).origin;
+  const candidates = [
+    "/llms.txt",
+    "/llm.txt",
+    "/ai.txt",
+    "/agents.txt",
+    "/llms",
+    "/ai",
+    "/agents",
+  ].map((path) => new URL(path, origin).toString());
+  const found: string[] = [];
+
+  for (const url of candidates) {
+    const response = await fetchTextDocument({
+      url,
+      fetchImpl: input.fetchImpl,
+      timeoutMs: 3_000,
+    });
+    if (response.ok && response.text.trim()) {
+      found.push(url);
+    }
+  }
+
+  return found;
+}
+
+function pageSelectionScore(url: string, source: "homepage" | "sitemap" | "internal"): {score: number; reason: string} {
+  const parsed = new URL(url);
+  const path = parsed.pathname.toLowerCase();
+
+  if (/(\/|^)(blog|news|tag|tags|author|login|signin|signup|register|cart|checkout|account|search|admin)(\/|$)/.test(path)
+    || /[?&](q|s|filter|sort)=/i.test(parsed.search)
+    || hasNonHtmlExtension(path)) {
+    return {score: -1_000, reason: "Skipped low-value or non-content URL"};
+  }
+
+  let score = source === "sitemap" ? 15 : source === "homepage" ? 8 : 4;
+  let reason = source === "sitemap" ? "Found in sitemap" : "Found from homepage links";
+
+  if (/(\/|^)(pricing|prices|plans|tariff|tariffs)(\/|$)/.test(path)) {
+    score += 100;
+    reason = "Pricing or plans page";
+  } else if (/(\/|^)(product|products|item|sku|shop|store)(\/|$)/.test(path) || isLikelyProductUrl(parsed)) {
+    score += 90;
+    reason = "Product or store page";
+  } else if (/(\/|^)(category|categories|collection|collections)(\/|$)/.test(path)) {
+    score += 80;
+    reason = "Category or collection page";
+  } else if (/(\/|^)(service|services)(\/|$)/.test(path)) {
+    score += 70;
+    reason = "Service page";
+  } else if (/(\/|^)(shipping|delivery|returns|refund|payment|warranty|terms|privacy)(\/|$)/.test(path)) {
+    score += 50;
+    reason = "Commerce trust page";
+  } else if (/(\/|^)(about|contact|company|reviews|testimonials|trust)(\/|$)/.test(path)) {
+    score += 40;
+    reason = "Trust or company page";
+  }
+
+  return {score, reason};
+}
+
+function selectKeySitePages(input: {
+  homepageUrl: string;
+  sitemapUrls: string[];
+  internalUrls: string[];
+  maxPages: number;
+}): {selectedUrls: string[]; selectionReasonByUrl: Record<string, string>; candidateUrlsCount: number} {
+  const sourceByUrl = new Map<string, "homepage" | "sitemap" | "internal">();
+  for (const url of input.sitemapUrls) {
+    sourceByUrl.set(url, "sitemap");
+  }
+  for (const url of input.internalUrls) {
+    if (!sourceByUrl.has(url)) {
+      sourceByUrl.set(url, "internal");
+    }
+  }
+
+  sourceByUrl.delete(input.homepageUrl);
+  const scored = Array.from(sourceByUrl.entries())
+    .map(([url, source], index) => {
+      const selected = pageSelectionScore(url, source);
+      return {url, source, index, ...selected};
+    })
+    .filter((candidate) => candidate.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
+  const selectedUrls = [input.homepageUrl, ...scored.map((candidate) => candidate.url)].slice(0, input.maxPages);
+  const selectionReasonByUrl: Record<string, string> = {
+    [input.homepageUrl]: "Homepage is always included",
+  };
+  for (const candidate of scored) {
+    if (selectedUrls.includes(candidate.url)) {
+      selectionReasonByUrl[candidate.url] = candidate.reason;
+    }
+  }
+
+  return {
+    selectedUrls,
+    selectionReasonByUrl,
+    candidateUrlsCount: sourceByUrl.size + 1,
+  };
+}
+
+export async function runAeoFullSiteScan(input: {
+  siteUrl: string;
+  maxPages?: number;
+  timeoutMs?: number;
+  userAgent?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<AeoFullSiteScanResult> {
+  const {requestedUrl, normalizedUrl} = normalizeSiteUrl(input.siteUrl);
+  const requestedMaxPages = Math.floor(input.maxPages ?? DEFAULT_SITE_SCAN_MAX_PAGES);
+  const maxPages = Number.isFinite(requestedMaxPages) ?
+    Math.max(1, Math.min(DEFAULT_SITE_SCAN_MAX_PAGES, requestedMaxPages)) :
+    DEFAULT_SITE_SCAN_MAX_PAGES;
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const fetchImpl = input.fetchImpl ?? fetch;
+
+  const homepage = await fetchTextDocument({
+    url: requestedUrl,
+    fetchImpl,
+    timeoutMs,
+    ...(input.userAgent ? {userAgent: input.userAgent} : {}),
+  });
+
+  const discoveryBaseUrl = homepage.finalUrl ?? requestedUrl;
+  const robotsUrl = new URL("/robots.txt", discoveryBaseUrl).toString();
+  const robots = await fetchTextDocument({
+    url: robotsUrl,
+    fetchImpl,
+    timeoutMs: Math.min(timeoutMs, 4_000),
+  });
+  const sitemapDiscovery = await discoverSitemapPageUrls({
+    baseUrl: discoveryBaseUrl,
+    robotsText: robots.ok ? robots.text : null,
+    fetchImpl,
+    timeoutMs,
+  });
+  const aiFilesFound = await discoverAiFiles({
+    baseUrl: discoveryBaseUrl,
+    fetchImpl,
+  });
+  const internalUrls = homepage.ok && isLikelyHtmlContentType(homepage.contentType) ?
+    findSameOriginPageCandidates(homepage.text, discoveryBaseUrl) :
+    [];
+  const selected = selectKeySitePages({
+    homepageUrl: discoveryBaseUrl,
+    sitemapUrls: sitemapDiscovery.candidateUrls,
+    internalUrls,
+    maxPages,
+  });
+  const discovery: AeoSiteDiscoveryEvidence = {
+    robotsFound: robots.ok,
+    sitemapsFound: sitemapDiscovery.sitemapsFound,
+    aiFilesFound,
+    candidateUrlsCount: selected.candidateUrlsCount,
+    selectedUrls: selected.selectedUrls,
+    selectionReasonByUrl: selected.selectionReasonByUrl,
+  };
+
+  const pages: AeoDeterministicScanResult[] = [];
+  for (const url of selected.selectedUrls) {
+    pages.push(await runAeoDeterministicScan({
+      siteUrl: url,
+      timeoutMs,
+      fetchImpl,
+      ...(input.userAgent ? {userAgent: input.userAgent} : {}),
+    }));
+  }
+
+  return buildFullSiteResult({
+    requestedUrl,
+    normalizedUrl,
+    pages,
+    maxPages,
+    discovery,
   });
 }
 

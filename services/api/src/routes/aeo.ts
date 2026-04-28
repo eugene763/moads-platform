@@ -4,6 +4,7 @@ import {
   consumeAeoStarterOfferState,
   createAeoPublicScan,
   createAeoSite,
+  createAeoSiteScan,
   createAeoWaitlistRequest,
   fulfillBillingOrderManually,
   getAeoPublicScanByToken,
@@ -29,6 +30,7 @@ import {maskUnavailableCheckoutOffers} from "../lib/billing-offers.js";
 import {
   normalizeSiteUrl,
   runAeoDeterministicScan,
+  runAeoFullSiteScan,
 } from "../lib/aeo-scanner.js";
 import {requireAdminClaim} from "../middleware/admin.js";
 import {requireAuth, resolveAccount} from "../middleware/auth.js";
@@ -239,6 +241,52 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
           store: "coming_soon",
         },
       },
+    });
+  });
+
+  app.post("/aeo/site-scans", {preHandler: authGuards}, async (request, reply) => {
+    if (!request.accountContext || !request.authContext) {
+      throw new PlatformError(500, "session_context_missing", "Session context is missing.");
+    }
+
+    const body = request.body as {
+      siteUrl?: unknown;
+      maxPages?: unknown;
+    } | undefined;
+
+    if (typeof body?.siteUrl !== "string") {
+      throw new PlatformError(400, "aeo_site_url_required", "siteUrl is required.");
+    }
+
+    const scan = await runAeoFullSiteScan({
+      siteUrl: body.siteUrl,
+      maxPages: readPositiveInt(body.maxPages, 5),
+    });
+
+    const created = await createAeoSiteScan(app.prisma, {
+      accountId: request.accountContext.accountId,
+      userId: request.authContext.userId,
+      siteUrl: scan.requestedUrl,
+      normalizedUrl: scan.normalizedUrl,
+      finalUrl: scan.finalUrl,
+      httpStatus: scan.httpStatus,
+      status: scan.status,
+      publicScore: scan.publicScore,
+      confidenceLevel: scan.confidenceLevel,
+      scoreVersion: "aeo_score_v2",
+      reportJson: toInputJson(scan.reportJson),
+      recommendationsJson: toInputJson(scan.recommendationsJson),
+      extractedFactsJson: toInputJson(scan.extractedFactsJson),
+      issuesJson: toInputJson(scan.issuesJson),
+      signalBlocksJson: toInputJson(scan.signalBlocksJson),
+      rawFetchMetaJson: toInputJson(scan.rawFetchMetaJson),
+      rulesetVersion: scan.rulesetVersion,
+      promptVersion: scan.promptVersion,
+    });
+
+    reply.status(201).send({
+      ...created,
+      status: scan.status,
     });
   });
 

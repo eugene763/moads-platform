@@ -3,6 +3,7 @@ import {describe, expect, it} from "vitest";
 import {
   normalizeSiteUrl,
   runAeoDeterministicScan,
+  runAeoFullSiteScan,
 } from "./aeo-scanner.js";
 
 describe("aeo scanner", () => {
@@ -226,5 +227,207 @@ describe("aeo scanner", () => {
     expect(report.evidence?.productPage?.url).toBe("https://example.com/products/test-product");
     expect(report.evidence?.productPage?.source).toBe("sitemap");
     expect(result.publicScore).toBeGreaterThan(40);
+  });
+
+  it("runs a capped key-page site scan across same-origin pages", async () => {
+    const pageHtml = (title: string, canonicalPath: string, links = "") => `
+      <html>
+        <head>
+          <title>${title}</title>
+          <meta name="description" content="${title} description" />
+          <link rel="canonical" href="https://example.com${canonicalPath}" />
+        </head>
+        <body>
+          <h1>${title}</h1>
+          <p>What is ${title}? ${title} is a test page with enough text for scan confidence.</p>
+          ${links}
+        </body>
+      </html>
+    `;
+
+    const result = await runAeoFullSiteScan({
+      siteUrl: "https://example.com",
+      maxPages: 2,
+      fetchImpl: async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+        if (url === "https://example.com/" || url === "https://example.com") {
+          return new Response(pageHtml("Home", "/", `
+            <a href="/about">About</a>
+            <a href="/pricing">Pricing</a>
+            <a href="https://other.example.com/skip">Skip</a>
+          `), {
+            status: 200,
+            headers: {"content-type": "text/html; charset=utf-8"},
+          });
+        }
+
+        if (url === "https://example.com/about") {
+          return new Response(pageHtml("About", "/about"), {
+            status: 200,
+            headers: {"content-type": "text/html; charset=utf-8"},
+          });
+        }
+
+        return new Response("", {status: 404});
+      },
+    });
+
+    const report = result.reportJson as {
+      summary?: {
+        scope?: string;
+        scannedPages?: number;
+        maxPages?: number;
+      };
+      evidence?: {
+        pages?: Array<{url: string}>;
+      };
+    };
+
+    expect(report.summary?.scope).toBe("site");
+    expect(report.summary?.scannedPages).toBe(2);
+    expect(report.summary?.maxPages).toBe(2);
+    expect(report.evidence?.pages?.map((page) => page.url)).toEqual([
+      "https://example.com/",
+      "https://example.com/pricing",
+    ]);
+    expect(result.scannedPages).toHaveLength(2);
+  });
+
+  it("prioritizes sitemap URLs over random homepage links", async () => {
+    const pageHtml = (title: string, links = "") => `
+      <html>
+        <head><title>${title}</title><meta name="description" content="${title} description" /></head>
+        <body><h1>${title}</h1><p>${title} page with crawlable content for AEO scanning.</p>${links}</body>
+      </html>
+    `;
+
+    const result = await runAeoFullSiteScan({
+      siteUrl: "https://example.com",
+      maxPages: 3,
+      fetchImpl: async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === "https://example.com/" || url === "https://example.com") {
+          return new Response(pageHtml("Home", `
+            <a href="/legal">Legal</a>
+            <a href="/random">Random</a>
+          `), {status: 200, headers: {"content-type": "text/html"}});
+        }
+        if (url === "https://example.com/robots.txt") {
+          return new Response("Sitemap: https://example.com/sitemap.xml", {status: 200});
+        }
+        if (url === "https://example.com/sitemap.xml") {
+          return new Response(`
+            <urlset>
+              <url><loc>https://example.com/products/widget</loc></url>
+              <url><loc>https://example.com/pricing</loc></url>
+            </urlset>
+          `, {status: 200, headers: {"content-type": "application/xml"}});
+        }
+        if (url === "https://example.com/products/widget") {
+          return new Response(pageHtml("Widget"), {status: 200, headers: {"content-type": "text/html"}});
+        }
+        if (url === "https://example.com/pricing") {
+          return new Response(pageHtml("Pricing"), {status: 200, headers: {"content-type": "text/html"}});
+        }
+        return new Response(pageHtml("Other"), {status: 200, headers: {"content-type": "text/html"}});
+      },
+    });
+
+    const discovery = (result.reportJson as {
+      discovery?: {
+        selectedUrls?: string[];
+        selectionReasonByUrl?: Record<string, string>;
+      };
+    }).discovery;
+
+    expect(discovery?.selectedUrls).toEqual([
+      "https://example.com/",
+      "https://example.com/pricing",
+      "https://example.com/products/widget",
+    ]);
+    expect(discovery?.selectionReasonByUrl?.["https://example.com/pricing"]).toBe("Pricing or plans page");
+    expect(result.scannedPages.map((page) => page.requestedUrl)).toEqual(discovery?.selectedUrls);
+  });
+
+  it("selects product pricing and category pages before blog pages", async () => {
+    const pageHtml = (title: string, links = "") => `
+      <html>
+        <head><title>${title}</title><meta name="description" content="${title} description" /></head>
+        <body><h1>${title}</h1><p>${title} content for key-page site scan testing.</p>${links}</body>
+      </html>
+    `;
+
+    const result = await runAeoFullSiteScan({
+      siteUrl: "https://example.com",
+      maxPages: 5,
+      fetchImpl: async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === "https://example.com/" || url === "https://example.com") {
+          return new Response(pageHtml("Home", `
+            <a href="/blog/launch">Blog</a>
+            <a href="/products/widget">Product</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/collections/new">Collection</a>
+            <a href="/about">About</a>
+          `), {status: 200, headers: {"content-type": "text/html"}});
+        }
+        return new Response(pageHtml(url), {status: 200, headers: {"content-type": "text/html"}});
+      },
+    });
+
+    const selectedUrls = ((result.reportJson as {discovery?: {selectedUrls?: string[]}}).discovery?.selectedUrls ?? []);
+    expect(selectedUrls).toEqual([
+      "https://example.com/",
+      "https://example.com/pricing",
+      "https://example.com/products/widget",
+      "https://example.com/collections/new",
+      "https://example.com/about",
+    ]);
+    expect(selectedUrls).not.toContain("https://example.com/blog/launch");
+  });
+
+  it("records llms.txt discovery without scanning it as a page", async () => {
+    const result = await runAeoFullSiteScan({
+      siteUrl: "https://example.com",
+      maxPages: 2,
+      fetchImpl: async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === "https://example.com/" || url === "https://example.com") {
+          return new Response(`
+            <html>
+              <head><title>Home</title><meta name="description" content="Home description" /></head>
+              <body><h1>Home</h1><a href="/pricing">Pricing</a></body>
+            </html>
+          `, {status: 200, headers: {"content-type": "text/html"}});
+        }
+        if (url === "https://example.com/llms.txt") {
+          return new Response("AI guidance", {status: 200, headers: {"content-type": "text/plain"}});
+        }
+        if (url === "https://example.com/pricing") {
+          return new Response(`
+            <html>
+              <head><title>Pricing</title><meta name="description" content="Pricing description" /></head>
+              <body><h1>Pricing</h1><p>Plans and prices.</p></body>
+            </html>
+          `, {status: 200, headers: {"content-type": "text/html"}});
+        }
+        return new Response("", {status: 404});
+      },
+    });
+
+    const discovery = (result.reportJson as {
+      discovery?: {
+        aiFilesFound?: string[];
+        selectedUrls?: string[];
+      };
+    }).discovery;
+
+    expect(discovery?.aiFilesFound).toContain("https://example.com/llms.txt");
+    expect(discovery?.selectedUrls).toEqual([
+      "https://example.com/",
+      "https://example.com/pricing",
+    ]);
+    expect(result.scannedPages.map((page) => page.requestedUrl)).not.toContain("https://example.com/llms.txt");
   });
 });
