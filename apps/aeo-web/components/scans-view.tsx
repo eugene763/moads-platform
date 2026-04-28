@@ -3,7 +3,7 @@
 import {useRouter} from "next/navigation";
 import {FormEvent, useEffect, useMemo, useState} from "react";
 
-import {apiRequest, PublicScanReport} from "../lib/api";
+import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
@@ -313,27 +313,16 @@ export function ScansView() {
       return;
     }
 
-    const previousScansCount = scans.length;
-    const shouldAutoUnlock = autoUnlockEnabled || previousScansCount > 0;
-
     setScanBusy(true);
     setError(null);
 
     try {
-      const created = await apiRequest<{scanId: string; publicToken: string}>("/v1/aeo/site-scans", {
+      const created = await apiRequest<{scanId: string; publicToken: string; wallet?: {balance: number}}>("/v1/aeo/site-scans", {
         method: "POST",
         body: JSON.stringify({siteUrl: candidate, maxPages: 5}),
       });
-
-      if (shouldAutoUnlock && walletBalance > 0) {
-        await apiRequest(`/v1/aeo/scans/${created.scanId}/generate-ai-tips`, {
-          method: "POST",
-          body: JSON.stringify({planCode: "free"}),
-        });
-        if (session && typeof window !== "undefined") {
-          window.localStorage.setItem(autoUnlockStorageKey(session.account.id), "1");
-          setAutoUnlockEnabled(true);
-        }
+      if (created.wallet) {
+        setWalletBalance(created.wallet.balance);
       }
 
       await loadWorkspace();
@@ -346,7 +335,11 @@ export function ScansView() {
       });
       setNewSiteUrl("");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to run full check.");
+      if (requestError instanceof ApiRequestError && requestError.code === "insufficient_credits") {
+        setPacksOpen(true);
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Failed to run full check.");
+      }
     } finally {
       setScanBusy(false);
     }

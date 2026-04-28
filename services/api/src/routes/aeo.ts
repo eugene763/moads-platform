@@ -1,5 +1,6 @@
 import {
   Prisma,
+  chargeAeoSiteScanCredits,
   claimAeoScan,
   consumeAeoStarterOfferState,
   createAeoPublicScan,
@@ -258,8 +259,15 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       throw new PlatformError(400, "aeo_site_url_required", "siteUrl is required.");
     }
 
+    const normalized = normalizeSiteUrl(body.siteUrl);
+    const charged = await chargeAeoSiteScanCredits(app.prisma, {
+      accountId: request.accountContext.accountId,
+      userId: request.authContext.userId,
+      operationKey: `aeo_site_scan:${request.accountContext.accountId}:${request.id}`,
+    });
+
     const scan = await runAeoFullSiteScan({
-      siteUrl: body.siteUrl,
+      siteUrl: normalized.requestedUrl,
       maxPages: readPositiveInt(body.maxPages, 5),
     });
 
@@ -287,6 +295,8 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
     reply.status(201).send({
       ...created,
       status: scan.status,
+      chargedCredits: charged.chargedCredits,
+      wallet: charged.wallet,
     });
   });
 

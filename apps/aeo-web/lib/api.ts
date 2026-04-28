@@ -125,6 +125,20 @@ export interface PublicScanReport {
   }>;
 }
 
+export class ApiRequestError extends Error {
+  code: string | null;
+  details: unknown;
+  status: number;
+
+  constructor(message: string, input: {code?: string | null; details?: unknown; status: number}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.code = input.code ?? null;
+    this.details = input.details ?? null;
+    this.status = input.status;
+  }
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -138,8 +152,13 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const message = (payload as {error?: {message?: string}}).error?.message ?? `Request failed (${response.status})`;
-    throw new Error(message);
+    const errorPayload = (payload as {error?: {code?: string; message?: string; details?: unknown}}).error;
+    const message = errorPayload?.message ?? `Request failed (${response.status})`;
+    throw new ApiRequestError(message, {
+      code: errorPayload?.code ?? null,
+      details: errorPayload?.details ?? null,
+      status: response.status,
+    });
   }
 
   if (response.status === 204) {
