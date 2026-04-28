@@ -26,6 +26,7 @@
     "cloud-tasks:ensure:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/ensure-cloud-tasks-queue.ts",
     "env:render:dev-cloud": "./infra/scripts/cloud/render-dev-cloud-env.sh",
     "cloud-run:deploy:dev-cloud": "./infra/scripts/cloud/deploy-moads-api-dev.sh",
+    "cloud-aeo-web:deploy:dev-cloud": "./infra/scripts/cloud/deploy-moads-aeo-web-dev.sh",
     "cloud-run:deploy:prod": "./infra/scripts/cloud/deploy-moads-api-prod.sh",
     "cloud-run:deploy:pro": "./infra/scripts/cloud/deploy-moads-api-pro.sh",
     "cloud-frontends:deploy:pro": "./infra/scripts/cloud/deploy-moads-pro-frontends.sh",
