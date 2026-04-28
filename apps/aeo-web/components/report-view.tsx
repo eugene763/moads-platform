@@ -354,7 +354,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
         </div>
         <div className="score-actions">
           <button type="button" className="cta-primary" onClick={handleFullSiteIntent} disabled={claimBusy || tipsBusy}>
-            {claimBusy ? "Unlocking..." : "Scan all site pages"}
+            {claimBusy ? "Unlocking..." : "Run key-page site scan"}
           </button>
           <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
           <button type="button" className="cta-ghost" onClick={printReport}>Print</button>

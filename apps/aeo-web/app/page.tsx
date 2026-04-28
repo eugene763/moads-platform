@@ -272,7 +272,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="sample-report-foot">
-                First result is one-page readiness only. Sign in to unlock deeper diagnostics and full-site actions.
+                First result is one-page readiness only. Sign in to unlock deeper diagnostics and key-page site scans.
               </p>
             </div>
           </div>
