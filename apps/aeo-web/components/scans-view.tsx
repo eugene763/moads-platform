@@ -60,33 +60,6 @@ function scanCostLabel(scanId: string, firstScanId: string | null): string {
   return scanId === firstScanId ? "Free" : "1 credit";
 }
 
-function buildDeveloperIssueSummary(
-  input: {
-    siteUrl: string;
-    score: number | null;
-    issues: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>;
-  },
-): string {
-  const header = [
-    "# AEO fixes for developer",
-    "",
-    `Site: ${input.siteUrl}`,
-    `Score: ${input.score ?? "--"}/100`,
-    "",
-    "## Visible issues",
-  ];
-
-  const body = input.issues.map((issue, index) => [
-    `${index + 1}. ${formatIssueTitle(issue.code)}`,
-    `Severity: ${issue.severity}`,
-    `Explanation: ${explainIssue(issue.code, issue.message)}`,
-    `Action: ${issueAction(issue.code)}`,
-    ...(issue.affectedPages?.length ? [`Affected pages: ${issue.affectedPages.join(", ")}`] : []),
-  ].join("\n"));
-
-  return [...header, ...body].join("\n\n");
-}
-
 export function ScansView() {
   const router = useRouter();
   const [queryScanId, setQueryScanId] = useState<string | null>(null);
@@ -112,8 +85,10 @@ export function ScansView() {
   const [highlightDeepScanButton, setHighlightDeepScanButton] = useState(false);
   const scanFormRef = useRef<HTMLElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const scanSubmitButtonRef = useRef<HTMLButtonElement | null>(null);
   const selectedScoreCardRef = useRef<HTMLElement | null>(null);
   const deepScanButtonRef = useRef<HTMLButtonElement | null>(null);
+  const currentIssuesRef = useRef<HTMLDivElement | null>(null);
 
   const [tabOrder, setTabOrder] = useState<string[]>([]);
   const [selectedSiteKey, setSelectedSiteKey] = useState<string | null>(null);
@@ -157,6 +132,7 @@ export function ScansView() {
 
   const selectedSiteScans = selectedSite?.scans ?? [];
   const firstScanId = scans.length ? scans[scans.length - 1]?.scanId ?? null : null;
+  const sitesCount = groupedSites.length;
 
   const selectedScan = useMemo(() => {
     const fromCurrent = selectedSiteScans.find((scan) => scan.scanId === selectedScanId) ?? null;
@@ -264,10 +240,6 @@ export function ScansView() {
     const prefill = querySiteUrl;
     const intent = queryIntent;
 
-    if (prefill) {
-      setNewSiteUrl(normalizeUrlForDisplay(prefill));
-    }
-
     if (scanId && scans.length) {
       const matched = scans.find((scan) => scan.scanId === scanId);
       if (matched) {
@@ -276,6 +248,29 @@ export function ScansView() {
         setSelectedScanId(matched.scanId);
         setTabOrder((previous) => [siteKey, ...previous.filter((key) => key !== siteKey)].slice(0, 6));
       }
+    }
+
+    if (prefill) {
+      const normalizedPrefill = normalizeWebsiteUrlInput(prefill) ?? prefill;
+      const prefillSiteKey = toSiteLabel(normalizedPrefill);
+      const matchedSite = groupedSites.find((site) => site.key === prefillSiteKey);
+      setNewSiteUrl(normalizeUrlForDisplay(normalizedPrefill));
+
+      if (matchedSite) {
+        setSelectedSiteKey(matchedSite.key);
+        setSelectedScanId(matchedSite.scans[0]?.scanId ?? null);
+        setTabOrder((previous) => [matchedSite.key, ...previous.filter((key) => key !== matchedSite.key)].slice(0, 6));
+        setScanHint("Existing scan selected. Run a Deep Site Scan when you are ready.");
+      } else {
+        setScanHint("Enter a website URL to start a new scan.");
+      }
+
+      setHighlightScanForm(true);
+      window.setTimeout(() => setHighlightScanForm(false), 1800);
+      window.requestAnimationFrame(() => {
+        scanFormRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+        scanInputRef.current?.focus();
+      });
     }
 
     if (intent === "buy-credits") {
@@ -300,16 +295,12 @@ export function ScansView() {
       setAuthOpen(true);
     }
 
-    if (intent === "site-scan" && session && prefill) {
-      void runFullCheckByUrl(prefill);
-    }
-
     if (scanId || prefill || intent) {
       router.replace("/scans", {scroll: false});
     }
 
     setQueryApplied(true);
-  }, [loading, queryApplied, queryIntent, queryScanId, querySiteUrl, router, scans, session]);
+  }, [groupedSites, loading, queryApplied, queryIntent, queryScanId, querySiteUrl, router, scans, session]);
 
   function selectSite(siteKey: string): void {
     setError(null);
@@ -326,7 +317,15 @@ export function ScansView() {
     const intent = readAeoAuthIntent();
     if (intent?.type === "deep_site_scan" && intent.siteUrl) {
       clearAeoAuthIntent();
-      await runFullCheckByUrl(intent.siteUrl);
+      const normalizedIntentUrl = normalizeWebsiteUrlInput(intent.siteUrl) ?? intent.siteUrl;
+      setNewSiteUrl(normalizeUrlForDisplay(normalizedIntentUrl));
+      setScanHint("Run a Deep Site Scan when you are ready.");
+      setHighlightScanForm(true);
+      window.setTimeout(() => setHighlightScanForm(false), 1800);
+      window.requestAnimationFrame(() => {
+        scanFormRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+        scanInputRef.current?.focus();
+      });
       return;
     }
     if (pendingPacksAfterAuth) {
@@ -400,12 +399,18 @@ export function ScansView() {
   }
 
   function guideToDeepScanButton(): void {
+    const sourceUrl = selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "";
+    if (sourceUrl.trim()) {
+      setNewSiteUrl(normalizeUrlForDisplay(sourceUrl));
+    }
     setScanHint("Run a Deep Site Scan to unlock all diagnostics.");
     setHighlightDeepScanButton(true);
+    setHighlightScanForm(true);
     window.setTimeout(() => setHighlightDeepScanButton(false), 1800);
+    window.setTimeout(() => setHighlightScanForm(false), 1800);
     window.requestAnimationFrame(() => {
-      selectedScoreCardRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
-      deepScanButtonRef.current?.focus();
+      scanFormRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+      scanSubmitButtonRef.current?.focus();
     });
   }
 
@@ -435,6 +440,14 @@ export function ScansView() {
     }
 
     guideToDeepScanButton();
+  }
+
+  function scrollToCurrentIssues(): void {
+    currentIssuesRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+  }
+
+  function scrollToAgencySupport(): void {
+    document.getElementById("agency-support")?.scrollIntoView({behavior: "smooth", block: "start"});
   }
 
   async function removeSelectedSiteFromWorkspace(): Promise<void> {
@@ -508,6 +521,10 @@ export function ScansView() {
   }
 
   async function shareSelectedReport(): Promise<void> {
+    await shareReportLink("Report link copied");
+  }
+
+  async function shareReportLink(successMessage: string): Promise<void> {
     const shareUrl = selectedScanDetail?.publicToken ?
       `${window.location.origin}/r/${selectedScanDetail.publicToken}` :
       (selectedUrl || window.location.href);
@@ -519,6 +536,7 @@ export function ScansView() {
           text: `AEO scan result for ${selectedUrl || "site"}`,
           url: shareUrl,
         });
+        setExportMessage(successMessage);
         return;
       }
     } catch {
@@ -527,9 +545,9 @@ export function ScansView() {
 
     try {
       await navigator.clipboard.writeText(shareUrl);
-      alert("Share link copied.");
+      setExportMessage(successMessage);
     } catch {
-      alert("Share is not available in this browser.");
+      setExportMessage("Share is not available in this browser.");
     }
   }
 
@@ -537,19 +555,8 @@ export function ScansView() {
     window.print();
   }
 
-  async function copyVisibleIssuesForDeveloper(issuesToCopy: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>): Promise<void> {
-    const summary = buildDeveloperIssueSummary({
-      siteUrl: selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? selectedUrl,
-      score: selectedScanDetail?.publicScore ?? selectedScan?.publicScore ?? null,
-      issues: issuesToCopy,
-    });
-
-    try {
-      await navigator.clipboard.writeText(summary);
-      setExportMessage("Fix list copied for developer");
-    } catch {
-      setExportMessage("Could not copy automatically. Select and copy the visible issue list manually.");
-    }
+  async function shareFixesWithDeveloper(): Promise<void> {
+    await shareReportLink("Report link copied");
   }
 
   if (loading) {
@@ -609,7 +616,9 @@ export function ScansView() {
       <section className={`panel full scans-form-panel${highlightScanForm ? " input-highlight" : ""}`} ref={scanFormRef}>
         <div className="panel-header">
           <h2>AI DISCOVERY READINESS CHECK</h2>
-          <span className="badge badge-score">{walletBalance} credits</span>
+          <button type="button" className="badge badge-score badge-button" onClick={() => setPacksOpen(true)}>
+            {walletBalance} credits
+          </button>
         </div>
         <form className="inline-scan-form" onSubmit={(event) => void runFullCheck(event)}>
           <input
@@ -622,7 +631,7 @@ export function ScansView() {
             autoCorrect="off"
             spellCheck={false}
           />
-          <button type="submit" className="cta-primary" disabled={scanBusy}>
+          <button ref={scanSubmitButtonRef} type="submit" className={`cta-primary${highlightDeepScanButton ? " cta-highlight" : ""}`} disabled={scanBusy}>
             {scanBusy ? "Scanning..." : "Run Deep Site Scan"}
           </button>
         </form>
@@ -632,7 +641,9 @@ export function ScansView() {
       <section className="panel full">
         <div className="panel-header">
           <h2>Scans</h2>
-          <span className="badge badge-score">{scans.length} scans</span>
+          <button type="button" className="badge badge-score badge-button" onClick={() => router.push("/dashboard#scan-history")}>
+            {sitesCount} sites
+          </button>
         </div>
 
         <div className="site-tabs tabs-wrap-two-rows">
@@ -705,10 +716,10 @@ export function ScansView() {
             </article>
 
             <div className="surface-card selected-scan-card">
-              <div className="panel-header compact">
+              <button type="button" className="panel-header compact clickable-panel-header" onClick={scrollToCurrentIssues}>
                 <h3>AI Crawler Accessibility</h3>
-                <span className="badge badge-score">Scored + locked details</span>
-              </div>
+                <span className="badge badge-score">Scored details</span>
+              </button>
               <div className="evidence-grid">
                 <article className="surface-card">
                   <h3>Scored now</h3>
@@ -751,7 +762,7 @@ export function ScansView() {
                           </li>
                         ))}
                       </ul>
-                      <button type="button" className="cta-ghost" onClick={() => void runDeepSiteScanForSelected()} disabled={scanBusy}>
+                      <button type="button" className="cta-ghost" onClick={handleCurrentIssuesDeepScanCta} disabled={scanBusy}>
                         Unlock hidden block
                       </button>
                     </div>
@@ -768,14 +779,16 @@ export function ScansView() {
               ) : null}
             </div>
 
-            <div className="surface-card selected-scan-card">
+            <div className="surface-card selected-scan-card" ref={currentIssuesRef}>
               <div className="panel-header compact">
                 <h3>Current Issues</h3>
                 <div className="panel-actions">
-                  <button type="button" className="cta-ghost compact-button" onClick={() => void copyVisibleIssuesForDeveloper(visibleIssues)}>
+                  <button type="button" className="cta-ghost compact-button" onClick={() => void shareFixesWithDeveloper()}>
                     Send fixes to developer
                   </button>
-                  <span className="badge badge-score">{issuesBadge}</span>
+                  <button type="button" className="badge badge-score badge-button" onClick={scrollToAgencySupport}>
+                    {issuesBadge}
+                  </button>
                 </div>
               </div>
               {exportMessage ? <p className="toast-message">{exportMessage}</p> : null}
@@ -822,7 +835,7 @@ export function ScansView() {
         )}
       </section>
 
-      <AgencySupportBlock className="dashboard-wide" />
+      <AgencySupportBlock id="agency-support" className="dashboard-wide" />
 
       {error ? <p className="error-text">{error}</p> : null}
       <AuthModal

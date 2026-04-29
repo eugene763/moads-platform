@@ -156,9 +156,7 @@ export function affectedPagesLabel(issue: RenderedIssue): string | null {
     return null;
   }
 
-  const visible = pages.slice(0, 3).join(", ");
-  const extra = pages.length > 3 ? ` +${pages.length - 3} more` : "";
-  return `Found on ${pages.length} pages: ${visible}${extra}`;
+  return `Found on ${pages.length} pages: ${pages.join(", ")}`;
 }
 
 function hasIssueCode(issues: Array<{code: string; message?: string}>, codes: string[]): boolean {

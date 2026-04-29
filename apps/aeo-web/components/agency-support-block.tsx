@@ -1,12 +1,13 @@
 interface AgencySupportBlockProps {
   className?: string;
+  id?: string;
 }
 
-export function AgencySupportBlock({className = ""}: AgencySupportBlockProps) {
+export function AgencySupportBlock({className = "", id}: AgencySupportBlockProps) {
   const classes = `lead-footer lead-footer-light ${className}`.trim();
 
   return (
-    <section className={classes}>
+    <section id={id} className={classes}>
       <p className="section-eyebrow section-eyebrow-light">Agency Support</p>
       <h2>Want us to implement AEO improvements?</h2>
       <p>

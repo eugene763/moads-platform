@@ -381,6 +381,7 @@ input {
   font-size: 0.92rem;
   margin: 12px 0 0;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .error-text {
@@ -1516,6 +1517,15 @@ input {
   justify-content: center;
 }
 
+.badge-button {
+  border: 0;
+  cursor: pointer;
+}
+
+.badge-button:hover {
+  filter: brightness(0.97);
+}
+
 .badge-high {
   background: var(--danger-soft);
   color: var(--danger);
@@ -2021,6 +2031,20 @@ input {
 .panel-header.compact {
   margin-bottom: 10px;
   padding-bottom: 8px;
+}
+
+.clickable-panel-header {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.clickable-panel-header:hover h3 {
+  color: var(--brand);
 }
 
 .account-actions-row {

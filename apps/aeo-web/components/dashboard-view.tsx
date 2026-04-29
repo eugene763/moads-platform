@@ -134,7 +134,7 @@ export function DashboardView() {
         </div>
       </section>
 
-      <section className="panel full">
+      <section id="scan-history" className="panel full">
         <div className="panel-header">
           <h2>Scan History</h2>
           <span className="badge badge-score">{scansCount} scans</span>
