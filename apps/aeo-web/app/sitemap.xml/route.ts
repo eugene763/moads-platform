@@ -9,7 +9,7 @@ const urls = [
   {
     loc: "https://aeo.moads.agency/scans",
     changefreq: "monthly",
-    priority: "0.6",
+    priority: "0.7",
   },
 ] as const;
 
