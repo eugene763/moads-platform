@@ -17,6 +17,8 @@ import {scheduleMotrendSubmitTaskTx} from "./motrend-tasks.js";
 
 type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
 
+const MAX_ACTIVE_GENERATION_JOBS = 3;
+
 function readJsonObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -268,17 +270,11 @@ export async function prepareMotrendJob(
       }
     }
 
-    const activeJob = await tx.moTrendJob.findFirst({
+    const awaitingUploadJob = await tx.moTrendJob.findFirst({
       where: {
         accountId: input.accountId,
         userId: input.userId,
-        status: {
-          in: [
-            MotrendJobStatus.AWAITING_UPLOAD,
-            MotrendJobStatus.QUEUED,
-            MotrendJobStatus.PROCESSING,
-          ],
-        },
+        status: MotrendJobStatus.AWAITING_UPLOAD,
       },
       orderBy: {
         createdAt: "asc",
@@ -286,7 +282,7 @@ export async function prepareMotrendJob(
     });
 
     let template = null;
-    if (activeJob?.status === MotrendJobStatus.AWAITING_UPLOAD) {
+    if (awaitingUploadJob) {
       template = await tx.moTrendTemplate.findFirst({
         where: {
           OR: [
@@ -298,23 +294,49 @@ export async function prepareMotrendJob(
 
       if (
         template?.isActive &&
-        activeJob.templateId === template.id &&
-        activeJob.selectionKind === requestedSelectionKind
+        awaitingUploadJob.templateId === template.id &&
+        awaitingUploadJob.selectionKind === requestedSelectionKind
       ) {
         return {
-          jobId: activeJob.id,
-          uploadPath: activeJob.inputImagePath,
+          jobId: awaitingUploadJob.id,
+          uploadPath: awaitingUploadJob.inputImagePath,
           reused: true,
         };
       }
     }
 
     assertOrThrow(
-      !activeJob,
+      !awaitingUploadJob,
       409,
       "active_job_exists",
-      "Finish the current upload or generation before starting a new one.",
-      activeJob ? {activeJobId: activeJob.id, activeStatus: activeJob.status} : undefined,
+      "Finish the current upload before starting a new one.",
+      awaitingUploadJob ?
+        {activeJobId: awaitingUploadJob.id, activeStatus: awaitingUploadJob.status} :
+        undefined,
+    );
+
+    const activeGenerationCount = await tx.moTrendJob.count({
+      where: {
+        accountId: input.accountId,
+        userId: input.userId,
+        status: {
+          in: [
+            MotrendJobStatus.QUEUED,
+            MotrendJobStatus.PROCESSING,
+          ],
+        },
+      },
+    });
+
+    assertOrThrow(
+      activeGenerationCount < MAX_ACTIVE_GENERATION_JOBS,
+      409,
+      "active_queue_limit_reached",
+      `You already have ${MAX_ACTIVE_GENERATION_JOBS} generations in progress. Wait for one to finish before starting another.`,
+      {
+        activeCount: activeGenerationCount,
+        activeLimit: MAX_ACTIVE_GENERATION_JOBS,
+      },
     );
 
     if (!template) {

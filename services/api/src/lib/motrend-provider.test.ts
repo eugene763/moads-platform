@@ -26,6 +26,7 @@ function baseConfig(motrendProviderMode: MotrendProviderMode): ApiConfig {
     cloudTasksMotrendSubmitQueue: "motrend-submit",
     cloudTasksMotrendPollQueue: "motrend-poll",
     cloudTasksInvokerServiceAccountEmail: "399776789069-compute@developer.gserviceaccount.com",
+    dodoEnvironment: "live_mode",
     motrendProviderMode,
     motrendProviderPollDelayMs: 2000,
     klingAccessKey: "kling-access",

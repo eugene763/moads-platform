@@ -1,120 +1,53 @@
-# AEO/LAB Service Status (Git-Anchored)
+# AEO/LAB Service Status — Final Git Snapshot (Updated)
 
-Snapshot time: 2026-03-30 14:02:15 +0400  
+Updated: 2026-04-21  
 Repository: `moads-platform`  
-Status type: technical verification for Claude/Codex handoff
+Branch: `codex/fix-reference-video-duration-u5ad86df2c2`  
+Source HEAD: `28a9675`
 
-## 1) Git snapshot anchor
+## Canonical spec
 
-- `HEAD`: `cf118be`  
-  `docs: add prod rollout status snapshot and harden frontend deploy check`
-- Functional base for AEO/LAB MVP: `b359096`  
-  `feat: finalize AEO/LAB pro contour MVP and frontend routing setup`
+Primary technical handoff:
 
-Interpretation rule for this status file:
-- runtime behavior is anchored to these two commits plus live checks below.
+- `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md` (includes 2026-04-21 addendum)
 
-## 2) Live runtime check (current)
+Current alignment/status file:
 
-Direct checks executed at snapshot time:
-- `https://aeo.moads.agency/` -> `200`
-- `https://lab.moads.agency/` -> `200`
-- `POST https://api.moads.agency/v1/aeo/public-scans` -> `200`
+- `docs/status/aeo_mvp_v2_alignment_status_2026-04-20.md`
 
-Referenced rollout status source:
-- `docs/status/prod-rollout-status-2026-03-30.md`
+## Current source-side contract
 
-From rollout source (as-of 2026-03-30 13:18:44 +04):
-- Firebase custom domains for `aeo.moads.agency` and `lab.moads.agency` are `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE`.
-- Cloud Run services updated:
-  - `moads-aeo-web`
-  - `moads-lab-web`
-  - `moads-api`
+- AEO public scan is free and URL-first.
+- Public score path is deterministic and does not call OpenAI.
+- AI tips are explicit paid action (`1 credit`).
+- AEO/LAB billing uses Dodo credit packs.
+- LAB remains account/billing center.
+- Subscription plans remain non-live (`coming soon` behavior in UX).
 
-## 3) API coverage in current code
+## Latest source update in git
 
-Mounted route groups:
-- `/v1/auth/*`
-- `/v1/me`, `/v1/wallet/summary`
-- `/v1/aeo/*`
-- `/v1/lab/*`
+```text
+28a96758dbf457076e5cce2ef08de2d91c640de3
+feat(aeo-web): improve auth flows, gated fixes, tabs, and pack modal UX
+```
 
-### 3.1 `/v1/aeo` coverage
+Key impact:
+- AEO auth modal expanded (Google + email/password + reset).
+- Top-fixes lock/unlock UX improved.
+- AEO-local pack popup checkout start added.
+- Dashboard tabs/account access improved.
 
-Implemented and active in code:
-- public scan creation/report:
-  - `POST /v1/aeo/public-scans`
-  - `GET /v1/aeo/public-scans/:publicToken`
-- public waitlist:
-  - `POST /v1/aeo/waitlist`
-- auth flow:
-  - `POST /v1/aeo/scans/:scanId/claim`
-  - `GET /v1/aeo/scans`
-  - `GET /v1/aeo/scans/:scanId`
-  - `POST /v1/aeo/scans/:scanId/generate-ai-tips`
-- site management:
-  - `GET /v1/aeo/sites`
-  - `POST /v1/aeo/sites`
-- offer/pricing/orders:
-  - `GET /v1/aeo/offers/starter`
-  - `POST /v1/aeo/offers/starter/consume`
-  - `GET /v1/aeo/pricing/credit-packs`
-  - `GET /v1/aeo/orders`
-  - `POST /v1/aeo/orders/checkout`
-  - `POST /v1/aeo/orders/:orderId/manual-fulfill` (admin)
-- evidence:
-  - `GET /v1/aeo/evidence/ga4`
-  - `GET /v1/aeo/realtime/stream` (SSE)
+## Runtime caution
 
-### 3.2 `/v1/lab` coverage
+Source was pushed, but runtime may still show previous frontend revisions until fresh deploy is completed with valid `gcloud` auth session.  
+Treat source/runtime parity as **NEEDS CHECK** until post-deploy smoke verifies latest UI.
 
-- `GET /v1/lab/center`
-- `GET /v1/lab/orders`
-- `POST /v1/lab/starter/checkout`
-- `POST /v1/lab/admin/orders/:orderId/manual-fulfill` (admin)
+## Immediate operator checks
 
-### 3.3 Auth/wallet/me coverage
-
-- `POST /v1/auth/session-login`
-- `POST /v1/auth/session-logout`
-- `GET /v1/auth/me`
-- `GET /v1/me`
-- `GET /v1/me/products`
-- `GET /v1/wallet/summary`
-
-## 4) Done vs deferred status
-
-## Done now
-- AEO and LAB Next.js apps are present and deployed through pro frontend scripts.
-- Public AEO scan/report token flow is active.
-- Auth claim and unlock flow is active.
-- AI tips endpoint with credit charging path is active.
-- Shared auth/account/membership/wallet backend integration is active.
-- API gateway path model for pro namespace is scripted and documented.
-
-## Deferred / next iteration
-- Global ranking board and opt-in shared leaderboard.
-- Advanced marketplace-specific parsers/connectors.
-- Full production move to dedicated `moads-pro` contour with all secrets/access finalized.
-- Full automated subscription/webhook hardening beyond manual-safe fulfillment baseline.
-
-## 5) Current blockers and risks
-
-Primary contour risk remains dedicated pro project readiness:
-- missing/blocked access for `moads-pro` project,
-- required secrets missing in pro context:
-  - `SESSION_COOKIE_SECRET_PRO`
-  - `MOADS_API_PRO_DATABASE_URL`
-- managed pro DB sync and pro API deploy cannot complete until permissions/secrets are fixed.
-
-Operational note:
-- additional pro gateway LB resources were created in current project; final placement decision is still required.
-
-## 6) Practical interpretation for implementers
-
-Use this as the current truth:
-- service is live on `aeo.moads.agency` and `lab.moads.agency` in current project contour,
-- API contracts listed above are available,
-- product work can continue immediately in repo,
-- migration to dedicated `moads-pro` should be treated as an infrastructure phase gate, not as a blocker for UX/backend iteration.
-
+1. Re-auth `gcloud` and ADC in deploy environment.
+2. Deploy frontends.
+3. Verify live auth on `aeo.moads.agency`:
+   - authorized domain in Firebase;
+   - Google provider enabled;
+   - email/password provider enabled.
+4. Verify live AEO pack popup checkout starts correctly.

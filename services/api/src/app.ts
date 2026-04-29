@@ -42,6 +42,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
     logger: true,
   });
 
+  app.addContentTypeParser("application/json", {parseAs: "string"}, (request, body, done) => {
+    const rawBody = typeof body === "string" ? body : body.toString();
+    request.rawBody = rawBody;
+
+    if (!rawBody.trim()) {
+      done(null, {});
+      return;
+    }
+
+    try {
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
   app.decorate("config", config);
   app.decorate("prisma", prisma);
   app.decorate("firebase", firebase);

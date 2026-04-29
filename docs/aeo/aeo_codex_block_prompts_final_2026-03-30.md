@@ -1,21 +1,32 @@
+> Pre-beta update, 2026-04-20: for current AEO/LAB source-of-truth, use `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md`. This older document is retained for historical context and may contain outdated branch/runtime references.
+
 # AEO/LAB Final Block Prompt Pack for Codex
 
-Date: 2026-03-30  
-Goal: run implementation in autonomous blocks with minimal user interruption.
+Date: 2026-04-14  
+Goal: run implementation in autonomous blocks with minimal user interruption against the current live launch baseline.
 
 ## Global execution rules (for all blocks)
 
 - Use repository: `/Users/malevich/Documents/Playground/moads-platform`
-- Git anchor: `cf118be` with functional baseline `b359096`
+- Git anchor: `ac04f69`
+- Runtime interpretation note:
+  - current branch HEAD is newer than the last verified live runtime snapshot,
+  - latest commits after `d184e17` are docs/status and rollout-alignment work,
+  - when re-deploying frontends, expect possible `gcloud auth login` reauth before Cloud Run/Firebase commands succeed
+- Practical baseline:
+  - live score = deterministic 3-block score,
+  - evidence layer = crawlability + product sample + action plan + prompt kit,
+  - Dodo = only active AEO billing provider
 - Keep `free-first` UX and economy:
   - public scan free,
   - score deterministic and shared across plans,
   - AI tips only on explicit action for `1 credit`.
 - Never mix entities in copy:
-  - plans = subscriptions (`Free`, `Starter`, `Pro`, `Deep Audit`)
+  - plans = subscriptions (`Free`, `Starter`, `Pro`, `Store`, `Deep Audit`)
   - packs = credit bundles (`Pack S/M/L`)
 - Secrets and paid integrations remain server-side only.
 - Default connector mode: `mock`, unless live secrets are explicitly provided.
+- Dodo launch phase is `Free + Packs only`; recurring subscriptions are deferred.
 
 ---
 
@@ -71,7 +82,7 @@ Ensure responsive behavior and no critical logic in frontend state.
 1. Simplify AEO scan form to URL-only payload.
 2. Update landing/report/dashboard copy to free-first contract.
 3. Keep share/print actions in public report.
-4. Ensure Starter/Pro/Deep Audit positioning follows lead/coming-soon rules.
+4. Ensure `Pack S/M/L` are the only live purchase actions and `Starter/Pro/Store/Deep Audit` positioning follows lead/coming-soon rules.
 5. Validate mobile layout and loading performance regressions.
 
 ### Done criteria
@@ -99,7 +110,8 @@ Align backend behavior with final free-first contract:
 - keep score deterministic and plan-agnostic,
 - grant one-time AEO welcome credit idempotently on first AEO activation,
 - enforce plan vs pack semantic separation in API responses and UI-facing labels,
-- preserve waitlist flows for Pro and Deep Audit.
+- preserve waitlist flows for Starter, Pro, Store, and Deep Audit,
+- keep Dodo limited to one-time AEO credit packs in this phase.
 Do not add new API families unless strictly required.
 ```
 
@@ -107,7 +119,7 @@ Do not add new API families unless strictly required.
 1. Add idempotent welcome-credit grant for first AEO activation path.
 2. Verify AI tips debit path stays 1 credit and idempotent-safe.
 3. Normalize API payload naming to avoid plan/pack confusion.
-4. Ensure waitlist endpoint accepts clear intent (`starter/pro/deep_audit`).
+4. Ensure waitlist endpoint accepts clear intent (`starter/pro/store/deep_audit`).
 5. Add/adjust tests for wallet/ledger idempotency and unlock path.
 
 ### Done criteria
@@ -129,7 +141,7 @@ Do not add new API families unless strictly required.
 
 ### Prompt
 ```text
-Harden integration scaffolding for OpenAI, GA4, and realtime evidence.
+Harden integration scaffolding for OpenAI, GA4, realtime evidence, and Dodo pack billing.
 Default to mock mode, keep live mode behind secrets and explicit flags.
 Implement queue-safe, resource-efficient behavior for paid actions and avoid blocking request paths.
 Ensure all key integration calls are server-side only.
@@ -137,10 +149,11 @@ Ensure all key integration calls are server-side only.
 
 ### Steps
 1. Verify mock/live switching and fallback behavior.
-2. Enforce secret-gated live connectors.
+2. Enforce secret-gated live connectors and Dodo credentials.
 3. Add timeout/retry/queue safety for AI tips generation path.
 4. Keep GA4/realtime in evidence layer only (not score layer).
 5. Add operational logging for cost and failure analysis.
+6. Keep subscriptions out of live billing scope for this phase.
 
 ### Done criteria
 - Integration code runs in mock mode without external credentials.
@@ -198,4 +211,3 @@ Do not proceed to dedicated moads-pro contour until required secrets/permissions
 
 Hard gate between D and E:
 - Do not switch connectors to live mode without confirmed secrets and permission readiness.
-

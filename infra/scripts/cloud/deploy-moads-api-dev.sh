@@ -40,6 +40,7 @@ INSTANCE_CONNECTION_NAME="${INSTANCE_CONNECTION_NAME:-$PROJECT_ID:$REGION:$INSTA
 RUNTIME_SERVICE_ACCOUNT_EMAIL="${RUNTIME_SERVICE_ACCOUNT_EMAIL:-moads-api-dev-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"
 SESSION_COOKIE_SECRET_NAME="${SESSION_COOKIE_SECRET_NAME:-SESSION_COOKIE_SECRET_DEV}"
 DATABASE_URL_SECRET_NAME="${DATABASE_URL_SECRET_NAME:-MOADS_API_DEV_DATABASE_URL}"
+OPENAI_API_KEY_SECRET_NAME="${OPENAI_API_KEY_SECRET_NAME:-OPENAI_API_KEY}"
 
 if [[ -z "${PROJECT_ID}" ]]; then
   echo "FIREBASE_PROJECT_ID or PROJECT_ID is required." >&2
@@ -71,6 +72,24 @@ secret_flags=(
   "KLING_SECRET_KEY=KLING_SECRET_KEY:latest"
 )
 
+if gcloud secrets describe "DODO_API_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_API_KEY=DODO_API_KEY:latest")
+else
+  echo "Dodo API key is not configured; Dodo checkout session creation will remain unavailable." >&2
+fi
+
+if gcloud secrets describe "DODO_WEBHOOK_KEY" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_WEBHOOK_KEY=DODO_WEBHOOK_KEY:latest")
+elif gcloud secrets describe "DODO_WEBHOOK_SECRET" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("DODO_WEBHOOK_KEY=DODO_WEBHOOK_SECRET:latest")
+else
+  echo "Dodo webhook secret is not configured; Dodo webhook processing will remain unavailable." >&2
+fi
+
+if gcloud secrets describe "$OPENAI_API_KEY_SECRET_NAME" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  secret_flags+=("OPENAI_API_KEY=${OPENAI_API_KEY_SECRET_NAME}:latest")
+fi
+
 if [[ "${ATTACH_FIREBASE_SERVICE_ACCOUNT_SECRET:-false}" == "true" ]] && \
   gcloud secrets describe FIREBASE_SERVICE_ACCOUNT --project "$PROJECT_ID" >/dev/null 2>&1; then
   secret_flags+=("FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT:latest")
@@ -98,6 +117,14 @@ env_pairs=(
   "MOTREND_PROVIDER_POLL_DELAY_MS=${MOTREND_PROVIDER_POLL_DELAY_MS:-2000}"
   "KLING_BASE_URL=${KLING_BASE_URL:-https://api-singapore.klingai.com}"
   "KLING_HTTP_TIMEOUT_MS=${KLING_HTTP_TIMEOUT_MS:-20000}"
+  "AEO_PUBLIC_SCAN_RATE_LIMIT_PER_HOUR=${AEO_PUBLIC_SCAN_RATE_LIMIT_PER_HOUR:-60}"
+  "AEO_PUBLIC_SCAN_CACHE_TTL_MS=${AEO_PUBLIC_SCAN_CACHE_TTL_MS:-86400000}"
+  "AEO_AI_TIPS_MODE=${AEO_AI_TIPS_MODE:-mock}"
+  "AEO_GA4_MODE=${AEO_GA4_MODE:-mock}"
+  "AEO_REALTIME_MODE=${AEO_REALTIME_MODE:-mock}"
+  "AEO_REALTIME_INTERVAL_MS=${AEO_REALTIME_INTERVAL_MS:-5000}"
+  "AEO_AI_TIPS_MODEL=${AEO_AI_TIPS_MODEL:-gpt-5-mini}"
+  "DODO_ENVIRONMENT=${DODO_ENVIRONMENT:-test_mode}"
 )
 
 if [[ -n "${runtime_session_cookie_domain}" ]]; then
@@ -110,6 +137,10 @@ fi
 
 if [[ -n "${MOTREND_STUB_OUTPUT_URL:-}" ]]; then
   env_pairs+=("MOTREND_STUB_OUTPUT_URL=${MOTREND_STUB_OUTPUT_URL}")
+fi
+
+if [[ -n "${DODO_BASE_URL:-}" ]]; then
+  env_pairs+=("DODO_BASE_URL=${DODO_BASE_URL}")
 fi
 
 secret_string="$(IFS=,; printf '%s' "${secret_flags[*]}")"

@@ -13,6 +13,7 @@ import {
 } from "./wallet.js";
 
 type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
+export const AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST = 1;
 
 function createToken(bytes = 18): string {
   return randomBytes(bytes).toString("base64url");
@@ -187,6 +188,129 @@ export async function createAeoPublicScan(
       publicToken: created.publicToken,
       status: created.status.toLowerCase(),
       resultUrl: `/aeo/r/${created.publicToken}`,
+    };
+  });
+}
+
+export async function createAeoSiteScan(
+  prisma: Prisma.DefaultPrismaClient,
+  input: CreateAeoPublicScanInput & {
+    accountId: string;
+    userId: string;
+  },
+) {
+  return await prisma.$transaction(async (tx) => {
+    const site = await ensureAeoSiteForClaim(tx, {
+      accountId: input.accountId,
+      userId: input.userId,
+      normalizedUrl: input.normalizedUrl,
+    });
+
+    const created = await tx.aeoScan.create({
+      data: {
+        accountId: input.accountId,
+        userId: input.userId,
+        siteId: site.id,
+        anonymousSessionId: input.anonymousSessionId ?? null,
+        siteUrl: input.siteUrl,
+        normalizedUrl: input.normalizedUrl,
+        finalUrl: input.finalUrl ?? null,
+        httpStatus: input.httpStatus ?? null,
+        status: input.status,
+        publicScore: input.publicScore ?? null,
+        confidenceLevel: input.confidenceLevel ?? null,
+        recommendationsLocked: false,
+        isClaimed: true,
+        scanKind: "site_scan",
+        publicToken: createToken(),
+        scoreVersion: input.scoreVersion ?? "v1",
+      },
+    });
+
+    await tx.aeoScanReport.create({
+      data: {
+        scanId: created.id,
+        rulesetVersion: input.rulesetVersion ?? "aeo_rules_v1",
+        promptVersion: input.promptVersion ?? "deterministic_site_v1",
+        reportJson: input.reportJson,
+        recommendationsJson: input.recommendationsJson ?? Prisma.JsonNull,
+        extractedFactsJson: input.extractedFactsJson ?? Prisma.JsonNull,
+        issuesJson: input.issuesJson ?? Prisma.JsonNull,
+        signalBlocksJson: input.signalBlocksJson ?? Prisma.JsonNull,
+        rawFetchMetaJson: input.rawFetchMetaJson ?? Prisma.JsonNull,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        accountId: input.accountId,
+        userId: input.userId,
+        actionCode: "aeo.site_scan_created",
+        targetType: "aeo_scan",
+        targetId: created.id,
+        payloadJson: {
+          siteId: site.id,
+          publicToken: created.publicToken,
+        },
+      },
+    });
+
+    return {
+      scanId: created.id,
+      publicToken: created.publicToken,
+      status: created.status.toLowerCase(),
+      resultUrl: `/aeo/r/${created.publicToken}`,
+    };
+  });
+}
+
+export async function chargeAeoSiteScanCredits(
+  prisma: Prisma.DefaultPrismaClient,
+  input: {
+    accountId: string;
+    userId: string;
+    operationKey?: string | null;
+  },
+) {
+  return await prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUnique({
+      where: {code: "aeo"},
+    });
+    assertOrThrow(product, 404, "product_not_found", "AEO product was not found.");
+
+    const wallet = await ensureGlobalCreditsWallet(tx, input.accountId);
+    await debitWalletCredits(tx, {
+      walletId: wallet.id,
+      accountId: input.accountId,
+      productId: product.id,
+      entryType: LedgerEntryType.SPEND,
+      amountDelta: -AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST,
+      reasonCode: "aeo_key_page_site_scan",
+      refType: "aeo_site_scan",
+      refId: null,
+      operationKey: input.operationKey ?? null,
+      metadataJson: {
+        maxPages: 5,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        accountId: input.accountId,
+        userId: input.userId,
+        actionCode: "aeo.site_scan_credits_charged",
+        targetType: "aeo_site_scan",
+        targetId: null,
+        payloadJson: {
+          creditsCharged: AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST,
+        },
+      },
+    });
+
+    const walletSnapshot = await getWalletSnapshot(tx, input.accountId);
+    return {
+      chargedCredits: AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST,
+      wallet: walletSnapshot,
     };
   });
 }
@@ -394,6 +518,55 @@ export async function getAeoScanById(
 
   assertOrThrow(scan, 404, "aeo_scan_not_found", "AEO scan was not found.");
   return shapeScanDetail(scan);
+}
+
+export async function removeAeoScanFromWorkspace(
+  prisma: Prisma.DefaultPrismaClient,
+  input: {
+    accountId: string;
+    userId: string;
+    scanId: string;
+  },
+) {
+  return await prisma.$transaction(async (tx) => {
+    const scan = await tx.aeoScan.findFirst({
+      where: {
+        id: input.scanId,
+        accountId: input.accountId,
+      },
+    });
+
+    assertOrThrow(scan, 404, "aeo_scan_not_found", "AEO scan was not found.");
+
+    await tx.aeoScan.update({
+      where: {id: scan.id},
+      data: {
+        accountId: null,
+        userId: null,
+        siteId: null,
+        isClaimed: false,
+        recommendationsLocked: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        accountId: input.accountId,
+        userId: input.userId,
+        actionCode: "aeo.scan_removed_from_workspace",
+        targetType: "aeo_scan",
+        targetId: scan.id,
+        payloadJson: {
+          publicToken: scan.publicToken,
+        },
+      },
+    });
+
+    return {
+      scanId: scan.id,
+      removed: true,
+    };
+  });
 }
 
 export async function saveAeoAiTips(

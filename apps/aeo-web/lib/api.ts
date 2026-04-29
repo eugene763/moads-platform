@@ -10,7 +10,11 @@ export interface PublicScanResponse {
 
 export interface PublicScanReport {
   scanId: string;
+  siteUrl: string;
+  normalizedUrl?: string | null;
+  finalUrl?: string | null;
   publicToken: string;
+  scanKind?: string;
   publicScore: number | null;
   status: string;
   confidenceLevel: string | null;
@@ -18,8 +22,26 @@ export interface PublicScanReport {
   lockedRecommendationsCount: number;
   report: {
     summary?: {
+      scope?: string;
       ratingSchemaStatus?: string;
+      scanModeNote?: string | null;
     };
+    dimensions?: {
+      access?: number;
+      basicSeo?: number;
+      ratingsSchema?: number;
+      aiCrawlerAccessibility?: number;
+      answerOptimization?: number;
+      citationReadiness?: number;
+      technicalHygiene?: number;
+    };
+    topFixes?: Array<{
+      id: string;
+      title: string;
+      description: string;
+      impactScore: number;
+      priority: string;
+    }>;
     evidence?: {
       structuredData?: {
         aggregateRating?: {
@@ -33,6 +55,62 @@ export interface PublicScanReport {
         reviewsCount?: number;
         snippet?: string | null;
       };
+      crawlability?: {
+        robotsExists?: boolean;
+        sitemapExists?: boolean;
+        llmsTxtExists?: boolean;
+        llmGuidancePage?: string | null;
+        aiBots?: Record<string, {allowed?: boolean; explicitly?: boolean; reachable?: boolean | null}>;
+      };
+      productPage?: {
+        sampled?: boolean;
+        source?: string;
+        url?: string | null;
+        title?: string | null;
+        aggregateRating?: {
+          ratingValue?: number;
+          reviewCount?: number;
+          ratingCount?: number;
+        } | null;
+        onPage?: {
+          ratingValue?: number;
+          reviewsCount?: number;
+          snippet?: string | null;
+        } | null;
+      };
+      notes?: string[];
+    };
+    actionPlan?: {
+      topIssues?: Array<{
+        code: string;
+        message: string;
+        severity: string;
+        dimension: string;
+        pointsLost: number;
+      }>;
+      fastestWin?: {
+        id: string;
+        title: string;
+        description: string;
+        impactScore: number;
+        priority: string;
+      } | null;
+      priorityFixes?: Array<{
+        id: string;
+        title: string;
+        description: string;
+        impactScore: number;
+        priority: string;
+      }>;
+    };
+    promptKit?: {
+      mode?: string;
+      prompts?: Array<{
+        id: string;
+        title: string;
+        engine: string;
+        prompt: string;
+      }>;
     };
   };
   recommendations: Array<{
@@ -49,6 +127,20 @@ export interface PublicScanReport {
   }>;
 }
 
+export class ApiRequestError extends Error {
+  code: string | null;
+  details: unknown;
+  status: number;
+
+  constructor(message: string, input: {code?: string | null; details?: unknown; status: number}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.code = input.code ?? null;
+    this.details = input.details ?? null;
+    this.status = input.status;
+  }
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -62,8 +154,13 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const message = (payload as {error?: {message?: string}}).error?.message ?? `Request failed (${response.status})`;
-    throw new Error(message);
+    const errorPayload = (payload as {error?: {code?: string; message?: string; details?: unknown}}).error;
+    const message = errorPayload?.message ?? `Request failed (${response.status})`;
+    throw new ApiRequestError(message, {
+      code: errorPayload?.code ?? null,
+      details: errorPayload?.details ?? null,
+      status: response.status,
+    });
   }
 
   if (response.status === 204) {

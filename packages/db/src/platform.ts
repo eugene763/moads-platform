@@ -7,8 +7,10 @@ import {
 
 import {PlatformError, assertOrThrow} from "./errors.js";
 import {
+  AEO_WELCOME_CREDITS,
   ensureGlobalCreditsWallet,
   getWalletSnapshot,
+  grantAeoWelcomeCredits,
   grantMotrendBootstrapCredits,
   MOTREND_TEST_BOOTSTRAP_CREDITS,
 } from "./wallet.js";
@@ -25,6 +27,7 @@ export interface SessionBootstrapInput {
   photoUrl?: string | null;
   signInProvider?: string | null;
   legacySupportCode?: string | null;
+  suppressMotrendGift?: boolean;
 }
 
 export interface SessionBootstrapResult {
@@ -207,8 +210,15 @@ export async function bootstrapSessionLogin(
       });
     }
 
-    const grantedTestCredits = product.code === "motrend" && createdMembership ?
+    const grantedTestCredits = product.code === "motrend" && createdMembership && !input.suppressMotrendGift ?
       await grantMotrendBootstrapCredits(tx, {
+        walletId: wallet.id,
+        accountId: account.id,
+        productId: product.id,
+      }) :
+      false;
+    const grantedAeoWelcomeCredits = product.code === "aeo" && createdMembership ?
+      await grantAeoWelcomeCredits(tx, {
         walletId: wallet.id,
         accountId: account.id,
         productId: product.id,
@@ -225,10 +235,12 @@ export async function bootstrapSessionLogin(
         payloadJson: {
           productCode: product.code,
           createdMembership,
+          suppressMotrendGift: Boolean(input.suppressMotrendGift),
           grantedTestCredits,
+          grantedAeoWelcomeCredits,
           grantedTestCreditsAmount: grantedTestCredits ?
             MOTREND_TEST_BOOTSTRAP_CREDITS :
-            null,
+            grantedAeoWelcomeCredits ? AEO_WELCOME_CREDITS : null,
         },
       },
     });
@@ -272,10 +284,10 @@ export async function bootstrapSessionLogin(
       supportCode: supportProfile.supportCode,
       wallet: walletSnapshot,
       createdMembership,
-      grantedTestCredits,
+      grantedTestCredits: grantedTestCredits || grantedAeoWelcomeCredits,
       grantedTestCreditsAmount: grantedTestCredits ?
         MOTREND_TEST_BOOTSTRAP_CREDITS :
-        null,
+        grantedAeoWelcomeCredits ? AEO_WELCOME_CREDITS : null,
     };
   });
 }

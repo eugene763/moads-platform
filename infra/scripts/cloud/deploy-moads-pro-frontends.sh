@@ -78,6 +78,7 @@ deploy_frontend_service() {
     --project "$PROJECT_ID" \
     --region "$REGION" \
     --source "$app_dir" \
+    --set-build-env-vars "$env_string" \
     --allow-unauthenticated \
     --no-invoker-iam-check \
     --ingress all \

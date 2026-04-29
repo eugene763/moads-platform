@@ -1,10 +1,13 @@
 "use client";
 
+import {useRouter} from "next/navigation";
 import {useEffect, useMemo, useState} from "react";
 
 import {apiRequest} from "../lib/api";
-import {trackGa4} from "../lib/analytics";
-import {signInForAeoSession} from "../lib/firebase";
+import {scoreToneClass, statusToneClass, toSiteLabel} from "../lib/aeo-ui";
+import {AgencySupportBlock} from "./agency-support-block";
+import {AuthModal} from "./auth-modal";
+import {CreditPacksModal} from "./credit-packs-modal";
 
 interface SessionSnapshot {
   account: {id: string};
@@ -19,24 +22,26 @@ interface ScanItem {
   createdAt: string;
 }
 
-interface StreamState {
-  mentionCount: number;
-  citationCount: number;
-  gaSessions: number;
-  gaAiSessions: number;
+function sortByDateDesc(scans: ScanItem[]): ScanItem[] {
+  return [...scans].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+function scanCostLabel(scanId: string, firstScanId: string | null): string {
+  return scanId === firstScanId ? "Free" : "1 credit";
 }
 
 export function DashboardView() {
+  const router = useRouter();
   const [session, setSession] = useState<SessionSnapshot | null>(null);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [scans, setScans] = useState<ScanItem[]>([]);
-  const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
-  const [streamState, setStreamState] = useState<StreamState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [signInBusy, setSignInBusy] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [packsOpen, setPacksOpen] = useState(false);
 
-  const selectedScan = useMemo(() => scans.find((scan) => scan.scanId === selectedScanId) ?? scans[0] ?? null, [scans, selectedScanId]);
+  const scansCount = useMemo(() => scans.length, [scans]);
+  const firstScanId = scans.length ? scans[scans.length - 1]?.scanId ?? null : null;
 
   async function loadDashboard(): Promise<void> {
     setLoading(true);
@@ -51,10 +56,14 @@ export function DashboardView() {
 
       setSession(sessionSnapshot);
       setWalletBalance(wallet.wallet.balance);
-      setScans(scanList.scans);
-      setSelectedScanId(scanList.scans[0]?.scanId ?? null);
+      setScans(sortByDateDesc(scanList.scans));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to load dashboard.");
+      const message = requestError instanceof Error ? requestError.message : "Failed to load account.";
+      if (!/session|membership required|product membership/i.test(message)) {
+        setError(message);
+      }
+      setSession(null);
+      setScans([]);
     } finally {
       setLoading(false);
     }
@@ -65,127 +74,116 @@ export function DashboardView() {
   }, []);
 
   useEffect(() => {
-    if (!session) {
+    if (typeof window === "undefined") {
       return;
     }
-
-    const url = `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.moads.agency"}/v1/aeo/realtime/stream`;
-    const stream = new EventSource(url, {withCredentials: true});
-
-    stream.addEventListener("snapshot", (event) => {
-      const message = JSON.parse((event as MessageEvent<string>).data) as {
-        realtime: {mentionCount: number; citationCount: number};
-        ga: {sessions: number; aiAttributedSessions: number};
-      };
-      setStreamState({
-        mentionCount: message.realtime.mentionCount,
-        citationCount: message.realtime.citationCount,
-        gaSessions: message.ga.sessions,
-        gaAiSessions: message.ga.aiAttributedSessions,
-      });
-    });
-
-    return () => {
-      stream.close();
-    };
-  }, [session]);
-
-  async function signIn(): Promise<void> {
-    setSignInBusy(true);
-    setError(null);
-
-    try {
-      const idToken = await signInForAeoSession();
-      await apiRequest("/v1/auth/session-login", {
-        method: "POST",
-        body: JSON.stringify({
-          idToken,
-          productCode: "aeo",
-        }),
-      });
-      await loadDashboard();
-      trackGa4("aeo_dashboard_signin");
-    } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Sign in failed.");
-    } finally {
-      setSignInBusy(false);
+    if (window.location.hash === "#billing") {
+      setPacksOpen(true);
     }
-  }
+  }, []);
 
-  async function generateTips(): Promise<void> {
-    if (!selectedScan) {
-      return;
-    }
-
-    try {
-      await apiRequest(`/v1/aeo/scans/${selectedScan.scanId}/generate-ai-tips`, {
-        method: "POST",
-        body: JSON.stringify({planCode: "starter"}),
-      });
-      const wallet = await apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary");
-      setWalletBalance(wallet.wallet.balance);
-      trackGa4("aeo_dashboard_ai_tips", {
-        scan_id: selectedScan.scanId,
-      });
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to generate tips.");
-    }
+  async function onAuthSuccess(): Promise<void> {
+    setAuthOpen(false);
+    await loadDashboard();
   }
 
   if (loading) {
-    return <div className="state-card">Loading dashboard...</div>;
+    return (
+      <div className="panel">
+        <div className="skeleton-pulse" />
+      </div>
+    );
   }
 
   if (!session) {
     return (
       <div className="state-card">
-        <h2>Starter Dashboard</h2>
-        <p>Sign in to unlock history, wallet, GA4 and realtime widgets.</p>
-        <button type="button" className="cta-primary" onClick={signIn} disabled={signInBusy}>
-          {signInBusy ? "Signing in..." : "Sign In with Google"}
+        <h2>Account</h2>
+        <p>Sign in to access your AEO scans, credits, and billing actions.</p>
+        <button type="button" className="cta-primary" onClick={() => setAuthOpen(true)}>
+          Sign In / Create Account
         </button>
         {error ? <p className="error-text">{error}</p> : null}
+        <AuthModal
+          open={authOpen}
+          onClose={() => setAuthOpen(false)}
+          onSuccess={onAuthSuccess}
+          source="dashboard_gate"
+        />
       </div>
     );
   }
 
   return (
     <div className="dashboard-grid">
-      <section className="panel">
-        <h2>Account</h2>
-        <p>Email: {session.user.email ?? "unknown"}</p>
-        <p>Account: {session.account.id}</p>
-        <p>Credits: <strong>{walletBalance ?? "--"}</strong></p>
-      </section>
-
-      <section className="panel">
-        <h2>Realtime Evidence</h2>
-        <p>Mentions: {streamState?.mentionCount ?? "--"}</p>
-        <p>Citations: {streamState?.citationCount ?? "--"}</p>
-        <p>GA Sessions: {streamState?.gaSessions ?? "--"}</p>
-        <p>AI-attributed Sessions: {streamState?.gaAiSessions ?? "--"}</p>
+      <section className="panel" id="billing">
+        <div className="panel-header">
+          <h2>Account</h2>
+          <span className="badge badge-score">{walletBalance} credits</span>
+        </div>
+        <div className="summary-stack">
+          <p>Email: {session.user.email ?? "unknown"}</p>
+          <p>Account ID: {session.account.id}</p>
+          <p className="tiny">Use credits to unlock all recommendations and deeper diagnostics.</p>
+        </div>
+        <div className="account-actions-row">
+          <button type="button" className="cta-primary" onClick={() => setPacksOpen(true)}>
+            Buy more credits
+          </button>
+          <button type="button" className="cta-ghost" onClick={() => router.push("/scans")}>Open scans workspace</button>
+        </div>
       </section>
 
       <section className="panel full">
-        <h2>Scan History</h2>
-        <ul className="list">
-          {scans.map((scan) => (
-            <li key={scan.scanId}>
-              <button type="button" className="scan-item" onClick={() => setSelectedScanId(scan.scanId)}>
-                <span>
-                  <strong>{scan.publicScore ?? "--"}</strong> • {scan.siteUrl}
-                </span>
-                <span className="tiny">{new Date(scan.createdAt).toLocaleString()}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button type="button" className="cta-primary" onClick={generateTips} disabled={!selectedScan}>
-          Generate AI Tips for Selected Scan (1 Credit)
-        </button>
+        <div className="panel-header">
+          <h2>Scan History</h2>
+          <span className="badge badge-score">{scansCount} scans</span>
+        </div>
+        {scansCount ? (
+          <ul className="list scan-history-list">
+            {scans.map((scan) => (
+              <li key={scan.scanId}>
+                <button
+                  type="button"
+                  className="scan-item"
+                  onClick={() => router.push(`/scans?scanId=${encodeURIComponent(scan.scanId)}`)}
+                >
+                  <div className="scan-item-main">
+                    <p className="list-title">{toSiteLabel(scan.siteUrl)}</p>
+                    <p className="tiny">{scan.siteUrl}</p>
+                    <p className="tiny">{new Date(scan.createdAt).toLocaleString()}</p>
+                    <p className="tiny scan-cost-line">Scan cost: {scanCostLabel(scan.scanId, firstScanId)}</p>
+                  </div>
+                  <div className="scan-item-side">
+                    <span className={`score-pill ${scoreToneClass(scan.publicScore)}`}>{scan.publicScore ?? "--"}/100</span>
+                    <span className={`status-chip ${statusToneClass(scan.status)}`}>{scan.status.replace(/_/g, " ")}</span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="surface-card">
+            <p className="list-title">No scans yet</p>
+            <p className="tiny">Run your first scan from the checker and it will appear here.</p>
+          </div>
+        )}
       </section>
 
+      <AgencySupportBlock className="dashboard-wide" />
+
       {error ? <p className="error-text">{error}</p> : null}
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onSuccess={onAuthSuccess}
+        source="dashboard_auth"
+      />
+      <CreditPacksModal
+        open={packsOpen}
+        onClose={() => setPacksOpen(false)}
+        source="dashboard_packs"
+      />
     </div>
   );
 }

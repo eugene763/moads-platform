@@ -1,11 +1,12 @@
 import {
   Prisma,
+  chargeAeoSiteScanCredits,
   claimAeoScan,
   consumeAeoStarterOfferState,
   createAeoPublicScan,
   createAeoSite,
+  createAeoSiteScan,
   createAeoWaitlistRequest,
-  createBillingCheckoutOrder,
   fulfillBillingOrderManually,
   getAeoPublicScanByToken,
   getAeoScanById,
@@ -15,6 +16,7 @@ import {
   listBillingCreditPackOffers,
   listBillingOrders,
   PlatformError,
+  removeAeoScanFromWorkspace,
   saveAeoAiTips,
   upsertAeoMonitoringSnapshot,
 } from "@moads/db";
@@ -25,11 +27,13 @@ import {
   createAeoGaAdapter,
   createAeoRealtimeAdapter,
 } from "../lib/aeo-adapters.js";
+import {createBillingCheckoutResponse, normalizeCheckoutAttribution} from "../lib/billing-checkout.js";
+import {maskUnavailableCheckoutOffers} from "../lib/billing-offers.js";
 import {
   normalizeSiteUrl,
   runAeoDeterministicScan,
+  runAeoFullSiteScan,
 } from "../lib/aeo-scanner.js";
-import {requireProductMembership} from "../middleware/access.js";
 import {requireAdminClaim} from "../middleware/admin.js";
 import {requireAuth, resolveAccount} from "../middleware/auth.js";
 
@@ -127,7 +131,7 @@ async function tryResolveAuthContext(request: FastifyRequest) {
 }
 
 export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
-  const authGuards = [requireAuth, resolveAccount, requireProductMembership("aeo")];
+  const authGuards = [requireAuth, resolveAccount];
   const aiTipsAdapter = createAeoAiTipsAdapter(app.config);
   const gaAdapter = createAeoGaAdapter(app.config);
   const realtimeAdapter = createAeoRealtimeAdapter(app.config);
@@ -187,7 +191,7 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       status: scan.status,
       publicScore: scan.publicScore,
       confidenceLevel: scan.confidenceLevel,
-      scoreVersion: "aeo_score_v1",
+      scoreVersion: "aeo_score_v2",
       reportJson: toInputJson(scan.reportJson),
       recommendationsJson: toInputJson(scan.recommendationsJson),
       extractedFactsJson: toInputJson(scan.extractedFactsJson),
@@ -226,13 +230,74 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
         free: {
           scoreVisible: true,
           recommendationsUnlocked: 3,
+          deterministicScanPrice: "free",
         },
-        starter: {
-          recommendationsUnlocked: "all",
-          includesGa4: true,
-          includesRealtime: true,
+        packs: {
+          availableCodes: ["aeo_pack_s", "aeo_pack_m", "aeo_pack_l"],
+          aiTipsCreditCost: 1,
+          checkoutSurface: "lab_center",
+        },
+        futurePlans: {
+          starter: "coming_soon",
+          pro: "coming_soon",
+          store: "coming_soon",
         },
       },
+    });
+  });
+
+  app.post("/aeo/site-scans", {preHandler: authGuards}, async (request, reply) => {
+    if (!request.accountContext || !request.authContext) {
+      throw new PlatformError(500, "session_context_missing", "Session context is missing.");
+    }
+
+    const body = request.body as {
+      siteUrl?: unknown;
+      maxPages?: unknown;
+    } | undefined;
+
+    if (typeof body?.siteUrl !== "string") {
+      throw new PlatformError(400, "aeo_site_url_required", "siteUrl is required.");
+    }
+
+    const normalized = normalizeSiteUrl(body.siteUrl);
+    const charged = await chargeAeoSiteScanCredits(app.prisma, {
+      accountId: request.accountContext.accountId,
+      userId: request.authContext.userId,
+      operationKey: `aeo_site_scan:${request.accountContext.accountId}:${request.id}`,
+    });
+
+    const scan = await runAeoFullSiteScan({
+      siteUrl: normalized.requestedUrl,
+      maxPages: readPositiveInt(body.maxPages, 5),
+    });
+
+    const created = await createAeoSiteScan(app.prisma, {
+      accountId: request.accountContext.accountId,
+      userId: request.authContext.userId,
+      siteUrl: scan.requestedUrl,
+      normalizedUrl: scan.normalizedUrl,
+      finalUrl: scan.finalUrl,
+      httpStatus: scan.httpStatus,
+      status: scan.status,
+      publicScore: scan.publicScore,
+      confidenceLevel: scan.confidenceLevel,
+      scoreVersion: "aeo_score_v2",
+      reportJson: toInputJson(scan.reportJson),
+      recommendationsJson: toInputJson(scan.recommendationsJson),
+      extractedFactsJson: toInputJson(scan.extractedFactsJson),
+      issuesJson: toInputJson(scan.issuesJson),
+      signalBlocksJson: toInputJson(scan.signalBlocksJson),
+      rawFetchMetaJson: toInputJson(scan.rawFetchMetaJson),
+      rulesetVersion: scan.rulesetVersion,
+      promptVersion: scan.promptVersion,
+    });
+
+    reply.status(201).send({
+      ...created,
+      status: scan.status,
+      chargedCredits: charged.chargedCredits,
+      wallet: charged.wallet,
     });
   });
 
@@ -306,6 +371,25 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
     });
 
     reply.send(scan);
+  });
+
+  app.delete("/aeo/scans/:scanId", {preHandler: authGuards}, async (request, reply) => {
+    if (!request.accountContext || !request.authContext) {
+      throw new PlatformError(500, "session_context_missing", "Session context is missing.");
+    }
+
+    const params = request.params as {scanId?: unknown};
+    if (typeof params.scanId !== "string" || !params.scanId.trim()) {
+      throw new PlatformError(400, "scan_id_required", "scanId is required.");
+    }
+
+    const removed = await removeAeoScanFromWorkspace(app.prisma, {
+      accountId: request.accountContext.accountId,
+      userId: request.authContext.userId,
+      scanId: params.scanId.trim(),
+    });
+
+    reply.send(removed);
   });
 
   app.post("/aeo/scans/:scanId/generate-ai-tips", {preHandler: authGuards}, async (request, reply) => {
@@ -430,9 +514,9 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/aeo/pricing/credit-packs", {preHandler: authGuards}, async (_request, reply) => {
-    const packs = await listBillingCreditPackOffers(app.prisma, {
+    const packs = maskUnavailableCheckoutOffers(app.config, await listBillingCreditPackOffers(app.prisma, {
       productCode: "aeo",
-    });
+    })).map(({providerCode: _providerCode, ...pack}) => pack);
 
     reply.send({packs});
   });
@@ -458,16 +542,21 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
 
     const body = request.body as {
       priceId?: unknown;
+      attribution?: unknown;
     } | undefined;
 
     if (typeof body?.priceId !== "string" || !body.priceId.trim()) {
       throw new PlatformError(400, "billing_price_required", "priceId is required.");
     }
 
-    const order = await createBillingCheckoutOrder(app.prisma, {
+    const order = await createBillingCheckoutResponse(app, {
       accountId: request.accountContext.accountId,
       productCode: "aeo",
       priceId: body.priceId.trim(),
+      userId: request.authContext?.userId ?? null,
+      firebaseUid: request.authContext?.firebaseUid ?? null,
+      email: request.authContext?.email ?? null,
+      attribution: normalizeCheckoutAttribution(body?.attribution),
     });
 
     reply.status(201).send(order);

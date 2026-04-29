@@ -2,6 +2,7 @@ import {PrismaClient} from "@prisma/client";
 
 import {
   BILLING_CHECKOUT_LINK_PROVIDER_CODE,
+  BILLING_DODO_PROVIDER_CODE,
   BILLING_CREDIT_PACK_PRODUCT_TYPE,
   buildCreditPackScopeRef,
 } from "../../packages/db/src/billing.js";
@@ -12,7 +13,9 @@ interface CreditPackSeedInput {
   name: string;
   creditsAmount: number;
   amountMinor: number;
+  providerCode?: string;
   checkoutUrl?: string;
+  dodoProductId?: string;
   currencyCode?: string;
   marketCode?: string;
   languageCode?: string;
@@ -25,6 +28,8 @@ function readPackInputs(): CreditPackSeedInput[] {
   if (!raw) {
     return DEFAULT_MOTREND_CREDIT_PACKS.map((pack) => ({
       ...pack,
+      providerCode: pack.dodoProductId ? BILLING_DODO_PROVIDER_CODE : BILLING_CHECKOUT_LINK_PROVIDER_CODE,
+      checkoutUrl: pack.dodoProductId ?? "",
       currencyCode: "USD",
       marketCode: "global",
       languageCode: "en",
@@ -45,8 +50,14 @@ function readPackInputs(): CreditPackSeedInput[] {
     const name = typeof item.name === "string" ? item.name.trim() : "";
     const creditsAmount = Number((item as {creditsAmount?: unknown}).creditsAmount);
     const amountMinor = Number((item as {amountMinor?: unknown}).amountMinor);
+    const providerCode = typeof (item as {providerCode?: unknown}).providerCode === "string" ?
+      (item as {providerCode?: string}).providerCode?.trim().toLowerCase() :
+      "";
     const checkoutUrl = typeof (item as {checkoutUrl?: unknown}).checkoutUrl === "string" ?
       (item as {checkoutUrl?: string}).checkoutUrl?.trim() :
+      "";
+    const dodoProductId = typeof (item as {dodoProductId?: unknown}).dodoProductId === "string" ?
+      (item as {dodoProductId?: string}).dodoProductId?.trim() :
       "";
     const currencyCode = typeof (item as {currencyCode?: unknown}).currencyCode === "string" ?
       (item as {currencyCode?: string}).currencyCode?.trim().toUpperCase() :
@@ -67,7 +78,9 @@ function readPackInputs(): CreditPackSeedInput[] {
       name,
       creditsAmount,
       amountMinor,
-      ...(checkoutUrl ? {checkoutUrl} : {}),
+      ...(providerCode ? {providerCode} : {}),
+      ...((dodoProductId || checkoutUrl) ? {checkoutUrl: dodoProductId || checkoutUrl} : {}),
+      ...(dodoProductId ? {dodoProductId} : {}),
       currencyCode,
       marketCode,
       languageCode,
@@ -75,16 +88,40 @@ function readPackInputs(): CreditPackSeedInput[] {
   });
 }
 
-async function ensureCheckoutLinkProvider() {
+function resolveProviderCode(input: CreditPackSeedInput): string {
+  if (typeof input.providerCode === "string" && input.providerCode.trim()) {
+    return input.providerCode.trim().toLowerCase();
+  }
+
+  if (input.dodoProductId) {
+    return BILLING_DODO_PROVIDER_CODE;
+  }
+
+  return BILLING_CHECKOUT_LINK_PROVIDER_CODE;
+}
+
+function providerNameFromCode(providerCode: string): string {
+  if (providerCode === BILLING_DODO_PROVIDER_CODE) {
+    return "Dodo Payments";
+  }
+
+  if (providerCode === BILLING_CHECKOUT_LINK_PROVIDER_CODE) {
+    return "Checkout Link";
+  }
+
+  return providerCode;
+}
+
+async function ensureProvider(providerCode: string) {
   return await prisma.billingProvider.upsert({
-    where: {code: BILLING_CHECKOUT_LINK_PROVIDER_CODE},
+    where: {code: providerCode},
     update: {
-      name: "Checkout Link",
+      name: providerNameFromCode(providerCode),
       status: "active",
     },
     create: {
-      code: BILLING_CHECKOUT_LINK_PROVIDER_CODE,
-      name: "Checkout Link",
+      code: providerCode,
+      name: providerNameFromCode(providerCode),
       status: "active",
     },
   });
@@ -119,9 +156,9 @@ async function ensurePriceBook(input: Required<Pick<CreditPackSeedInput, "curren
 
 async function main(): Promise<void> {
   const packs = readPackInputs();
-  const provider = await ensureCheckoutLinkProvider();
 
   for (const pack of packs) {
+    const provider = await ensureProvider(resolveProviderCode(pack));
     const priceBook = await ensurePriceBook({
       currencyCode: pack.currencyCode ?? "USD",
       marketCode: pack.marketCode ?? "global",
@@ -150,7 +187,6 @@ async function main(): Promise<void> {
     const existingPrice = await prisma.billingPrice.findFirst({
       where: {
         billingProductId: billingProduct.id,
-        providerId: provider.id,
         priceBookId: priceBook.id,
       },
       orderBy: {
@@ -162,6 +198,7 @@ async function main(): Promise<void> {
       await prisma.billingPrice.update({
         where: {id: existingPrice.id},
         data: {
+          providerId: provider.id,
           amountMinor: pack.amountMinor,
           isActive: true,
           ...("checkoutUrl" in pack ? {externalPriceId: pack.checkoutUrl ?? null} : {}),

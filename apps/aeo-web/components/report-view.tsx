@@ -1,11 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
-import {signInForAeoSession} from "../lib/firebase";
+import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
+import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
+import {affectedPagesLabel, prepareCurrentIssues} from "../lib/current-issues";
+import {AuthModal} from "./auth-modal";
+import {CreditPacksModal} from "./credit-packs-modal";
+import {ScoreRing} from "./score-ring";
+import {AgencySupportBlock} from "./agency-support-block";
 
 interface ScanDetail extends PublicScanReport {
   aiTips?: {
@@ -18,20 +23,72 @@ interface ScanDetail extends PublicScanReport {
   };
 }
 
+function priorityBadgeClass(priority: string): string {
+  const normalized = priority.trim().toLowerCase();
+  if (normalized === "high") {
+    return "badge-high";
+  }
+  if (normalized === "medium" || normalized === "med") {
+    return "badge-med";
+  }
+  return "badge-low";
+}
+
+function formatIssueTitle(code: string): string {
+  return code
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (value) => value.toUpperCase());
+}
+
+function buildDeveloperIssueSummary(
+  input: {
+    siteUrl: string;
+    score: number | null;
+    issues: Array<{code: string; severity: string; message: string}>;
+  },
+): string {
+  const header = [
+    "# AEO fixes for developer",
+    "",
+    `Site: ${input.siteUrl}`,
+    `Score: ${input.score ?? "--"}/100`,
+    "",
+    "## Visible issues",
+  ];
+
+  const body = input.issues.map((issue, index) => [
+    `${index + 1}. ${formatIssueTitle(issue.code)}`,
+    `Severity: ${issue.severity}`,
+    `Explanation: ${explainIssue(issue.code, issue.message)}`,
+    `Action: ${issueAction(issue.code)}`,
+  ].join("\n"));
+
+  return [...header, ...body].join("\n\n");
+}
+
 export function ReportView({publicToken}: {publicToken: string}) {
   const [report, setReport] = useState<ScanDetail | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [isAuthed, setIsAuthed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [packsOpen, setPacksOpen] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
-  const [tipsBusy, setTipsBusy] = useState(false);
+  const [pendingSiteScanIntent, setPendingSiteScanIntent] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [deepScanHint, setDeepScanHint] = useState<string | null>(null);
+  const [highlightDeepScanButton, setHighlightDeepScanButton] = useState(false);
+  const scoreCardRef = useRef<HTMLElement | null>(null);
+  const deepScanButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const ratingStatus = report?.report.summary?.ratingSchemaStatus ?? "unknown";
+  const publicScore = report?.publicScore ?? 0;
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
       setError(null);
+
       try {
         const data = await apiRequest<ScanDetail>(`/v1/aeo/public-scans/${publicToken}`);
         setReport(data);
@@ -47,33 +104,68 @@ export function ReportView({publicToken}: {publicToken: string}) {
     })();
   }, [publicToken]);
 
-  const scoreLabel = useMemo(() => {
-    if (!report?.publicScore && report?.publicScore !== 0) {
-      return "--";
+  async function refreshSessionAndWallet(): Promise<void> {
+    try {
+      await apiRequest("/v1/me");
+      setIsAuthed(true);
+      const wallet = await apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary");
+      setWalletBalance(wallet.wallet.balance);
+    } catch {
+      setIsAuthed(false);
+      setWalletBalance(null);
+    }
+  }
+
+  useEffect(() => {
+    void refreshSessionAndWallet();
+  }, []);
+
+  const statusLabel = useMemo(() => {
+    if (!report) {
+      return "loading";
+    }
+    return report.status.replace(/_/g, " ");
+  }, [report]);
+
+  async function claimScanIfNeeded(): Promise<void> {
+    if (!report || !report.recommendationsLocked) {
+      return;
     }
 
-    return String(report.publicScore);
-  }, [report?.publicScore]);
-
-  async function loginAndCreateSession(): Promise<void> {
-    setAuthBusy(true);
-    setError(null);
-
+    setClaimBusy(true);
     try {
-      const idToken = await signInForAeoSession();
-      await apiRequest("/v1/auth/session-login", {
+      const claimed = await apiRequest<ScanDetail>(`/v1/aeo/scans/${report.scanId}/claim`, {
         method: "POST",
-        body: JSON.stringify({
-          idToken,
-          productCode: "aeo",
-        }),
       });
-      trackGa4("aeo_auth_success");
-    } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Sign in failed.");
-      throw authError;
+      setReport(claimed);
     } finally {
-      setAuthBusy(false);
+      setClaimBusy(false);
+    }
+  }
+
+  async function handleAuthSuccess(): Promise<void> {
+    try {
+      await refreshSessionAndWallet();
+      await claimScanIfNeeded();
+
+      const intent = readAeoAuthIntent();
+      if ((pendingSiteScanIntent || intent?.type === "deep_site_scan") && report) {
+        clearAeoAuthIntent();
+        const destination = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
+        window.location.href = destination;
+        return;
+      }
+
+      if (intent?.type === "unlock_report" && report) {
+        clearAeoAuthIntent();
+        window.location.href = `/scans?scanId=${encodeURIComponent(report.scanId)}`;
+        return;
+      }
+
+      setAuthOpen(false);
+      setPendingSiteScanIntent(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
     }
   }
 
@@ -82,61 +174,151 @@ export function ReportView({publicToken}: {publicToken: string}) {
       return;
     }
 
+    if (!isAuthed) {
+      saveAeoAuthIntent({
+        type: "unlock_report",
+        publicToken,
+        scanId: report.scanId,
+        siteUrl: report.siteUrl,
+      });
+      setAuthOpen(true);
+      return;
+    }
+
     setClaimBusy(true);
     setError(null);
 
     try {
-      await loginAndCreateSession();
       const claimed = await apiRequest<ScanDetail>(`/v1/aeo/scans/${report.scanId}/claim`, {
         method: "POST",
       });
       setReport(claimed);
+      await refreshSessionAndWallet();
       trackGa4("aeo_scan_claimed", {
         scan_id: report.scanId,
       });
-    } catch {
-      // error already set
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
     } finally {
       setClaimBusy(false);
     }
   }
 
-  async function handleGenerateTips(): Promise<void> {
+  function hasDeepSiteScanData(): boolean {
+    return report?.scanKind === "site_scan" || report?.report.summary?.scope === "site";
+  }
+
+  function handleDeepSiteScanIntent(): void {
     if (!report) {
       return;
     }
 
-    setTipsBusy(true);
-    setError(null);
+    if (!isAuthed) {
+      saveAeoAuthIntent({
+        type: "deep_site_scan",
+        publicToken,
+        scanId: report.scanId,
+        siteUrl: report.siteUrl,
+      });
+      setPendingSiteScanIntent(true);
+      setAuthOpen(true);
+      return;
+    }
+
+    if (hasDeepSiteScanData()) {
+      setReport((previous) => previous ? {...previous, recommendationsLocked: false} : previous);
+      return;
+    }
+
+    if ((walletBalance ?? 0) <= 0) {
+      setPacksOpen(true);
+      return;
+    }
+
+    window.location.href = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
+  }
+
+  function guideToDeepScanButton(): void {
+    setDeepScanHint("Run a Deep Site Scan to unlock all diagnostics.");
+    setHighlightDeepScanButton(true);
+    window.setTimeout(() => setHighlightDeepScanButton(false), 1800);
+    window.requestAnimationFrame(() => {
+      scoreCardRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+      deepScanButtonRef.current?.focus();
+    });
+  }
+
+  function handleCurrentIssuesDeepScanCta(): void {
+    if (!report) {
+      return;
+    }
+
+    if (!isAuthed) {
+      handleDeepSiteScanIntent();
+      return;
+    }
+
+    if (hasDeepSiteScanData()) {
+      setReport((previous) => previous ? {...previous, recommendationsLocked: false} : previous);
+      return;
+    }
+
+    if ((walletBalance ?? 0) <= 0) {
+      setPacksOpen(true);
+      return;
+    }
+
+    guideToDeepScanButton();
+  }
+
+  function printReport(): void {
+    window.print();
+  }
+
+  async function shareResult(): Promise<void> {
+    if (!report) {
+      return;
+    }
+
+    const sharePayload = {
+      title: "MO AEO CHECKER report",
+      text: `AI Discovery Readiness: ${report.publicScore ?? "--"}/100 for ${normalizeUrlForDisplay(report.siteUrl)}`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      await navigator.share(sharePayload).catch(() => undefined);
+      return;
+    }
+
+    await navigator.clipboard.writeText(window.location.href).catch(() => undefined);
+  }
+
+  async function copyVisibleIssuesForDeveloper(issues: Array<{code: string; severity: string; message: string}>): Promise<void> {
+    if (!report) {
+      return;
+    }
+
+    const summary = buildDeveloperIssueSummary({
+      siteUrl: report.siteUrl || displayUrl,
+      score: report.publicScore,
+      issues,
+    });
 
     try {
-      const result = await apiRequest<{tips: Array<{title: string; detail: string; priority: string; category: string}>}>(
-        `/v1/aeo/scans/${report.scanId}/generate-ai-tips`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            planCode: "free",
-          }),
-        },
-      );
-
-      setReport((prev) => prev ? {
-        ...prev,
-        aiTips: {tips: result.tips},
-      } : prev);
-
-      trackGa4("aeo_ai_tips_generated", {
-        scan_id: report.scanId,
-      });
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "AI tips failed.");
-    } finally {
-      setTipsBusy(false);
+      await navigator.clipboard.writeText(summary);
+      setExportMessage("Fix list copied for developer");
+    } catch {
+      setExportMessage("Could not copy automatically. Select and copy the visible issue list manually.");
     }
   }
 
   if (loading) {
-    return <div className="state-card">Loading report...</div>;
+    return (
+      <div className="panel">
+        <div className="skeleton-pulse" />
+      </div>
+    );
   }
 
   if (error && !report) {
@@ -147,76 +329,197 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return <div className="state-card">Report not found.</div>;
   }
 
-  const aggregate = report.report.evidence?.structuredData?.aggregateRating;
-  const onPage = report.report.evidence?.onPage;
+  const crawlability = report.report.evidence?.crawlability;
+  const scanModeNote = report.report.summary?.scanModeNote;
+  const displayUrl = normalizeUrlForDisplay(report.siteUrl || report.finalUrl || "");
+
+  const scoredNow = [
+    ["AI Crawler Accessibility", report.report.dimensions?.aiCrawlerAccessibility],
+    ["Answer Optimization", report.report.dimensions?.answerOptimization],
+    ["Citation Readiness", report.report.dimensions?.citationReadiness],
+    ["Technical Hygiene", report.report.dimensions?.technicalHygiene],
+  ] as const;
+
+  const visibleCrawlerRows: Array<{label: string; value: string}> = [
+    {label: "Sitemap", value: crawlability?.sitemapExists ? "found" : "not found"},
+    {label: "Robots.txt", value: crawlability?.robotsExists ? "found" : "not found"},
+    {
+      label: "Pre-rendered text",
+      value: report.confidenceLevel === "low" ? "limited" : "detected",
+    },
+  ];
+
+  const hiddenCrawlerRows: Array<{label: string; value: string}> = [
+    {
+      label: "llms.txt",
+      value: crawlability?.llmsTxtExists ? "found" : "not found",
+    },
+    {
+      label: "LLM guidance page",
+      value: crawlability?.llmGuidancePage ? "found" : "not found",
+    },
+    {
+      label: "Canonical stability",
+      value: report.issues.some((issue) => issue.code === "canonical_missing") ? "needs fix" : "stable",
+    },
+    {
+      label: "Blocked content",
+      value: report.status === "blocked" ? "risk" : "clear",
+    },
+  ];
+
+  const currentIssues = prepareCurrentIssues(report);
+  const issuesVisibleLimit = report.recommendationsLocked ? 3 : 5;
+  const visibleIssues = currentIssues.slice(0, issuesVisibleLimit);
+  const issuesPreview = currentIssues[issuesVisibleLimit] ?? null;
+  const currentIssuesBadge = currentIssues.length === report.issues.length ?
+    `${currentIssues.length} issues` :
+    `${currentIssues.length} issues · ${report.issues.length} findings`;
 
   return (
     <div className="report-shell">
-      <section className="report-top">
-        <div className="score-card">
-          <p className="score-kicker">AI Discovery Score (Beta)</p>
-          <p className="score-value">{scoreLabel}<span>/100</span></p>
-          <p className="score-meta">Ratings schema status: <strong>{ratingStatus}</strong></p>
+      <section className="panel score-card" ref={scoreCardRef}>
+        <ScoreRing score={publicScore} />
+        <div className="score-text-block">
+          <p className="score-kicker">AI DISCOVERY READINESS OF</p>
+          <h1 className="score-url-heading">{displayUrl || "this page"}</h1>
+          <p className={`score-heading ${scoreToneClass(publicScore)}`}>{publicScore}/100</p>
+          <p className={`status-chip ${statusToneClass(statusLabel)}`}>{statusLabel}</p>
+          <p className="warning-line">⚠️ This result covers one scanned page only, not full site readiness.</p>
+          {scanModeNote ? <p className="tiny note-banner">{scanModeNote}</p> : null}
         </div>
         <div className="score-actions">
-          <button type="button" className="cta-ghost" onClick={() => window.print()}>Print</button>
-          <button type="button" className="cta-ghost" onClick={() => navigator.clipboard.writeText(window.location.href)}>Copy Link</button>
-          <Link className="cta-primary" href="/dashboard">Open Dashboard</Link>
+          <button
+            ref={deepScanButtonRef}
+            type="button"
+            className={`cta-primary${highlightDeepScanButton ? " cta-highlight" : ""}`}
+            onClick={handleDeepSiteScanIntent}
+            disabled={claimBusy}
+          >
+            {claimBusy ? "Unlocking..." : "Run Deep Site Scan"}
+          </button>
+          <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
+          <button type="button" className="cta-ghost" onClick={printReport}>Print</button>
         </div>
+        {deepScanHint ? <p className="scan-form-hint">{deepScanHint}</p> : null}
       </section>
 
       <section className="panel">
-        <h2>Evidence</h2>
+        <div className="panel-header">
+          <h2>AI Crawler Accessibility</h2>
+          <span className="badge badge-score">Scored + locked details</span>
+        </div>
         <div className="evidence-grid">
-          <article>
-            <h3>Structured Data</h3>
-            <p>ratingValue: {aggregate?.ratingValue ?? "not found"}</p>
-            <p>reviewCount: {aggregate?.reviewCount ?? aggregate?.ratingCount ?? "not found"}</p>
+          <article className="surface-card">
+            <h3>Scored now</h3>
+            <ul className="meta-list">
+              {scoredNow.map(([label, value]) => (
+                <li key={label}>
+                  <span>{label}</span>
+                  <strong>{value ?? "--"}</strong>
+                </li>
+              ))}
+            </ul>
           </article>
-          <article>
-            <h3>On-page Evidence</h3>
-            <p>Visible rating: {onPage?.ratingValue ?? "not found"}</p>
-            <p>Visible reviews: {onPage?.reviewsCount ?? "not found"}</p>
-            <p className="tiny">{onPage?.snippet ?? "No matching snippet found in raw HTML."}</p>
+          <article className="surface-card">
+            <h3>Visible checks</h3>
+            <ul className="meta-list">
+              {visibleCrawlerRows.map((row) => (
+                <li key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </li>
+              ))}
+            </ul>
+            {report.recommendationsLocked ? (
+              <div className="locked-subset">
+                <p className="tiny">Sign in to unlock additional crawler checks.</p>
+                <ul className="meta-list locked-rows">
+                  {hiddenCrawlerRows.map((row) => (
+                    <li key={row.label}>
+                      <span>{row.label}</span>
+                      <strong>locked</strong>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="cta-ghost" onClick={handleDeepSiteScanIntent} disabled={claimBusy}>
+                  Unlock hidden block
+                </button>
+              </div>
+            ) : (
+              <ul className="meta-list" style={{marginTop: "10px"}}>
+                {hiddenCrawlerRows.map((row) => (
+                  <li key={row.label}>
+                    <span>{row.label}</span>
+                    <strong>{row.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         </div>
-        <p className="tiny">Scanner mode: raw HTML only (rendered mode in next iteration).</p>
       </section>
 
-      <section className="panel">
-        <h2>Top Fixes</h2>
-        <ul className="list">
-          {report.recommendations.map((recommendation) => (
-            <li key={recommendation.id}>
-              <div>
-                <p className="list-title">{recommendation.title}</p>
-                <p className="tiny">{recommendation.description}</p>
-              </div>
-              <span className="badge">+{recommendation.impactScore}</span>
-            </li>
-          ))}
-        </ul>
-
-        {report.recommendationsLocked ? (
-          <div className="lock-panel">
-            <p>{report.lockedRecommendationsCount} fixes are locked. Sign in to unlock full breakdown.</p>
-            <button type="button" className="cta-primary" onClick={handleClaim} disabled={authBusy || claimBusy}>
-              {authBusy || claimBusy ? "Unlocking..." : "Sign In and Unlock"}
-            </button>
+      {currentIssues.length ? (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Current Issues</h2>
+            <div className="panel-actions">
+              <button type="button" className="cta-ghost compact-button" onClick={() => void copyVisibleIssuesForDeveloper(visibleIssues)}>
+                Send fixes to developer
+              </button>
+              <span className="badge badge-score">{currentIssuesBadge}</span>
+            </div>
           </div>
-        ) : (
-          <div className="unlock-panel">
-            <p>Full report unlocked.</p>
-            <button type="button" className="cta-primary" onClick={handleGenerateTips} disabled={tipsBusy}>
-              {tipsBusy ? "Generating..." : "Generate AI Tips (1 Credit)"}
-            </button>
-          </div>
-        )}
-      </section>
+          {exportMessage ? <p className="toast-message">{exportMessage}</p> : null}
+          <ul className="list">
+            {visibleIssues.map((issue) => (
+              <li key={issue.code}>
+                <div>
+                  <p className="list-title">{formatIssueTitle(issue.code)}</p>
+                  <p className="tiny">{explainIssue(issue.code, issue.message)}</p>
+                  <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issue.code)}</p>
+                  {affectedPagesLabel(issue) ? <p className="tiny">{affectedPagesLabel(issue)}</p> : null}
+                </div>
+                <span className={`badge ${priorityBadgeClass(issue.severity)}`}>{issue.severity}</span>
+              </li>
+            ))}
+            {issuesPreview ? (
+              <li className="blur-preview">
+                <div>
+                  <p className="list-title">{formatIssueTitle(issuesPreview.code)}</p>
+                  <p className="tiny">{explainIssue(issuesPreview.code, issuesPreview.message)}</p>
+                  <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issuesPreview.code)}</p>
+                  {affectedPagesLabel(issuesPreview) ? <p className="tiny">{affectedPagesLabel(issuesPreview)}</p> : null}
+                </div>
+                <span className={`badge ${priorityBadgeClass(issuesPreview.severity)}`}>{issuesPreview.severity}</span>
+              </li>
+            ) : null}
+          </ul>
+          {report.recommendationsLocked ? (
+            <div className="lock-panel">
+              <p>{Math.max(0, currentIssues.length - visibleIssues.length)} more issue diagnostics unlock after sign-in.</p>
+              <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta}>
+                Unlock all fixes
+              </button>
+            </div>
+          ) : currentIssues.length > visibleIssues.length ? (
+            <div className="unlock-panel">
+              <p>Use 1 credit to unlock full issue diagnostics for this site and priority actions.</p>
+              <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta}>
+                Run Deep Site Scan
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {report.aiTips?.tips?.length ? (
         <section className="panel">
-          <h2>AI Tips</h2>
+          <div className="panel-header">
+            <h2>AI Tips</h2>
+            <span className="badge badge-score">{report.aiTips.tips.length} generated</span>
+          </div>
           <ul className="list">
             {report.aiTips.tips.map((tip, index) => (
               <li key={`${tip.title}-${index}`}>
@@ -224,14 +527,30 @@ export function ReportView({publicToken}: {publicToken: string}) {
                   <p className="list-title">{tip.title}</p>
                   <p className="tiny">{tip.detail}</p>
                 </div>
-                <span className="badge">{tip.priority}</span>
+                <span className={`badge ${priorityBadgeClass(tip.priority)}`}>{tip.priority}</span>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
 
+      <AgencySupportBlock />
+
       {error ? <p className="error-text">{error}</p> : null}
+      <AuthModal
+        open={authOpen}
+        onClose={() => {
+          setAuthOpen(false);
+          setPendingSiteScanIntent(false);
+        }}
+        onSuccess={handleAuthSuccess}
+        source="report_unlock"
+      />
+      <CreditPacksModal
+        open={packsOpen && isAuthed}
+        onClose={() => setPacksOpen(false)}
+        source="report_deep_site_scan"
+      />
     </div>
   );
 }

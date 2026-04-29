@@ -18,6 +18,7 @@ type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
 
 export const BILLING_CREDIT_PACK_PRODUCT_TYPE = "credit_pack";
 export const BILLING_CHECKOUT_LINK_PROVIDER_CODE = "checkout_link";
+export const BILLING_DODO_PROVIDER_CODE = "dodo";
 
 export interface CreditPackScope {
   productCode: string;
@@ -35,6 +36,7 @@ export interface BillingCreditPackOffer {
   marketCode: string | null;
   languageCode: string | null;
   checkoutConfigured: boolean;
+  providerCode: string | null;
 }
 
 export interface BillingOrderSummary {
@@ -59,11 +61,35 @@ export interface BillingCheckoutOrder {
   currencyCode: string;
 }
 
+export interface BillingCheckoutOrderDraft {
+  orderId: string;
+  status: string;
+  billingProductCode: string;
+  creditsAmount: number;
+  amountMinor: number;
+  currencyCode: string;
+  providerCode: string | null;
+  externalPriceId: string | null;
+}
+
 export interface BillingManualFulfillmentResult {
   orderId: string;
   status: string;
   billingProductCode: string;
   creditsGranted: number;
+  wallet: {
+    walletId: string;
+    currencyCode: string;
+    balance: number;
+  };
+}
+
+export interface BillingProviderFulfillmentResult {
+  orderId: string;
+  status: string;
+  billingProductCode: string;
+  creditsGranted: number;
+  externalOrderId: string;
   wallet: {
     walletId: string;
     currencyCode: string;
@@ -202,7 +228,8 @@ export async function listBillingCreditPackOffers(
         currencyCode: price.priceBook?.currencyCode ?? "USD",
         marketCode: price.priceBook?.marketCode ?? null,
         languageCode: price.priceBook?.languageCode ?? null,
-        checkoutConfigured: normalizeCheckoutUrl(price.externalPriceId) != null,
+        checkoutConfigured: typeof price.externalPriceId === "string" && price.externalPriceId.trim().length > 0,
+        providerCode: price.provider?.code ?? null,
       } satisfies BillingCreditPackOffer;
     })
     .filter((offer): offer is BillingCreditPackOffer => offer != null);
@@ -252,14 +279,15 @@ export async function listBillingOrders(
     .filter((order): order is BillingOrderSummary => order != null);
 }
 
-export async function createBillingCheckoutOrder(
+export async function createBillingCheckoutOrderDraft(
   prisma: Prisma.DefaultPrismaClient,
   input: {
     accountId: string;
     productCode: string;
     priceId: string;
+    attribution?: Prisma.InputJsonValue;
   },
-): Promise<BillingCheckoutOrder> {
+): Promise<BillingCheckoutOrderDraft> {
   return await prisma.$transaction(async (tx) => {
     const price = await tx.billingPrice.findUnique({
       where: {id: input.priceId},
@@ -288,10 +316,8 @@ export async function createBillingCheckoutOrder(
       "billing_price_not_found",
       "Billing price does not belong to this product.",
     );
-
-    const redirectUrl = normalizeCheckoutUrl(price.externalPriceId);
     assertOrThrow(
-      redirectUrl,
+      typeof price.externalPriceId === "string" && price.externalPriceId.trim().length > 0,
       409,
       "billing_checkout_unavailable",
       "Checkout is not configured for this credit pack yet.",
@@ -324,6 +350,7 @@ export async function createBillingCheckoutOrder(
           creditsAmount: parsedScope.creditsAmount,
           amountMinor: price.amountMinor,
           currencyCode,
+          attribution: input.attribution ?? null,
         },
       },
     });
@@ -331,11 +358,12 @@ export async function createBillingCheckoutOrder(
     return {
       orderId: order.id,
       status: order.status.toLowerCase(),
-      redirectUrl,
       billingProductCode: price.billingProduct.code,
       creditsAmount: parsedScope.creditsAmount,
       amountMinor: price.amountMinor,
       currencyCode,
+      providerCode: price.provider?.code ?? null,
+      externalPriceId: price.externalPriceId ?? null,
     };
   }).catch((error) => {
     if (error instanceof PlatformError) {
@@ -344,6 +372,35 @@ export async function createBillingCheckoutOrder(
 
     throw error;
   });
+}
+
+export async function createBillingCheckoutOrder(
+  prisma: Prisma.DefaultPrismaClient,
+  input: {
+    accountId: string;
+    productCode: string;
+    priceId: string;
+    attribution?: Prisma.InputJsonValue;
+  },
+): Promise<BillingCheckoutOrder> {
+  const draft = await createBillingCheckoutOrderDraft(prisma, input);
+  const redirectUrl = normalizeCheckoutUrl(draft.externalPriceId);
+  assertOrThrow(
+    redirectUrl,
+    409,
+    "billing_checkout_unavailable",
+    "Checkout is not configured for this credit pack yet.",
+  );
+
+  return {
+    orderId: draft.orderId,
+    status: draft.status,
+    redirectUrl,
+    billingProductCode: draft.billingProductCode,
+    creditsAmount: draft.creditsAmount,
+    amountMinor: draft.amountMinor,
+    currencyCode: draft.currencyCode,
+  };
 }
 
 export async function fulfillBillingOrderManually(
@@ -435,6 +492,136 @@ export async function fulfillBillingOrderManually(
       status: BillingOrderStatus.PAID.toLowerCase(),
       billingProductCode: order.billingProduct.code,
       creditsGranted: parsedScope.creditsAmount,
+      wallet: walletSnapshot,
+    };
+  });
+}
+
+export async function fulfillBillingOrderFromProvider(
+  prisma: Prisma.DefaultPrismaClient,
+  input: {
+    orderId: string;
+    externalOrderId: string;
+    providerCode: string;
+    providerName?: string | null;
+    fulfilledAt?: Date | null;
+    eventType?: string | null;
+    metadata?: Prisma.InputJsonValue;
+  },
+): Promise<BillingProviderFulfillmentResult> {
+  return await prisma.$transaction(async (tx) => {
+    const order = await tx.billingOrder.findUnique({
+      where: {id: input.orderId},
+      include: {
+        billingProduct: true,
+      },
+    });
+
+    assertOrThrow(order, 404, "billing_order_not_found", "Billing order was not found.");
+    assertOrThrow(
+      order.billingProduct.productType === BILLING_CREDIT_PACK_PRODUCT_TYPE,
+      409,
+      "billing_order_invalid",
+      "Only credit-pack orders can be fulfilled by provider.",
+    );
+
+    if (order.externalOrderId && order.externalOrderId !== input.externalOrderId) {
+      throw new PlatformError(
+        409,
+        "billing_order_external_mismatch",
+        "Billing order was already linked to another external order.",
+      );
+    }
+
+    const parsedScope = parseCreditPackScopeRef(order.billingProduct.scopeRef);
+    assertOrThrow(parsedScope, 409, "billing_scope_invalid", "Billing product scope is invalid.");
+
+    const scopedProduct = await tx.product.findUnique({
+      where: {code: parsedScope.productCode},
+    });
+    assertOrThrow(scopedProduct, 409, "billing_scope_product_missing", "Credit-pack product is not mapped to catalog.");
+
+    const provider = await tx.billingProvider.upsert({
+      where: {code: input.providerCode},
+      update: {
+        name: input.providerName?.trim() || input.providerCode,
+        status: "active",
+      },
+      create: {
+        code: input.providerCode,
+        name: input.providerName?.trim() || input.providerCode,
+        status: "active",
+      },
+    });
+
+    const wallet = await ensureGlobalCreditsWallet(tx, order.accountId);
+    const operationKey = `billing_order_paid:${order.id}`;
+
+    const existingLedger = await tx.ledgerEntry.findUnique({
+      where: {operationKey},
+    });
+
+    if (!existingLedger) {
+      await appendLedgerEntry(tx, {
+        walletId: wallet.id,
+        accountId: order.accountId,
+        productId: scopedProduct.id,
+        entryType: LedgerEntryType.PURCHASE,
+        amountDelta: parsedScope.creditsAmount,
+        reasonCode: `${input.providerCode}_order_paid`,
+        refType: "billing_order",
+        refId: order.id,
+        operationKey,
+        metadataJson: {
+          externalOrderId: input.externalOrderId,
+          providerCode: input.providerCode,
+          eventType: input.eventType ?? null,
+          providerMetadata: input.metadata ?? null,
+        },
+      });
+    }
+
+    if (
+      order.status !== BillingOrderStatus.PAID ||
+      order.externalOrderId !== input.externalOrderId ||
+      order.providerId !== provider.id
+    ) {
+      await tx.billingOrder.update({
+        where: {id: order.id},
+        data: {
+          status: BillingOrderStatus.PAID,
+          externalOrderId: input.externalOrderId,
+          providerId: provider.id,
+        },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        accountId: order.accountId,
+        actionCode: "billing.order_provider_fulfilled",
+        targetType: "billing_order",
+        targetId: order.id,
+        payloadJson: {
+          billingProductCode: order.billingProduct.code,
+          creditsGranted: parsedScope.creditsAmount,
+          externalOrderId: input.externalOrderId,
+          providerCode: input.providerCode,
+          eventType: input.eventType ?? null,
+          fulfilledAt: input.fulfilledAt ? input.fulfilledAt.toISOString() : null,
+          providerMetadata: input.metadata ?? null,
+        },
+      },
+    });
+
+    const walletSnapshot = await getWalletSnapshot(tx, order.accountId);
+
+    return {
+      orderId: order.id,
+      status: BillingOrderStatus.PAID.toLowerCase(),
+      billingProductCode: order.billingProduct.code,
+      creditsGranted: parsedScope.creditsAmount,
+      externalOrderId: input.externalOrderId,
       wallet: walletSnapshot,
     };
   });

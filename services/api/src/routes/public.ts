@@ -44,6 +44,17 @@ function safeExternalUrl(value: unknown): string {
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return "";
     }
+    const isApprovedAssetHost =
+      url.hostname === "trend.moads.agency" ||
+      url.hostname === "gen-lang-client-0651837818.web.app" ||
+      url.hostname === "gen-lang-client-0651837818.firebaseapp.com";
+    const isApprovedStorageHost =
+      url.hostname === "firebasestorage.googleapis.com" &&
+      /^\/v0\/b\/gen-lang-client-0651837818\.firebasestorage\.app\/o\//.test(url.pathname) &&
+      Boolean((url.searchParams.get("token") || "").trim());
+    if (!isApprovedAssetHost && !isApprovedStorageHost) {
+      return "";
+    }
     return url.toString();
   } catch {
     return "";
@@ -144,6 +155,13 @@ function renderPublicShareHtml(
   <meta name="twitter:description" content="${description}"/>
   <meta name="twitter:image" content="${previewImageUrl}"/>
   <link rel="icon" href="/favicon.ico" sizes="any"/>
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-MK8VXS47');</script>
+  <!-- End Google Tag Manager -->
   <style>
     @font-face{font-family:"Coolvetica";src:url("/fonts/CoolveticaRg-Regular.woff") format("woff");font-weight:400;font-style:normal;font-display:swap;}
     @font-face{font-family:"Coolvetica";src:url("/fonts/CoolveticaRg-Bold.woff") format("woff");font-weight:700;font-style:normal;font-display:swap;}
@@ -177,6 +195,7 @@ function renderPublicShareHtml(
   </style>
 </head>
 <body>
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MK8VXS47" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="wrap">
     <div class="card">
       <a class="brand" href="/"><h1>MoTrend©</h1></a>
@@ -196,6 +215,7 @@ function renderPublicShareHtml(
       <div id="note" class="note"></div>
     </div>
   </div>
+  <script src="https://trend.moads.agency/gtm-bootstrap.js?v=20260417e"></script>
   <script>
     (function() {
       const initialState = ${initialState};
@@ -256,6 +276,7 @@ function renderPublicShareHtml(
         currentState = state;
         const inlineUrl = safeUrl(state.inlineUrl || "");
         const downloadUrl = safeUrl(state.downloadUrl || "");
+        const posterUrl = safeUrl(state.previewImageUrl || "");
         const hasPreparedVideo = !!(inlineUrl || downloadUrl);
 
         showError("");
@@ -268,6 +289,11 @@ function renderPublicShareHtml(
           if ((videoEl.getAttribute("data-current-src") || "") !== videoSrc) {
             videoEl.setAttribute("data-current-src", videoSrc);
             videoEl.src = videoSrc;
+          }
+          if (posterUrl) {
+            videoEl.poster = posterUrl;
+          } else {
+            videoEl.removeAttribute("poster");
           }
           btnSaveFile.href = downloadUrl || inlineUrl;
           noteEl.textContent = "Prepared links are temporary. If they expire, prepare them again from this page.";
@@ -409,12 +435,17 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       throw new PlatformError(400, "job_id_required", "job id is required.");
     }
 
+    const body = request.body as {previewImageUrl?: unknown} | undefined;
+    const previewImageUrl = typeof body?.previewImageUrl === "string" ?
+      body.previewImageUrl.trim() :
+      "";
     const entryDomain = await getMotrendEntryDomain(app);
     const share = await createOrReuseMotrendPublicShare(app.prisma, {
       accountId: request.accountContext.accountId,
       userId: request.authContext.userId,
       jobId: params.id.trim(),
       entryDomain,
+      previewImageUrl,
     });
 
     reply.send(await buildPublicSharePayload(app, share.slug, entryDomain));

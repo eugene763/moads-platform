@@ -1,220 +1,193 @@
+> Pre-beta update, 2026-04-20: for current AEO/LAB source-of-truth, use `docs/aeo/aeo_pre_beta_handoff_2026-04-20.md`. This older document is retained for historical context and may contain outdated branch/runtime references.
+
 # AEO/LAB Final UX + Architecture + Backend Spec
 
-Date: 2026-03-30  
-Status: Final for MVP launch alignment (`free-first`)  
-Git anchor: functional base `b359096`, latest hardening/status `cf118be`
+Date: 2026-04-14  
+Status: Live launch contract for the current contour  
+Repository: `moads-platform`  
+Branch: `feature/motrend-wallet-fastspring`  
+Git anchor: `ac04f69`
 
-## 1) Purpose and source context
+Operational note:
+- branch HEAD is newer than the last verified live runtime snapshot,
+- latest commits after `d184e17` are documentation/status alignment and do not change the last confirmed runtime revisions listed below,
+- next redeploy may require renewed `gcloud auth login` before Cloud Run/Firebase commands succeed.
 
-This document is the final product/UX/backend contract for AEO/LAB MVP0 so Claude/Codex can execute without manual interpretation.
+## 1) Purpose
 
-Sources consolidated:
-- `aeo_codex_v1_spec_v4.md`
-- `aeo_codex_v1_spec (1).md`
-- `aeo_codex_v1_spec_v3_addendum.md`
-- `MOADS_STACK_CURRENT_SPEC.md`
-- `moads_full_architecture_for_codex (1) (1).md`
-- current repository state at `cf118be` + `b359096`
+This document is the current source of truth for how AEO/LAB works in production-like launch mode.
 
-If any old text conflicts with this file, this file wins for MVP0 execution.
+If older planning docs conflict with this file, this file wins for:
+- UX behavior,
+- score interpretation,
+- billing provider choice,
+- dashboard gating,
+- scanner/evidence boundaries.
 
 ## 2) Locked product decisions
 
-### 2.1 Pricing layers (must not be mixed)
+### 2.1 Access model
+- `Free` is live
+- `Starter`, `Pro`, `Store` are not live billing products yet
+- `Deep Audit` is lead-based only
 
-There are two separate economic entities:
-
-1. Product plans (subscription access):
-- `Free`
-- `Starter` (monthly access)
-- `Pro` (coming soon, lead capture only now)
-- `Deep Audit` (agency lead flow only now)
-
-2. Credit packs (prepaid usage bundles):
-- `Pack S` -> `$4.99` -> `30 credits`
-- `Pack M` -> `$9.99` -> `80 credits`
-- `Pack L` -> `$19.99` -> `200 credits`
+### 2.2 Pack model
+- `Pack S` -> 30 credits -> `$4.99`
+- `Pack M` -> 80 credits -> `$9.99`
+- `Pack L` -> 200 credits -> `$19.99`
 
 Rules:
-- Do not name packs as `Starter`/`Pro`.
-- `1 credit = 1 AI tips generation`.
-- Welcome gift for first AEO activation: `1 credit` (idempotent grant).
+- packs are usage bundles only
+- packs are not subscriptions
+- `1 credit = 1 AI tips generation`
+- public scan is free
 
-### 2.2 Launch model
+### 2.3 Active payment provider
+- Dodo Payments only
+- no active FastSpring path remains in AEO pack flow
 
-- Launch mode is `Free + Credits` (not strict-free).
-- Public deterministic scan is always free.
-- Auth unlock opens detailed report and paid AI tips action.
-- Share/print is in MVP.
-- Global ranking is deferred to next iteration.
+## 3) Current UX contract
 
-## 3) Final UX contract
+### 3.1 Landing
+- one-field checker: `Store URL`
+- nav CTA is `Open Checker`
+- nav CTA and free pricing CTA route to `/#scan`
+- copy reflects the real score model, not an inflated dimension promise
 
-### 3.1 `/aeo` landing (checker entry)
-
-Must be minimal and lead-oriented, based on `moads.agency` visual language.
-
-Required changes:
-- Remove wording fragment: `for e-commerce` in hero eyebrow.
-- Keep only one input in scan form: `Store URL`.
-- Remove optional fields from landing form:
-  - `Brand Name`
-  - `Category`
-  - `Work Email`
-  - `Platform`
-
-Expected copy behavior:
-- Before input: `No credit card. Deterministic score in under 60 seconds.`
-- With URL input: `Score is free. Full breakdown unlocks after sign-in.`
-
-Typography:
-- Use Coolvetica only for hero/score headings.
-- Keep body/UI typography readable and lightweight.
-
-### 3.2 Public result `/aeo/r/{publicToken}`
-
-Public report must show:
-- `AI Discovery Score` (0-100).
-- evidence summary (structured data + on-page evidence).
-- top fixes preview.
-- lock panel for full recommendations.
-- actions: `Print` and `Share`.
-
-Lock behavior:
-- Score is public.
-- Extended recommendations and advanced blocks are locked until auth/claim.
-
-### 3.3 Auth + claim flow
-
-Flow:
-1. User clicks unlock CTA.
-2. User signs in via shared Firebase Auth.
-3. Backend creates `.moads.agency` session via `/v1/auth/session-login`.
-4. User claims scan via `/v1/aeo/scans/:scanId/claim`.
-5. Same report becomes unlocked for account context.
-
-### 3.4 Auth dashboard `/aeo/dashboard`
-
-Show:
-- account identity basics,
-- credits widget (from backend wallet summary),
-- scan history,
-- explicit AI tips action (1 credit),
-- evidence widgets area (GA4/realtime as connected layer).
-
-Required CTA for growth instrumentation:
-- `Refine your AI score and track growth in real time`.
-
-### 3.5 Pricing and lead funnel
-
-In AEO/LAB UX:
-- `Free` is active.
-- `Starter` is available as monthly access.
-- `Pro` and `Deep Audit` use waitlist/lead forms (no fake activation).
-- Always separate plans from credit packs in copy and UI blocks.
-
-### 3.6 Unsupported/problematic targets
-
-For problematic scans, show explicit state:
-- `blocked` (WAF/challenge/forbidden),
-- `js_heavy` (client-rendered risk),
-- `marketplace_unsupported`.
-
-Mandatory CTA text:
-- `Sign up to get update` for unsupported marketplace/site classes.
-
-## 4) Score engine contract (shared for all plans)
-
-Main rule: one deterministic, objective, server-side score for everyone.
-
-### 4.1 Formula stability
-
-- Score algorithm is identical across `Free`, `Starter`, and future plans.
-- No randomness.
-- Same page content -> same score.
-- Every deduction maps to a visible issue.
-
-### 4.2 Dimension mapping for v1
-
-User-facing dimensions:
-- `Access` (35)
-- `Understanding` (35)
-- `Citation readiness` (30)
-
-Implementation mapping in current engine:
-- `access` -> Access
-- `basic_seo` -> Understanding
-- `ratings_schema` -> Citation readiness
-
-### 4.3 What must not change score
-
-These are external evidence layers and must not mutate core score:
-- GA4 data,
-- Search Console evidence,
-- realtime mention stream,
-- OpenAI outputs,
-- tracked query SERP/AI-overview monitoring.
-
-## 5) Evidence layer (connected, optional)
-
-Evidence widgets are allowed and encouraged, but marked separately:
-- label examples:
-  - `Connected data`
+### 3.2 Report
+- public score is visible before auth
+- report shows:
+  - `Scored now`
   - `Evidence layer`
-  - `Not included in AI Discovery Score`
+  - `Priority Action Plan`
+  - `Prompt Kit`
+- deeper account-only functionality stays behind sign-in/claim
 
-Connection model:
-- `mock` mode is default for safe testing.
-- `live` mode only when secrets/connectors are configured.
+### 3.3 Dashboard
+- free users can sign in and view dashboard basics
+- dashboard must not require paid membership for basic access
+- missing session shows sign-in gate only
 
-## 6) Backend and security contract
+### 3.4 LAB
+- utility billing/account center
+- pack-first surface
+- coming-soon plan framing remains informational only
 
-### 6.1 Server-side authority
+## 4) Score contract
 
-Must stay server-side only:
-- scan execution and score computation,
-- scan claim/unlock,
-- wallet debit/grant/refund,
-- OpenAI calls,
-- manual fulfillment/admin actions,
-- integration secrets.
+The current top-line score is deterministic and shared for everyone.
 
-### 6.2 Auth/session
+### 4.1 Scored now
+- `Access`
+- `Basic SEO`
+- `Ratings Schema`
 
-- Shared Firebase identity provider.
-- Shared session cookie on `.moads.agency`.
-- Product access by membership + entitlement checks.
+### 4.2 Evidence layer
+- crawlability
+- product-page sample
+- action plan
+- prompt kit
+- connected data widgets
 
-### 6.3 Wallet and credits
+### 4.3 Must not affect score
+- OpenAI
+- GA4
+- realtime stream
+- monitored query intelligence
+- external SERP/AI APIs
 
-- Shared global wallet model.
-- `wallet.ledger_entries` is source of truth.
-- Frontend credits are display cache only.
+## 5) Scanner contract
 
-### 6.4 API behavior contract
+The current scanner is a raw-HTML, server-side rules engine.
 
-No new API families required in this doc lock. Existing namespace remains:
+### 5.1 Current read path
+1. normalize requested URL
+2. fetch requested URL with browser-like headers
+3. one controlled retry on retryable/network-like failure
+4. parse HTML for:
+   - title
+   - meta description
+   - canonical
+   - og/twitter title
+   - JSON-LD
+   - AggregateRating
+   - visible review/rating evidence
+
+### 5.2 Evidence-first enrichments now live
+- `robots.txt`
+- `sitemap.xml`
+- AI bot crawlability checks
+- homepage/root PDP sampling
+- report action plan
+- manual prompt kit
+
+### 5.3 Current scanner limits
+- no mandatory JS rendering
+- no paid provider calls
+- no headless browser fallback yet
+- PDP discovery is improved but still conservative
+
+## 6) Auth and security contract
+
+- shared Firebase identity provider
+- session cookie on `.moads.agency`
+- wallet ledger remains the source of truth
+- server-side only for:
+  - scoring
+  - claim
+  - AI tips charging
+  - webhook processing
+  - secret usage
+
+Relevant live secrets:
+- `DODO_API_KEY`
+- `DODO_WEBHOOK_KEY`
+- `OPENAI_API_KEY`
+
+## 7) API contract
+
+Primary namespaces:
 - `/v1/auth/*`
-- `/v1/me`, `/v1/wallet/*`
+- `/v1/me`
+- `/v1/wallet/*`
 - `/v1/aeo/*`
 - `/v1/lab/*`
+- `/v1/billing/webhooks/dodo`
 
-Contracted behaviors:
-- `public scan` is free.
-- `generate-ai-tips` is explicit action and charges exactly `1 credit`.
-- plan and pack semantics never mixed in responses/copy.
+Key behaviors:
+- `POST /v1/aeo/public-scans` stays `siteUrl`-only
+- public scan is free
+- `generate-ai-tips` stays explicit and credit-billed
+- Dodo webhook is centralized under `/v1/billing/webhooks/dodo`
 
-## 7) Performance and platform constraints
+## 8) OpenAI contract
 
-- Keep scanner cheap by default (no mandatory headless render in MVP0).
-- Use explicit warnings for in-app/native browser limitations where needed.
-- Queue/adapter usage must avoid burst overload and hanging requests.
-- Rate-limit public scan endpoints for abuse protection.
+OpenAI is not part of public scanning.
 
-## 8) Deferred to next iteration
+Current intended role:
+- optional post-scan AI tips
+- explicit user action
+- usage-based via credits
 
-- Global opt-in public ranking board.
-- Full marketplace-specific deep parsers.
-- Full dedicated `moads-pro` contour activation (after secrets/access completion).
-- Advanced monitored query intelligence in core product.
+Prompt strategy:
+- prompt lives in backend code for now
+- no OpenAI-side prompt product is required for launch
 
+## 9) Last verified runtime
+
+Last verified live revisions:
+- `moads-api` -> `moads-api-00034-h54`
+- `moads-aeo-web` -> `moads-aeo-web-00010-fn6`
+- `moads-lab-web` -> `moads-lab-web-00009-2mr`
+
+Live checks:
+- `https://aeo.moads.agency/` -> `200`
+- `https://lab.moads.agency/` -> `200`
+- uncached public scan works
+
+## 10) Current priority gap list
+
+1. stronger PDP discovery
+2. objective content-structure scoring
+3. JS-heavy fallback path
+4. finishing live AI tips rollout if desired
