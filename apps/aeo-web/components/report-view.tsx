@@ -2,7 +2,7 @@
 
 import {useEffect, useMemo, useRef, useState} from "react";
 
-import {apiRequest, PublicScanReport} from "../lib/api";
+import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
@@ -13,6 +13,9 @@ import {ScoreRing} from "./score-ring";
 import {AgencySupportBlock} from "./agency-support-block";
 
 interface ScanDetail extends PublicScanReport {
+  workspaceAccess?: {
+    sharedFromAnotherWorkspace?: boolean;
+  };
   aiTips?: {
     tips?: Array<{
       title: string;
@@ -73,6 +76,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
   const [isAuthed, setIsAuthed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sharedWorkspaceReport, setSharedWorkspaceReport] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [packsOpen, setPacksOpen] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
@@ -85,6 +89,17 @@ export function ReportView({publicToken}: {publicToken: string}) {
 
   const publicScore = report?.publicScore ?? 0;
 
+  function isCrossAccountClaimError(error: unknown): boolean {
+    return error instanceof ApiRequestError && error.code === "aeo_scan_claim_forbidden";
+  }
+
+  function showSharedWorkspaceNotice(): void {
+    setSharedWorkspaceReport(true);
+    setError(null);
+    setAuthOpen(false);
+    setPendingSiteScanIntent(false);
+  }
+
   useEffect(() => {
     void (async () => {
       setLoading(true);
@@ -93,6 +108,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
       try {
         const data = await apiRequest<ScanDetail>(`/v1/aeo/public-scans/${publicToken}`);
         setReport(data);
+        setSharedWorkspaceReport(Boolean(data.workspaceAccess?.sharedFromAnotherWorkspace));
         trackGa4("aeo_report_view", {
           status: data.status,
           score: data.publicScore,
@@ -139,6 +155,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
         method: "POST",
       });
       setReport(claimed);
+      setSharedWorkspaceReport(false);
     } finally {
       setClaimBusy(false);
     }
@@ -166,7 +183,11 @@ export function ReportView({publicToken}: {publicToken: string}) {
       setAuthOpen(false);
       setPendingSiteScanIntent(false);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
+      if (isCrossAccountClaimError(requestError)) {
+        showSharedWorkspaceNotice();
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
+      }
     }
   }
 
@@ -194,22 +215,23 @@ export function ReportView({publicToken}: {publicToken: string}) {
         method: "POST",
       });
       setReport(claimed);
+      setSharedWorkspaceReport(false);
       await refreshSessionAndWallet();
       trackGa4("aeo_scan_claimed", {
         scan_id: report.scanId,
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
+      if (isCrossAccountClaimError(requestError)) {
+        showSharedWorkspaceNotice();
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Failed to unlock report.");
+      }
     } finally {
       setClaimBusy(false);
     }
   }
 
-  function hasDeepSiteScanData(): boolean {
-    return report?.scanKind === "site_scan" || report?.report.summary?.scope === "site";
-  }
-
-  function handleDeepSiteScanIntent(): void {
+  function runOwnScan(): void {
     if (!report) {
       return;
     }
@@ -226,8 +248,23 @@ export function ReportView({publicToken}: {publicToken: string}) {
       return;
     }
 
-    if (hasDeepSiteScanData()) {
-      setReport((previous) => previous ? {...previous, recommendationsLocked: false} : previous);
+    window.location.href = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
+  }
+
+  function handleDeepSiteScanIntent(): void {
+    if (!report) {
+      return;
+    }
+
+    if (!isAuthed) {
+      saveAeoAuthIntent({
+        type: "deep_site_scan",
+        publicToken,
+        scanId: report.scanId,
+        siteUrl: report.siteUrl,
+      });
+      setPendingSiteScanIntent(true);
+      setAuthOpen(true);
       return;
     }
 
@@ -256,11 +293,6 @@ export function ReportView({publicToken}: {publicToken: string}) {
 
     if (!isAuthed) {
       handleDeepSiteScanIntent();
-      return;
-    }
-
-    if (hasDeepSiteScanData()) {
-      setReport((previous) => previous ? {...previous, recommendationsLocked: false} : previous);
       return;
     }
 
@@ -378,6 +410,20 @@ export function ReportView({publicToken}: {publicToken: string}) {
         </div>
         {deepScanHint ? <p className="scan-form-hint">{deepScanHint}</p> : null}
       </section>
+
+      {sharedWorkspaceReport ? (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Shared report</h2>
+            <span className="badge badge-score">View only</span>
+          </div>
+          <p className="tiny">This is a shared report from another workspace.</p>
+          <p className="tiny">Run your own scan to save results to your account and unlock deeper checks.</p>
+          <button type="button" className="cta-primary" onClick={runOwnScan}>
+            Run my own scan
+          </button>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="panel-header">

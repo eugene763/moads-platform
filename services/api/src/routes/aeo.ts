@@ -158,6 +158,8 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
     const cached = await app.prisma.aeoScan.findFirst({
       where: {
         normalizedUrl: normalized.normalizedUrl,
+        accountId: null,
+        isClaimed: false,
         createdAt: {
           gte: cacheCutoff,
         },
@@ -222,10 +224,22 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       throw new PlatformError(400, "public_token_required", "publicToken is required.");
     }
 
-    const report = await getAeoPublicScanByToken(app.prisma, params.publicToken.trim());
+    const publicToken = params.publicToken.trim();
+    const report = await getAeoPublicScanByToken(app.prisma, publicToken);
+    const auth = await tryResolveAuthContext(request);
+    const scanOwner = auth?.accountId ? await app.prisma.aeoScan.findUnique({
+      where: {publicToken},
+      select: {
+        accountId: true,
+      },
+    }) : null;
+    const sharedFromAnotherWorkspace = Boolean(scanOwner?.accountId && auth?.accountId && scanOwner.accountId !== auth.accountId);
 
     reply.send({
       ...report,
+      workspaceAccess: {
+        sharedFromAnotherWorkspace,
+      },
       planVisibility: {
         free: {
           scoreVisible: true,
