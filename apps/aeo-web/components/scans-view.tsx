@@ -7,6 +7,7 @@ import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, formatIssueTitle, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
 import {affectedPagesLabel, deriveCrawlerAccessibilityChecks, prepareCurrentIssues} from "../lib/current-issues";
+import {buildReportSharePayload, buildTelegramShareUrl} from "../lib/report-share";
 import {normalizeWebsiteUrlInput, WEBSITE_URL_ERROR} from "../lib/url-validation";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
@@ -272,7 +273,7 @@ export function ScansView() {
         setSelectedSiteKey(matchedSite.key);
         setSelectedScanId(matchedSite.scans[0]?.scanId ?? null);
         setTabOrder((previous) => [matchedSite.key, ...previous.filter((key) => key !== matchedSite.key)].slice(0, 6));
-        setScanHint("Existing scan selected. Run a Deep Site Scan when you are ready.");
+        setScanHint(null);
       } else {
         setScanHint("Enter a website URL to start a new scan.");
       }
@@ -540,26 +541,32 @@ export function ScansView() {
     const shareUrl = selectedScanDetail?.publicToken ?
       `${window.location.origin}/r/${selectedScanDetail.publicToken}` :
       (selectedUrl || window.location.href);
+    const sharePayload = buildReportSharePayload({
+      siteUrl: selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? selectedUrl,
+      score: selectedScanDetail?.publicScore ?? selectedScan?.publicScore ?? null,
+      reportUrl: shareUrl,
+    });
 
     try {
       if (navigator.share) {
         await navigator.share({
-          title: "MO AEO CHECKER result",
-          text: `AEO scan result for ${selectedUrl || "site"}`,
-          url: shareUrl,
+          title: sharePayload.title,
+          text: sharePayload.text,
+          url: sharePayload.reportUrl,
         });
         setExportMessage(successMessage);
         return;
       }
     } catch {
-      return;
+      // Fall through to copy/open fallback.
     }
 
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(sharePayload.text);
       setExportMessage(successMessage);
     } catch {
-      setExportMessage("Share is not available in this browser.");
+      window.open(buildTelegramShareUrl(sharePayload), "_blank", "noopener,noreferrer");
+      setExportMessage("Share opened");
     }
   }
 
@@ -648,6 +655,7 @@ export function ScansView() {
           </button>
         </form>
         {scanHint ? <p className="scan-form-hint">{scanHint}</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
       </section>
 
       <section className="panel full">
@@ -849,7 +857,6 @@ export function ScansView() {
 
       <AgencySupportBlock id="agency-support" className="dashboard-wide" />
 
-      {error ? <p className="error-text">{error}</p> : null}
       <AuthModal
         open={authOpen}
         onClose={() => {

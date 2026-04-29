@@ -7,6 +7,7 @@ import {trackGa4} from "../lib/analytics";
 import {explainIssue, formatIssueTitle, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
 import {affectedPagesLabel, deriveCrawlerAccessibilityChecks, prepareCurrentIssues} from "../lib/current-issues";
+import {buildReportSharePayload, buildTelegramShareUrl} from "../lib/report-share";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
@@ -138,9 +139,9 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return report.status.replace(/_/g, " ");
   }, [report]);
 
-  async function claimScanIfNeeded(): Promise<void> {
+  async function claimScanIfNeeded(): Promise<ScanDetail | null> {
     if (!report || !report.recommendationsLocked) {
-      return;
+      return report;
     }
 
     setClaimBusy(true);
@@ -150,6 +151,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
       });
       setReport(claimed);
       setSharedWorkspaceReport(false);
+      return claimed;
     } finally {
       setClaimBusy(false);
     }
@@ -158,19 +160,20 @@ export function ReportView({publicToken}: {publicToken: string}) {
   async function handleAuthSuccess(): Promise<void> {
     try {
       await refreshSessionAndWallet();
-      await claimScanIfNeeded();
+      const claimedReport = await claimScanIfNeeded();
+      const activeReport = claimedReport ?? report;
 
       const intent = readAeoAuthIntent();
-      if ((pendingSiteScanIntent || intent?.type === "deep_site_scan") && report) {
+      if ((pendingSiteScanIntent || intent?.type === "deep_site_scan") && activeReport) {
         clearAeoAuthIntent();
-        const destination = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
+        const destination = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(activeReport.siteUrl)}&scanId=${encodeURIComponent(activeReport.scanId)}`;
         window.location.href = destination;
         return;
       }
 
-      if (intent?.type === "unlock_report" && report) {
+      if (intent?.type === "unlock_report" && activeReport) {
         clearAeoAuthIntent();
-        window.location.href = `/scans?scanId=${encodeURIComponent(report.scanId)}`;
+        window.location.href = `/scans?scanId=${encodeURIComponent(activeReport.scanId)}`;
         return;
       }
 
@@ -307,18 +310,32 @@ export function ReportView({publicToken}: {publicToken: string}) {
       return;
     }
 
-    const sharePayload = {
-      title: "MO AEO CHECKER report",
-      text: `AI Discovery Readiness: ${report.publicScore ?? "--"}/100 for ${normalizeUrlForDisplay(report.siteUrl)}`,
-      url: window.location.href,
-    };
+    const sharePayload = buildReportSharePayload({
+      siteUrl: report.siteUrl,
+      score: report.publicScore,
+      reportUrl: window.location.href,
+    });
 
     if (navigator.share) {
-      await navigator.share(sharePayload).catch(() => undefined);
-      return;
+      try {
+        await navigator.share({
+          title: sharePayload.title,
+          text: sharePayload.text,
+          url: sharePayload.reportUrl,
+        });
+        return;
+      } catch {
+        // Fall through to copy/open fallback.
+      }
     }
 
-    await navigator.clipboard.writeText(window.location.href).catch(() => undefined);
+    try {
+      await navigator.clipboard.writeText(sharePayload.text);
+      setExportMessage("Report link copied");
+    } catch {
+      window.open(buildTelegramShareUrl(sharePayload), "_blank", "noopener,noreferrer");
+      setExportMessage("Share opened");
+    }
   }
 
   async function copyVisibleIssuesForDeveloper(issues: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>): Promise<void> {

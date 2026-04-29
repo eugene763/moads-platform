@@ -435,12 +435,128 @@ export async function claimAeoScan(
     });
 
     assertOrThrow(scan, 404, "aeo_scan_not_found", "AEO scan was not found.");
-    assertOrThrow(
-      !scan.accountId || scan.accountId === input.accountId,
-      403,
-      "aeo_scan_claim_forbidden",
-      "This scan belongs to a different account.",
-    );
+
+    if (scan.accountId && scan.accountId !== input.accountId) {
+      const existingClaim = await tx.aeoScanClaim.findFirst({
+        where: {
+          scanId: scan.id,
+          claimedByUserId: input.userId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      if (existingClaim) {
+        const existingClone = await tx.aeoScan.findFirst({
+          where: {
+            id: existingClaim.claimToken,
+            accountId: input.accountId,
+            isClaimed: true,
+          },
+          include: {
+            site: true,
+            reports: {
+              orderBy: {createdAt: "desc"},
+              take: 1,
+            },
+          },
+        });
+
+        if (existingClone) {
+          return shapeScanDetail(existingClone);
+        }
+      }
+
+      const report = scan.reports[0];
+      assertOrThrow(report, 409, "aeo_report_missing", "AEO report is missing for this scan.");
+
+      const site = await ensureAeoSiteForClaim(tx, {
+        accountId: input.accountId,
+        userId: input.userId,
+        normalizedUrl: scan.normalizedUrl,
+      });
+
+      const created = await tx.aeoScan.create({
+        data: {
+          accountId: input.accountId,
+          userId: input.userId,
+          siteId: site.id,
+          anonymousSessionId: null,
+          siteUrl: scan.siteUrl,
+          normalizedUrl: scan.normalizedUrl,
+          finalUrl: scan.finalUrl,
+          httpStatus: scan.httpStatus,
+          status: scan.status === "queued" ? "completed" : scan.status,
+          publicScore: scan.publicScore,
+          confidenceLevel: scan.confidenceLevel,
+          recommendationsLocked: false,
+          isClaimed: true,
+          scanKind: scan.scanKind,
+          publicToken: createToken(),
+          membershipSnapshotJson: {
+            sharedUnlock: {
+              sourceScanId: scan.id,
+              sourcePublicToken: scan.publicToken,
+            },
+          },
+          scoreVersion: scan.scoreVersion,
+        },
+      });
+
+      await tx.aeoScanReport.create({
+        data: {
+          scanId: created.id,
+          rulesetVersion: report.rulesetVersion,
+          promptVersion: report.promptVersion,
+          reportJson: report.reportJson as Prisma.InputJsonValue,
+          recommendationsJson: report.recommendationsJson === null ? Prisma.JsonNull : report.recommendationsJson as Prisma.InputJsonValue,
+          extractedFactsJson: report.extractedFactsJson === null ? Prisma.JsonNull : report.extractedFactsJson as Prisma.InputJsonValue,
+          issuesJson: report.issuesJson === null ? Prisma.JsonNull : report.issuesJson as Prisma.InputJsonValue,
+          signalBlocksJson: report.signalBlocksJson === null ? Prisma.JsonNull : report.signalBlocksJson as Prisma.InputJsonValue,
+          rawFetchMetaJson: report.rawFetchMetaJson === null ? Prisma.JsonNull : report.rawFetchMetaJson as Prisma.InputJsonValue,
+          aiTipsJson: report.aiTipsJson === null ? Prisma.JsonNull : report.aiTipsJson as Prisma.InputJsonValue,
+          aiTipsGeneratedAt: report.aiTipsGeneratedAt,
+        },
+      });
+
+      await tx.aeoScanClaim.create({
+        data: {
+          scanId: scan.id,
+          claimToken: created.id,
+          claimedByUserId: input.userId,
+          claimedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          accountId: input.accountId,
+          userId: input.userId,
+          actionCode: "aeo.shared_scan_claimed",
+          targetType: "aeo_scan",
+          targetId: created.id,
+          payloadJson: {
+            sourceScanId: scan.id,
+            sourcePublicToken: scan.publicToken,
+            siteId: site.id,
+          },
+        },
+      });
+
+      const shaped = await tx.aeoScan.findUnique({
+        where: {id: created.id},
+        include: {
+          site: true,
+          reports: {
+            orderBy: {createdAt: "desc"},
+            take: 1,
+          },
+        },
+      });
+      assertOrThrow(shaped, 500, "aeo_scan_clone_missing", "AEO scan clone was not found.");
+      return shapeScanDetail(shaped);
+    }
 
     const site = await ensureAeoSiteForClaim(tx, {
       accountId: input.accountId,

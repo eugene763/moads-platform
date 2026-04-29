@@ -973,8 +973,16 @@ function assertScannablePrimaryDocument(document: Awaited<ReturnType<typeof fetc
     throw new PlatformError(400, "site_unreachable", "We couldn’t reach this website. Check the URL and try again.");
   }
 
-  if (!isReadableHtmlDocument(document.contentType, document.text)) {
-    throw new PlatformError(400, "non_html_response", "This URL does not return a readable HTML page.");
+  const htmlMarkerDetected = hasHtmlDocumentMarkers(document.text);
+  if (!isLikelyHtmlContentType(document.contentType) && !htmlMarkerDetected) {
+    throw new PlatformError(400, "non_html_response", "This URL does not return a readable HTML page.", {
+      finalUrl: document.finalUrl,
+      httpStatus: document.status,
+      contentType: document.contentType,
+      bodyLength: document.text.length,
+      htmlMarkerDetected,
+      redirectCount: document.redirected ? 1 : 0,
+    });
   }
 
   if (!document.text.trim() || stripHtml(document.text).trim().length < 20) {
