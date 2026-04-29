@@ -1,7 +1,7 @@
 "use client";
 
 import {useRouter} from "next/navigation";
-import {FormEvent, useEffect, useMemo, useRef, useState} from "react";
+import {FormEvent, MouseEvent, useEffect, useMemo, useRef, useState} from "react";
 
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
@@ -443,8 +443,9 @@ export function ScansView() {
     guideToDeepScanButton();
   }
 
-  async function deleteSelectedScan(): Promise<void> {
-    if (!selectedScan) {
+  async function deleteSelectedScan(scanId: string): Promise<void> {
+    const scanToDelete = scans.find((scan) => scan.scanId === scanId) ?? selectedScan;
+    if (!scanToDelete) {
       return;
     }
 
@@ -456,10 +457,10 @@ export function ScansView() {
     setDeleteBusy(true);
     setError(null);
     try {
-      await apiRequest(`/v1/aeo/scans/${selectedScan.scanId}`, {
+      await apiRequest<void | {scanId: string; removed: boolean}>(`/v1/aeo/scans/${scanToDelete.scanId}`, {
         method: "DELETE",
       });
-      const remainingScans = sortByDateDesc(scans.filter((scan) => scan.scanId !== selectedScan.scanId));
+      const remainingScans = sortByDateDesc(scans.filter((scan) => scan.scanId !== scanToDelete.scanId));
       const remainingSiteKeys = new Set(remainingScans.map((scan) => toSiteLabel(scan.siteUrl)));
       const nextScan = remainingScans[0] ?? null;
       setScans(remainingScans);
@@ -479,6 +480,12 @@ export function ScansView() {
     } finally {
       setDeleteBusy(false);
     }
+  }
+
+  function handleDeleteScanClick(event: MouseEvent<HTMLButtonElement>, scanId: string): void {
+    event.preventDefault();
+    event.stopPropagation();
+    void deleteSelectedScan(scanId);
   }
 
   function focusNewScanInput(): void {
@@ -667,7 +674,7 @@ export function ScansView() {
               <button
                 type="button"
                 className="score-delete-button"
-                onClick={() => void deleteSelectedScan()}
+                onClick={(event) => handleDeleteScanClick(event, selectedScan.scanId)}
                 disabled={deleteBusy}
                 aria-label="Delete scan"
               >

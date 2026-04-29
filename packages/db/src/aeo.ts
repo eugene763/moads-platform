@@ -478,6 +478,7 @@ export async function listAeoScans(
   const scans = await prisma.aeoScan.findMany({
     where: {
       accountId: input.accountId,
+      isClaimed: true,
     },
     include: {
       site: true,
