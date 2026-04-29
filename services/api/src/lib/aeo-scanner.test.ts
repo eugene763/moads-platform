@@ -87,6 +87,30 @@ describe("aeo scanner", () => {
     });
   });
 
+  it("accepts readable HTML when content-type is unreliable", async () => {
+    const html = `
+      <!doctype html>
+      <html>
+        <head><title>Readable Page</title><meta name="description" content="Readable page" /></head>
+        <body>
+          <h1>Readable Page</h1>
+          <p>This page returns HTML in the body even though the server sends an unreliable content type.</p>
+        </body>
+      </html>
+    `;
+
+    const result = await runAeoDeterministicScan({
+      siteUrl: "https://example.com/unreliable-content-type",
+      fetchImpl: async () => new Response(html, {
+        status: 200,
+        headers: {"content-type": "application/octet-stream"},
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.publicScore).toBeGreaterThan(0);
+  });
+
   it("does not require aggregate rating for generic pages", async () => {
     const html = `
       <html>

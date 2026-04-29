@@ -60,6 +60,18 @@ function scanCostLabel(scanId: string, firstScanId: string | null): string {
   return scanId === firstScanId ? "Free" : "1 credit";
 }
 
+function safeScanErrorMessage(error: unknown): string {
+  if (error instanceof ApiRequestError && error.code === "non_html_response") {
+    return "This site could not be scanned because it did not return a readable HTML page. Try another URL or check if the site blocks crawlers.";
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Failed to run full check.";
+}
+
 export function ScansView() {
   const router = useRouter();
   const [queryScanId, setQueryScanId] = useState<string | null>(null);
@@ -375,7 +387,7 @@ export function ScansView() {
       if (requestError instanceof ApiRequestError && requestError.code === "insufficient_credits") {
         setPacksOpen(true);
       } else {
-        setError(requestError instanceof Error ? requestError.message : "Failed to run full check.");
+        setError(safeScanErrorMessage(requestError));
       }
     } finally {
       setScanBusy(false);
@@ -415,7 +427,7 @@ export function ScansView() {
   }
 
   async function runDeepSiteScanForSelected(): Promise<void> {
-    const sourceUrl = selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? newSiteUrl;
+    const sourceUrl = newSiteUrl.trim() || selectedScanDetail?.siteUrl || selectedScan?.siteUrl || "";
     if (!sourceUrl.trim()) {
       focusNewScanInput();
       return;

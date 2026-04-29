@@ -813,6 +813,17 @@ function isLikelyHtmlContentType(contentType: string | null): boolean {
   return /text\/html|application\/xhtml\+xml/i.test(contentType);
 }
 
+function hasHtmlDocumentMarkers(text: string): boolean {
+  const sample = text.slice(0, 4096).toLowerCase();
+  return sample.includes("<!doctype html") ||
+    sample.includes("<html") ||
+    /<(head|body|title|meta|script|link)\b/i.test(sample);
+}
+
+function isReadableHtmlDocument(contentType: string | null, text: string): boolean {
+  return isLikelyHtmlContentType(contentType) || hasHtmlDocumentMarkers(text);
+}
+
 async function collectSitemapProductCandidates(input: {
   sitemapUrl: string;
   sitemapText: string;
@@ -962,7 +973,7 @@ function assertScannablePrimaryDocument(document: Awaited<ReturnType<typeof fetc
     throw new PlatformError(400, "site_unreachable", "We couldn’t reach this website. Check the URL and try again.");
   }
 
-  if (!isLikelyHtmlContentType(document.contentType)) {
+  if (!isReadableHtmlDocument(document.contentType, document.text)) {
     throw new PlatformError(400, "non_html_response", "This URL does not return a readable HTML page.");
   }
 
@@ -1001,7 +1012,7 @@ async function fetchLlmGuidanceEvidence(input: {
       continue;
     }
 
-    if (!llmGuidancePage && isLikelyHtmlContentType(response.contentType)) {
+    if (!llmGuidancePage && isReadableHtmlDocument(response.contentType, response.text)) {
       llmGuidancePage = response.finalUrl ?? candidate;
     }
   }
@@ -1199,7 +1210,7 @@ async function fetchProductPageEvidence(input: {
     })();
     const validHtmlDocument = response.ok
       && response.text.length >= 300
-      && isLikelyHtmlContentType(response.contentType)
+      && isReadableHtmlDocument(response.contentType, response.text)
       && Boolean(finalCandidate && isLikelyProductUrl(finalCandidate));
 
     const sample: ProductPageSampleEvidence = (!validHtmlDocument) ? {
@@ -2442,7 +2453,7 @@ export async function runAeoFullSiteScan(input: {
     baseUrl: discoveryBaseUrl,
     fetchImpl,
   });
-  const internalUrls = homepage.ok && isLikelyHtmlContentType(homepage.contentType) ?
+  const internalUrls = homepage.ok && isReadableHtmlDocument(homepage.contentType, homepage.text) ?
     findSameOriginPageCandidates(homepage.text, discoveryBaseUrl) :
     [];
   const selected = selectKeySitePages({
