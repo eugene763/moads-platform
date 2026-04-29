@@ -68,6 +68,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
 
   await app.register(cors, {
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "DELETE"],
     origin(origin, callback) {
       if (isAllowedOrigin(origin, config)) {
         callback(null, true);
