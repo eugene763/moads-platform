@@ -152,7 +152,9 @@ export function DashboardView() {
                     <p className="list-title">{toSiteLabel(scan.siteUrl)}</p>
                     <p className="tiny">{scan.siteUrl}</p>
                     <p className="tiny">{new Date(scan.createdAt).toLocaleString()}</p>
-                    <p className="tiny scan-cost-line">Scan cost: {scanCostLabel(scan.scanId, firstScanId)}</p>
+                    {scanCostLabel(scan.scanId, firstScanId) !== "Free" ? (
+                      <p className="tiny scan-cost-line">Scan cost: {scanCostLabel(scan.scanId, firstScanId)}</p>
+                    ) : null}
                   </div>
                   <div className="scan-item-side">
                     <span className={`score-pill ${scoreToneClass(scan.publicScore)}`}>{scan.publicScore ?? "--"}/100</span>

@@ -37,12 +37,45 @@ const ISSUE_ACTIONS: Record<string, string> = {
   sitemap_missing: "Publish sitemap.xml and keep it updated so crawlers can discover key URLs faster.",
 };
 
+const ISSUE_TITLE_ACRONYMS: Record<string, string> = {
+  ai: "AI",
+  faq: "FAQ",
+  json: "JSON",
+  ld: "LD",
+  llm: "LLM",
+  qa: "Q&A",
+  url: "URL",
+};
+
 export function explainIssue(code: string, fallbackMessage: string): string {
   return ISSUE_EXPLANATIONS[code] ?? fallbackMessage;
 }
 
 export function issueAction(code: string): string {
   return ISSUE_ACTIONS[code] ?? "Apply the recommended fix in this block and rerun the scan to validate the improvement.";
+}
+
+export function formatIssueTitle(code: string): string {
+  const title = code
+    .split("_")
+    .map((word) => {
+      const acronym = ISSUE_TITLE_ACRONYMS[word.toLowerCase()];
+      return acronym ?? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+
+  if (!/\s+Missing$/i.test(title)) {
+    return title;
+  }
+
+  const base = title.replace(/\s+Missing$/i, "");
+  const words = base.split(" ");
+  return `${words.map((word, index) => {
+    if (/^(AI|FAQ|JSON|LD|LLM|Q&A|URL)$/.test(word)) {
+      return word;
+    }
+    return index === 0 ? word : word.toLowerCase();
+  }).join(" ")} not detected`;
 }
 
 export function toSiteLabel(siteUrl: string): string {

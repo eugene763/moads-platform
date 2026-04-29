@@ -2,6 +2,7 @@ import type {Metadata} from "next";
 import {Inter} from "next/font/google";
 import Script from "next/script";
 
+import {AeoFooter} from "../components/aeo-footer";
 import {isDevAeoEnvironment} from "../lib/search-indexing";
 import "./globals.css";
 
@@ -49,6 +50,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
           </>
         ) : null}
         {children}
+        <AeoFooter />
       </body>
     </html>
   );

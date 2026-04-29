@@ -4,7 +4,7 @@ import {useEffect, useMemo, useRef, useState} from "react";
 
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
-import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
+import {explainIssue, formatIssueTitle, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
 import {affectedPagesLabel, deriveCrawlerAccessibilityChecks, prepareCurrentIssues} from "../lib/current-issues";
 import {AuthModal} from "./auth-modal";
@@ -35,12 +35,6 @@ function priorityBadgeClass(priority: string): string {
     return "badge-med";
   }
   return "badge-low";
-}
-
-function formatIssueTitle(code: string): string {
-  return code
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (value) => value.toUpperCase());
 }
 
 function buildDeveloperIssueSummary(
@@ -362,7 +356,10 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return <div className="state-card">Report not found.</div>;
   }
 
-  const scanModeNote = report.report.summary?.scanModeNote;
+  const scanModeNote = report.report.summary?.scanModeNote?.replace(
+    /Deep Site Scan sampled \d+ pages in launch mode\./,
+    "Deep Site Scan sampled key pages in launch mode.",
+  );
   const displayUrl = normalizeUrlForDisplay(report.siteUrl || report.finalUrl || "");
 
   const scoredNow = [

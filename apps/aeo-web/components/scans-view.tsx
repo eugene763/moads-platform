@@ -4,7 +4,7 @@ import {useRouter} from "next/navigation";
 import {FormEvent, MouseEvent, useEffect, useMemo, useRef, useState} from "react";
 
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
-import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
+import {explainIssue, formatIssueTitle, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
 import {affectedPagesLabel, deriveCrawlerAccessibilityChecks, prepareCurrentIssues} from "../lib/current-issues";
 import {normalizeWebsiteUrlInput, WEBSITE_URL_ERROR} from "../lib/url-validation";
@@ -54,12 +54,6 @@ function priorityBadgeClass(priority: string): string {
     return "badge-med";
   }
   return "badge-low";
-}
-
-function formatIssueTitle(code: string): string {
-  return code
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (value) => value.toUpperCase());
 }
 
 function scanCostLabel(scanId: string, firstScanId: string | null): string {
@@ -632,7 +626,6 @@ export function ScansView() {
             {scanBusy ? "Scanning..." : "Run Deep Site Scan"}
           </button>
         </form>
-        <p className="tiny">Scans the homepage and key discovery pages selected from sitemap, robots.txt and internal links.</p>
         {scanHint ? <p className="scan-form-hint">{scanHint}</p> : null}
       </section>
 
@@ -689,7 +682,7 @@ export function ScansView() {
                 <h3 className="score-url-heading">{selectedUrl || "this site"}</h3>
                 <p className={`score-heading ${scoreToneClass(selectedScan.publicScore)}`}>{selectedScan.publicScore ?? "--"}/100</p>
                 <p className={`status-chip ${statusToneClass(selectedStatusLabel)}`}>{selectedStatusLabel}</p>
-                <p className="tiny scan-cost-line">Scan cost: {selectedScanCost}</p>
+                {selectedScanCost !== "Free" ? <p className="tiny scan-cost-line">Scan cost: {selectedScanCost}</p> : null}
               </div>
               <div className="score-actions">
                 <button type="button" className="cta-ghost" onClick={() => void repeatSelectedScan()} disabled={scanBusy}>

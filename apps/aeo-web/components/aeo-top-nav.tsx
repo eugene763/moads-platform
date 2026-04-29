@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 
 import {apiRequest} from "../lib/api";
 import {signOutFromAeoFirebase} from "../lib/firebase";
@@ -15,6 +15,7 @@ interface SessionSnapshot {
 }
 
 export function AeoTopNav() {
+  const headerRef = useRef<HTMLElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -32,6 +33,34 @@ export function AeoTopNav() {
     window.addEventListener("scroll", handler, {passive: true});
     return () => window.removeEventListener("scroll", handler);
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      if (headerRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      setMenuOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown, {passive: true});
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   async function refreshSession() {
     try {
@@ -124,7 +153,7 @@ export function AeoTopNav() {
   }
 
   return (
-    <header className={`top-nav${scrolled ? " scrolled" : ""}`}>
+    <header ref={headerRef} className={`top-nav${scrolled ? " scrolled" : ""}`}>
       <Link href="/" className="brand brand-logo" aria-label="MO AEO CHECKER home">
         <Image src="/logo-mo-aeo-checker.png" alt="MO AEO CHECKER" width={577} height={433} className="brand-logo-image" priority />
         <span className="demo-label">BETA</span>
@@ -133,8 +162,7 @@ export function AeoTopNav() {
       <nav>
         <Link href="/#how-it-works">How It Works</Link>
         <Link href="/#dimensions">Dimensions</Link>
-        <Link href="/#pricing">Pricing</Link>
-        <a href="https://moads.agency/#form" target="_blank" rel="noreferrer">Agency</a>
+        <a href="https://moads.agency/#form" target="_blank" rel="noreferrer">Deploy Fixes</a>
       </nav>
 
       <div className="nav-actions">
@@ -163,30 +191,30 @@ export function AeoTopNav() {
       {menuOpen ? (
         <div className="burger-panel">
           <div className="burger-group">
-            <strong>Navigation</strong>
-            <Link href="/#scan" onClick={() => setMenuOpen(false)}>Checker</Link>
-            <Link href="/scans" onClick={() => setMenuOpen(false)}>Scans</Link>
-            <Link href="/dashboard" onClick={() => setMenuOpen(false)}>Account</Link>
-            <a href="https://moads.agency/#form" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Agency Form</a>
-          </div>
-          <div className="burger-group">
-            <strong>Account</strong>
             {isAuthed ? (
               <>
-                <p className="tiny">{email ?? "signed user"}</p>
-                <p className="tiny">{credits ?? "--"} credits</p>
-                <Link href="/dashboard#billing" onClick={() => setMenuOpen(false)}>Buy more credits</Link>
-                <button type="button" className="auth-link" onClick={() => void handleLogout()}>
-                  Log out
-                </button>
+                <strong>Navigation</strong>
+                <Link href="/#scan" onClick={() => setMenuOpen(false)}>Checker</Link>
+                <Link href="/scans" onClick={() => setMenuOpen(false)}>Scans</Link>
+                <Link href="/dashboard" onClick={() => setMenuOpen(false)}>Account</Link>
+                <a href="https://moads.agency/#form" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Deploy Fixes</a>
               </>
             ) : (
               <div className="burger-auth-actions">
-                <button type="button" className="cta-ghost" onClick={() => openAuth("signin")}>Log In</button>
+                <button type="button" className="cta-ghost" onClick={() => openAuth("signin")}>Sign In</button>
                 <button type="button" className="cta-primary" onClick={() => openAuth("signup")}>Sign Up</button>
               </div>
             )}
           </div>
+          {isAuthed ? <div className="burger-group">
+            <strong>Account</strong>
+            <p className="tiny">{email ?? "signed user"}</p>
+            <p className="tiny">{credits ?? "--"} credits</p>
+            <Link href="/dashboard#billing" onClick={() => setMenuOpen(false)}>Buy more credits</Link>
+            <button type="button" className="auth-link" onClick={() => void handleLogout()}>
+              Log out
+            </button>
+          </div> : null}
         </div>
       ) : null}
 

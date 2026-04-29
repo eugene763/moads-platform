@@ -425,9 +425,6 @@ export default function HomePage() {
           <AgencySupportBlock className="final-cta-card" />
         </div>
       </section>
-      <footer className="site-footer">
-        <a href="https://moads.agency/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>
-      </footer>
     </main>
   );
 }
