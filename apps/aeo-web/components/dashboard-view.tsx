@@ -3,8 +3,9 @@
 import {useRouter} from "next/navigation";
 import {useEffect, useMemo, useState} from "react";
 
-import {apiRequest} from "../lib/api";
+import {ApiRequestError, apiRequest} from "../lib/api";
 import {scoreToneClass, statusToneClass, toSiteLabel} from "../lib/aeo-ui";
+import {signOutFromAeoFirebase} from "../lib/firebase";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
@@ -39,6 +40,7 @@ export function DashboardView() {
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [packsOpen, setPacksOpen] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
 
   const scansCount = useMemo(() => scans.length, [scans]);
   const firstScanId = scans.length ? scans[scans.length - 1]?.scanId ?? null : null;
@@ -87,6 +89,35 @@ export function DashboardView() {
     await loadDashboard();
   }
 
+  async function handleLogout(): Promise<void> {
+    setLogoutBusy(true);
+    setError(null);
+
+    try {
+      try {
+        await apiRequest<void>("/v1/auth/session-logout", {method: "POST"});
+      } catch (requestError) {
+        if (!(requestError instanceof ApiRequestError && requestError.status === 401)) {
+          throw requestError;
+        }
+      }
+
+      await signOutFromAeoFirebase();
+      setSession(null);
+      setWalletBalance(0);
+      setScans([]);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("aeo_authed_hint");
+        window.dispatchEvent(new Event("aeo-auth-changed"));
+      }
+      router.push("/");
+    } catch {
+      setError("Could not log out. Please try again.");
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="panel">
@@ -131,6 +162,9 @@ export function DashboardView() {
             Buy more credits
           </button>
           <button type="button" className="cta-ghost" onClick={() => router.push("/scans")}>Open scans workspace</button>
+          <button type="button" className="cta-ghost" onClick={() => void handleLogout()} disabled={logoutBusy}>
+            {logoutBusy ? "Logging out..." : "Log out"}
+          </button>
         </div>
       </section>
 
