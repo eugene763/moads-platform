@@ -5,6 +5,7 @@ import {FormEvent, useEffect, useState} from "react";
 
 import {apiRequest, PublicScanResponse} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
+import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
 import {AuthModal} from "./auth-modal";
 
 const SCAN_COUNT_KEY = "aeo_public_scan_count_v1";
@@ -69,6 +70,11 @@ export function ScanForm() {
     await refreshSession();
     setRequiresAuth(false);
     setAuthOpen(false);
+    const intent = readAeoAuthIntent();
+    if (intent?.type === "run_check") {
+      clearAeoAuthIntent();
+      router.push(`/scans?prefill=${encodeURIComponent(intent.siteUrl ?? siteUrl)}`);
+    }
     trackGa4("aeo_auth_gate_success", {source: "scan_form"});
   }
 
@@ -90,6 +96,10 @@ export function ScanForm() {
     }
 
     if (!authedNow && currentCount >= 1) {
+      saveAeoAuthIntent({
+        type: "run_check",
+        siteUrl: normalizedInput,
+      });
       setRequiresAuth(true);
       setAuthOpen(true);
       trackGa4("aeo_scan_auth_gate_shown", {reason: "second_scan"});
@@ -145,9 +155,9 @@ export function ScanForm() {
         </button>
       </div>
       <div className="hero-trust" aria-label="Trust signals">
-        <span>Free page scan</span>
-        <span>No card required</span>
-        <span>Server-side checks</span>
+        <span>First scan free</span>
+        <span>Real data-driven analysis</span>
+        <span>Sign in to unlock deeper checks</span>
       </div>
       {requiresAuth ? (
         <div className="lock-panel compact-lock">

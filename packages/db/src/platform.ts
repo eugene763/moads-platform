@@ -7,8 +7,10 @@ import {
 
 import {PlatformError, assertOrThrow} from "./errors.js";
 import {
+  AEO_WELCOME_CREDITS,
   ensureGlobalCreditsWallet,
   getWalletSnapshot,
+  grantAeoWelcomeCredits,
   grantMotrendBootstrapCredits,
   MOTREND_TEST_BOOTSTRAP_CREDITS,
 } from "./wallet.js";
@@ -215,6 +217,13 @@ export async function bootstrapSessionLogin(
         productId: product.id,
       }) :
       false;
+    const grantedAeoWelcomeCredits = product.code === "aeo" && createdMembership ?
+      await grantAeoWelcomeCredits(tx, {
+        walletId: wallet.id,
+        accountId: account.id,
+        productId: product.id,
+      }) :
+      false;
 
     await tx.auditLog.create({
       data: {
@@ -228,9 +237,10 @@ export async function bootstrapSessionLogin(
           createdMembership,
           suppressMotrendGift: Boolean(input.suppressMotrendGift),
           grantedTestCredits,
+          grantedAeoWelcomeCredits,
           grantedTestCreditsAmount: grantedTestCredits ?
             MOTREND_TEST_BOOTSTRAP_CREDITS :
-            null,
+            grantedAeoWelcomeCredits ? AEO_WELCOME_CREDITS : null,
         },
       },
     });
@@ -274,10 +284,10 @@ export async function bootstrapSessionLogin(
       supportCode: supportProfile.supportCode,
       wallet: walletSnapshot,
       createdMembership,
-      grantedTestCredits,
+      grantedTestCredits: grantedTestCredits || grantedAeoWelcomeCredits,
       grantedTestCreditsAmount: grantedTestCredits ?
         MOTREND_TEST_BOOTSTRAP_CREDITS :
-        null,
+        grantedAeoWelcomeCredits ? AEO_WELCOME_CREDITS : null,
     };
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import {FormEvent, useEffect, useRef, useState} from "react";
+import {createPortal} from "react-dom";
 
 import {apiRequest} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
@@ -143,11 +144,11 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
     }
   }
 
-  if (!open) {
+  if (!open || typeof document === "undefined") {
     return null;
   }
 
-  return (
+  return createPortal(
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section
         className="modal-card auth-modal"
@@ -245,6 +246,7 @@ export function AuthModal({open, onClose, onSuccess, source, initialMode = "sign
         {message ? <p className="tiny auth-success">{message}</p> : null}
         {error ? <p className="error-text">{error}</p> : null}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

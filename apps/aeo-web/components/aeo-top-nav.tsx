@@ -127,6 +127,7 @@ export function AeoTopNav() {
     <header className={`top-nav${scrolled ? " scrolled" : ""}`}>
       <Link href="/" className="brand brand-logo" aria-label="MO AEO CHECKER home">
         <Image src="/logo-mo-aeo-checker.png" alt="MO AEO CHECKER" width={577} height={433} className="brand-logo-image" priority />
+        <span className="demo-label">DEMO</span>
       </Link>
 
       <nav>

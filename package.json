@@ -43,6 +43,7 @@
     "billing:credit-packs:upsert:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/upsert-motrend-credit-packs.ts",
     "billing:aeo-credit-packs:upsert:local": "dotenv -e .env.local -- pnpm --filter @moads/db exec node --import tsx scripts/upsert-aeo-credit-packs.ts",
     "billing:aeo-credit-packs:upsert:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/db exec node --import tsx scripts/upsert-aeo-credit-packs.ts",
+    "billing:aeo-dodo:check:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/db exec node --import tsx scripts/check-aeo-dodo-config.ts --expect-moads-env=dev-cloud --expect-dodo-environment=test_mode",
     "billing:aeo-credit-packs:upsert:prod": "dotenv -e .env.prod.local -- pnpm --filter @moads/db exec node --import tsx scripts/upsert-aeo-credit-packs.ts",
     "motrend:tasks:run": "dotenv -e .env.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/run-motrend-job-tasks.ts",
     "motrend:tasks:run:dev-cloud": "dotenv -e .env.dev-cloud.local -- pnpm --filter @moads/api exec node --import tsx ../../infra/scripts/run-motrend-job-tasks.ts",

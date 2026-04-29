@@ -16,6 +16,7 @@ import {
   listBillingCreditPackOffers,
   listBillingOrders,
   PlatformError,
+  removeAeoScanFromWorkspace,
   saveAeoAiTips,
   upsertAeoMonitoringSnapshot,
 } from "@moads/db";
@@ -370,6 +371,25 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
     });
 
     reply.send(scan);
+  });
+
+  app.delete("/aeo/scans/:scanId", {preHandler: authGuards}, async (request, reply) => {
+    if (!request.accountContext || !request.authContext) {
+      throw new PlatformError(500, "session_context_missing", "Session context is missing.");
+    }
+
+    const params = request.params as {scanId?: unknown};
+    if (typeof params.scanId !== "string" || !params.scanId.trim()) {
+      throw new PlatformError(400, "scan_id_required", "scanId is required.");
+    }
+
+    const removed = await removeAeoScanFromWorkspace(app.prisma, {
+      accountId: request.accountContext.accountId,
+      userId: request.authContext.userId,
+      scanId: params.scanId.trim(),
+    });
+
+    reply.send(removed);
   });
 
   app.post("/aeo/scans/:scanId/generate-ai-tips", {preHandler: authGuards}, async (request, reply) => {

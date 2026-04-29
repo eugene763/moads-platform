@@ -1,10 +1,11 @@
 "use client";
 
 import {useRouter} from "next/navigation";
-import {FormEvent, useEffect, useMemo, useState} from "react";
+import {FormEvent, useEffect, useMemo, useRef, useState} from "react";
 
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
+import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
@@ -23,6 +24,7 @@ interface ScanItem {
   publicScore: number | null;
   status: string;
   createdAt: string;
+  scanKind?: string;
 }
 
 interface ScanDetail extends PublicScanReport {
@@ -35,12 +37,6 @@ interface ScanDetail extends PublicScanReport {
       category: string;
     }>;
   };
-}
-
-const AUTO_UNLOCK_KEY_PREFIX = "aeo_auto_unlock_tips_v1";
-
-function autoUnlockStorageKey(accountId: string): string {
-  return `${AUTO_UNLOCK_KEY_PREFIX}:${accountId}`;
 }
 
 function sortByDateDesc(scans: ScanItem[]): ScanItem[] {
@@ -68,6 +64,32 @@ function scanCostLabel(scanId: string, firstScanId: string | null): string {
   return scanId === firstScanId ? "Free" : "1 credit";
 }
 
+function buildDeveloperIssueSummary(
+  input: {
+    siteUrl: string;
+    score: number | null;
+    issues: Array<{code: string; severity: string; message: string}>;
+  },
+): string {
+  const header = [
+    "# AEO fixes for developer",
+    "",
+    `Site: ${input.siteUrl}`,
+    `Score: ${input.score ?? "--"}/100`,
+    "",
+    "## Visible issues",
+  ];
+
+  const body = input.issues.map((issue, index) => [
+    `${index + 1}. ${formatIssueTitle(issue.code)}`,
+    `Severity: ${issue.severity}`,
+    `Explanation: ${explainIssue(issue.code, issue.message)}`,
+    `Action: ${issueAction(issue.code)}`,
+  ].join("\n"));
+
+  return [...header, ...body].join("\n\n");
+}
+
 export function ScansView() {
   const router = useRouter();
   const [queryScanId, setQueryScanId] = useState<string | null>(null);
@@ -86,14 +108,18 @@ export function ScansView() {
 
   const [newSiteUrl, setNewSiteUrl] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
-  const [tipsBusy, setTipsBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [scanHint, setScanHint] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [highlightScanForm, setHighlightScanForm] = useState(false);
+  const scanFormRef = useRef<HTMLElement | null>(null);
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
 
   const [tabOrder, setTabOrder] = useState<string[]>([]);
   const [selectedSiteKey, setSelectedSiteKey] = useState<string | null>(null);
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [selectedScanDetail, setSelectedScanDetail] = useState<ScanDetail | null>(null);
   const [queryApplied, setQueryApplied] = useState(false);
-  const [autoUnlockEnabled, setAutoUnlockEnabled] = useState(false);
 
   const groupedSites = useMemo(() => {
     const groups = new Map<string, {key: string; label: string; scans: ScanItem[]}>();
@@ -151,10 +177,6 @@ export function ScansView() {
       setSession(sessionSnapshot);
       setWalletBalance(wallet.wallet.balance);
       setScans(sortByDateDesc(scanList.scans));
-      if (typeof window !== "undefined") {
-        const enabled = window.localStorage.getItem(autoUnlockStorageKey(sessionSnapshot.account.id)) === "1";
-        setAutoUnlockEnabled(enabled);
-      }
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Failed to load scans workspace.";
       if (!/session|membership required|product membership/i.test(message)) {
@@ -165,7 +187,6 @@ export function ScansView() {
       setSelectedSiteKey(null);
       setSelectedScanId(null);
       setSelectedScanDetail(null);
-      setAutoUnlockEnabled(false);
     } finally {
       setLoading(false);
     }
@@ -228,10 +249,6 @@ export function ScansView() {
       try {
         const detail = await apiRequest<ScanDetail>(`/v1/aeo/scans/${selectedScan.scanId}`);
         setSelectedScanDetail(detail);
-        if (detail.aiTips?.tips?.length && session && typeof window !== "undefined") {
-          window.localStorage.setItem(autoUnlockStorageKey(session.account.id), "1");
-          setAutoUnlockEnabled(true);
-        }
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Failed to load selected scan.");
       }
@@ -272,8 +289,19 @@ export function ScansView() {
     }
 
     if (intent === "site-scan" && !session) {
+      if (prefill) {
+        saveAeoAuthIntent({
+          type: "deep_site_scan",
+          siteUrl: prefill,
+          scanId: scanId ?? undefined,
+        });
+      }
       setAuthMode("signin");
       setAuthOpen(true);
+    }
+
+    if (intent === "site-scan" && session && prefill) {
+      void runFullCheckByUrl(prefill);
     }
 
     if (scanId || prefill || intent) {
@@ -293,6 +321,12 @@ export function ScansView() {
   async function onAuthSuccess(): Promise<void> {
     setAuthOpen(false);
     await loadWorkspace();
+    const intent = readAeoAuthIntent();
+    if (intent?.type === "deep_site_scan" && intent.siteUrl) {
+      clearAeoAuthIntent();
+      await runFullCheckByUrl(intent.siteUrl);
+      return;
+    }
     if (pendingPacksAfterAuth) {
       setPacksOpen(true);
       setPendingPacksAfterAuth(false);
@@ -350,68 +384,6 @@ export function ScansView() {
     await runFullCheckByUrl(newSiteUrl);
   }
 
-  function openPacks(): void {
-    if (!session) {
-      setPendingPacksAfterAuth(true);
-      setAuthMode("signup");
-      setAuthOpen(true);
-      return;
-    }
-
-    setPacksOpen(true);
-  }
-
-  async function unlockTipsForScan(scanId: string): Promise<void> {
-    if (!session) {
-      return;
-    }
-
-    if (walletBalance <= 0) {
-      setPacksOpen(true);
-      return;
-    }
-
-    setTipsBusy(true);
-    setError(null);
-
-    try {
-      await apiRequest(`/v1/aeo/scans/${scanId}/generate-ai-tips`, {
-        method: "POST",
-        body: JSON.stringify({planCode: "free"}),
-      });
-
-      const [wallet, detail] = await Promise.all([
-        apiRequest<{wallet: {balance: number}}>("/v1/wallet/summary"),
-        apiRequest<ScanDetail>(`/v1/aeo/scans/${scanId}`),
-      ]);
-
-      setWalletBalance(wallet.wallet.balance);
-      setSelectedScanDetail(detail);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(autoUnlockStorageKey(session.account.id), "1");
-      }
-      setAutoUnlockEnabled(true);
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : "Failed to generate tips.";
-      if (/insufficient|credit/i.test(message)) {
-        setPacksOpen(true);
-      } else {
-        setError(message);
-      }
-    } finally {
-      setTipsBusy(false);
-    }
-  }
-
-  async function handleUnblockAllTips(): Promise<void> {
-    if (!selectedScan) {
-      openPacks();
-      return;
-    }
-
-    await unlockTipsForScan(selectedScan.scanId);
-  }
-
   async function repeatSelectedScan(): Promise<void> {
     const sourceUrl = selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "";
     const candidate = sourceUrl.trim();
@@ -421,6 +393,60 @@ export function ScansView() {
     }
     setNewSiteUrl(normalizeUrlForDisplay(candidate));
     await runFullCheckByUrl(candidate);
+  }
+
+  async function runDeepSiteScanForSelected(): Promise<void> {
+    const sourceUrl = selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? newSiteUrl;
+    if (!sourceUrl.trim()) {
+      focusNewScanInput();
+      return;
+    }
+
+    if (walletBalance <= 0) {
+      setPacksOpen(true);
+      return;
+    }
+
+    await runFullCheckByUrl(sourceUrl);
+  }
+
+  async function deleteSelectedScan(): Promise<void> {
+    if (!selectedScan) {
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this scan?\n\nThis will remove the scan from your workspace. This action cannot be undone.");
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteBusy(true);
+    setError(null);
+    try {
+      await apiRequest(`/v1/aeo/scans/${selectedScan.scanId}`, {
+        method: "DELETE",
+      });
+      setScans((previous) => previous.filter((scan) => scan.scanId !== selectedScan.scanId));
+      setSelectedScanDetail(null);
+      setSelectedScanId(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to delete scan.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  function focusNewScanInput(): void {
+    setSelectedSiteKey(null);
+    setSelectedScanId(null);
+    setNewSiteUrl("");
+    setScanHint("Enter a website URL to start a new scan.");
+    setHighlightScanForm(true);
+    window.setTimeout(() => setHighlightScanForm(false), 1800);
+    window.requestAnimationFrame(() => {
+      scanFormRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+      scanInputRef.current?.focus();
+    });
   }
 
   async function shareSelectedReport(): Promise<void> {
@@ -453,6 +479,21 @@ export function ScansView() {
     window.print();
   }
 
+  async function copyVisibleIssuesForDeveloper(issuesToCopy: Array<{code: string; severity: string; message: string}>): Promise<void> {
+    const summary = buildDeveloperIssueSummary({
+      siteUrl: selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? selectedUrl,
+      score: selectedScanDetail?.publicScore ?? selectedScan?.publicScore ?? null,
+      issues: issuesToCopy,
+    });
+
+    try {
+      await navigator.clipboard.writeText(summary);
+      setExportMessage("Fix list copied for developer");
+    } catch {
+      setExportMessage("Could not copy automatically. Select and copy the visible issue list manually.");
+    }
+  }
+
   if (loading) {
     return (
       <div className="panel">
@@ -481,19 +522,29 @@ export function ScansView() {
     );
   }
 
-  const reportTopFixes = selectedScanDetail?.report?.topFixes ?? [];
-  const legacyRecommendations = selectedScanDetail?.recommendations ?? [];
-  const topFixes = reportTopFixes.length ? reportTopFixes : legacyRecommendations;
-
-  const tipsUnlocked = Boolean(session);
-  const topFixesVisibleLimit = tipsUnlocked ? topFixes.length : 5;
-  const visibleTopFixes = topFixes.slice(0, topFixesVisibleLimit);
-  const topFixesPreview = tipsUnlocked ? null : topFixes[5] ?? null;
-
   const issues = selectedScanDetail?.issues ?? [];
-  const issuesVisibleLimit = tipsUnlocked ? issues.length : 5;
+  const hasDeepSiteScanData = selectedScanDetail?.scanKind === "site_scan" || selectedScanDetail?.report.summary?.scope === "site";
+  const issuesVisibleLimit = hasDeepSiteScanData ? issues.length : 5;
   const visibleIssues = issues.slice(0, issuesVisibleLimit);
-  const issuesPreview = tipsUnlocked ? null : issues[5] ?? null;
+  const issuesPreview = hasDeepSiteScanData ? null : issues[5] ?? null;
+  const crawlability = selectedScanDetail?.report.evidence?.crawlability;
+  const scoredNow = [
+    ["AI Crawler Accessibility", selectedScanDetail?.report.dimensions?.aiCrawlerAccessibility],
+    ["Answer Optimization", selectedScanDetail?.report.dimensions?.answerOptimization],
+    ["Citation Readiness", selectedScanDetail?.report.dimensions?.citationReadiness],
+    ["Technical Hygiene", selectedScanDetail?.report.dimensions?.technicalHygiene],
+  ] as const;
+  const visibleCrawlerRows = [
+    {label: "Sitemap", value: crawlability?.sitemapExists ? "found" : "not found"},
+    {label: "Robots.txt", value: crawlability?.robotsExists ? "found" : "not found"},
+    {label: "Pre-rendered text", value: selectedScanDetail?.confidenceLevel === "low" ? "limited" : "detected"},
+  ];
+  const hiddenCrawlerRows = [
+    {label: "llms.txt", value: crawlability?.llmsTxtExists ? "found" : "not found"},
+    {label: "LLM guidance page", value: crawlability?.llmGuidancePage ? "found" : "not found"},
+    {label: "Canonical stability", value: selectedScanDetail?.issues.some((issue) => issue.code === "canonical_missing") ? "needs fix" : "stable"},
+    {label: "Blocked content", value: selectedScanDetail?.status === "blocked" ? "risk" : "clear"},
+  ];
 
   const selectedUrl = normalizeUrlForDisplay(selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "");
   const selectedScore = selectedScan?.publicScore ?? 0;
@@ -502,13 +553,14 @@ export function ScansView() {
 
   return (
     <div className="dashboard-grid">
-      <section className="panel full scans-form-panel">
+      <section className={`panel full scans-form-panel${highlightScanForm ? " input-highlight" : ""}`} ref={scanFormRef}>
         <div className="panel-header">
           <h2>AI DISCOVERY READINESS CHECK</h2>
           <span className="badge badge-score">{walletBalance} credits</span>
         </div>
         <form className="inline-scan-form" onSubmit={(event) => void runFullCheck(event)}>
           <input
+            ref={scanInputRef}
             type="text"
             placeholder="yoursite.com"
             value={newSiteUrl}
@@ -518,10 +570,11 @@ export function ScansView() {
             spellCheck={false}
           />
           <button type="submit" className="cta-primary" disabled={scanBusy}>
-            {scanBusy ? "Scanning..." : "Run key-page site scan"}
+            {scanBusy ? "Scanning..." : "Run Deep site scan"}
           </button>
         </form>
         <p className="tiny">Scans the homepage and key discovery pages selected from sitemap, robots.txt and internal links.</p>
+        {scanHint ? <p className="scan-form-hint">{scanHint}</p> : null}
       </section>
 
       <section className="panel full">
@@ -550,9 +603,7 @@ export function ScansView() {
                 alert("You reached the maximum number of reports. Delete one old report first.");
                 return;
               }
-              setSelectedSiteKey(null);
-              setSelectedScanId(null);
-              setNewSiteUrl("");
+              focusNewScanInput();
             }}
             aria-label="Add report tab"
           >
@@ -563,6 +614,15 @@ export function ScansView() {
         {selectedScan ? (
           <>
             <article className="surface-card selected-scan-card score-card site-score-card">
+              <button
+                type="button"
+                className="score-delete-button"
+                onClick={() => void deleteSelectedScan()}
+                disabled={deleteBusy}
+                aria-label="Delete scan"
+              >
+                ×
+              </button>
               <ScoreRing score={selectedScore} />
               <div className="score-text-block">
                 <p className="score-kicker">AI DISCOVERY READINESS OF SITE</p>
@@ -582,34 +642,63 @@ export function ScansView() {
 
             <div className="surface-card selected-scan-card">
               <div className="panel-header compact">
-                <h3>Top Fixes</h3>
-                <span className="badge badge-score">{topFixes.length} total</span>
+                <h3>AI Crawler Accessibility</h3>
+                <span className="badge badge-score">Scored + locked details</span>
               </div>
-              <ul className="list compact">
-                {visibleTopFixes.map((item) => (
-                  <li key={item.id}>
-                    <div>
-                      <p className="list-title">{item.title}</p>
-                      <p className="tiny">{item.description}</p>
+              <div className="evidence-grid">
+                <article className="surface-card">
+                  <h3>Scored now</h3>
+                  <ul className="meta-list">
+                    {scoredNow.map(([label, value]) => (
+                      <li key={label}>
+                        <span>{label}</span>
+                        <strong>{value ?? "--"}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+                <article className="surface-card">
+                  <h3>Visible checks</h3>
+                  <ul className="meta-list">
+                    {visibleCrawlerRows.map((row) => (
+                      <li key={row.label}>
+                        <span>{row.label}</span>
+                        <strong>{row.value}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                  {hasDeepSiteScanData ? (
+                    <ul className="meta-list" style={{marginTop: "10px"}}>
+                      {hiddenCrawlerRows.map((row) => (
+                        <li key={row.label}>
+                          <span>{row.label}</span>
+                          <strong>{row.value}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="locked-subset">
+                      <p className="tiny">Run Deep site scan to unlock additional crawler checks.</p>
+                      <ul className="meta-list locked-rows">
+                        {hiddenCrawlerRows.map((row) => (
+                          <li key={row.label}>
+                            <span>{row.label}</span>
+                            <strong>locked</strong>
+                          </li>
+                        ))}
+                      </ul>
+                      <button type="button" className="cta-ghost" onClick={() => void runDeepSiteScanForSelected()} disabled={scanBusy}>
+                        Unlock hidden block
+                      </button>
                     </div>
-                    <span className={`badge ${priorityBadgeClass(item.priority)}`}>{item.priority}</span>
-                  </li>
-                ))}
-                {topFixesPreview ? (
-                  <li className="blur-preview">
-                    <div>
-                      <p className="list-title">{topFixesPreview.title}</p>
-                      <p className="tiny">{topFixesPreview.description}</p>
-                    </div>
-                    <span className={`badge ${priorityBadgeClass(topFixesPreview.priority)}`}>{topFixesPreview.priority}</span>
-                  </li>
-                ) : null}
-              </ul>
-              {topFixesPreview ? (
+                  )}
+                </article>
+              </div>
+              {!hasDeepSiteScanData ? (
                 <div className="unlock-panel">
-                  <p>1 credit unlocks full report depth for this site.</p>
-                  <button type="button" className="cta-primary" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
-                    {tipsBusy ? "Unblocking..." : "Unblock all tips"}
+                  <p>Use 1 credit to run a Deep site scan for this site.</p>
+                  <button type="button" className="cta-primary" onClick={() => void runDeepSiteScanForSelected()} disabled={scanBusy}>
+                    {scanBusy ? "Scanning..." : "Run Deep site scan"}
                   </button>
                 </div>
               ) : null}
@@ -618,8 +707,14 @@ export function ScansView() {
             <div className="surface-card selected-scan-card">
               <div className="panel-header compact">
                 <h3>Current Issues</h3>
-                <span className="badge badge-score">{issues.length} total</span>
+                <div className="panel-actions">
+                  <button type="button" className="cta-ghost compact-button" onClick={() => void copyVisibleIssuesForDeveloper(visibleIssues)}>
+                    Send fixes to developer
+                  </button>
+                  <span className="badge badge-score">{issues.length} total</span>
+                </div>
               </div>
+              {exportMessage ? <p className="toast-message">{exportMessage}</p> : null}
               <ul className="list compact">
                 {visibleIssues.map((issue) => (
                   <li key={issue.code}>
@@ -644,9 +739,9 @@ export function ScansView() {
               </ul>
               {issuesPreview ? (
                 <div className="unlock-panel">
-                  <p>1 credit unlocks full issue diagnostics for this site.</p>
-                  <button type="button" className="cta-primary" onClick={() => void handleUnblockAllTips()} disabled={tipsBusy}>
-                    {tipsBusy ? "Unblocking..." : "Unblock all tips"}
+                  <p>Use 1 credit to run a Deep site scan and unlock full issue diagnostics for this site.</p>
+                  <button type="button" className="cta-primary" onClick={() => void runDeepSiteScanForSelected()} disabled={scanBusy}>
+                    {scanBusy ? "Scanning..." : "Run Deep site scan"}
                   </button>
                 </div>
               ) : null}

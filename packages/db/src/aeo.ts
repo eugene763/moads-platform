@@ -520,6 +520,55 @@ export async function getAeoScanById(
   return shapeScanDetail(scan);
 }
 
+export async function removeAeoScanFromWorkspace(
+  prisma: Prisma.DefaultPrismaClient,
+  input: {
+    accountId: string;
+    userId: string;
+    scanId: string;
+  },
+) {
+  return await prisma.$transaction(async (tx) => {
+    const scan = await tx.aeoScan.findFirst({
+      where: {
+        id: input.scanId,
+        accountId: input.accountId,
+      },
+    });
+
+    assertOrThrow(scan, 404, "aeo_scan_not_found", "AEO scan was not found.");
+
+    await tx.aeoScan.update({
+      where: {id: scan.id},
+      data: {
+        accountId: null,
+        userId: null,
+        siteId: null,
+        isClaimed: false,
+        recommendationsLocked: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        accountId: input.accountId,
+        userId: input.userId,
+        actionCode: "aeo.scan_removed_from_workspace",
+        targetType: "aeo_scan",
+        targetId: scan.id,
+        payloadJson: {
+          publicToken: scan.publicToken,
+        },
+      },
+    });
+
+    return {
+      scanId: scan.id,
+      removed: true,
+    };
+  });
+}
+
 export async function saveAeoAiTips(
   prisma: Prisma.DefaultPrismaClient,
   input: {

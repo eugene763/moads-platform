@@ -22,9 +22,17 @@ interface CreditPackSeedInput {
 
 const prisma = new PrismaClient();
 
+function isDevRuntime(): boolean {
+  return process.env.MOADS_ENV === "dev-cloud" || process.env.NODE_ENV === "development";
+}
+
 function readPackInputs(): CreditPackSeedInput[] {
   const raw = process.env.AEO_CREDIT_PACKS_JSON?.trim();
   if (!raw) {
+    if (isDevRuntime()) {
+      throw new Error("AEO_CREDIT_PACKS_JSON is required for dev AEO pack upserts so test-mode Dodo product ids are explicit.");
+    }
+
     return DEFAULT_AEO_CREDIT_PACKS.map((pack) => ({
       ...pack,
       providerCode: BILLING_DODO_PROVIDER_CODE,

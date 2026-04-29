@@ -5,6 +5,8 @@ import Link from "next/link";
 import {AeoTopNav} from "../components/aeo-top-nav";
 import {AgencySupportBlock} from "../components/agency-support-block";
 import {FeatureTabs} from "../components/feature-tabs";
+import {InstallAppButton} from "../components/install-app-button";
+import {PaymentReturnModal} from "../components/payment-return-modal";
 import {ScanForm} from "../components/scan-form";
 
 const floatLogos = [
@@ -95,13 +97,13 @@ const pricingCards: PricingCard[] = [
   {
     name: "Free",
     price: "$0",
-    description: "Free page scan in the MO AEO CHECKER with top fixes and auth unlock.",
+    description: "First scan free in the MO AEO CHECKER with top fixes and auth unlock.",
     features: [
       "Single URL free check",
       "Top fixes preview",
       "Share + print report",
       "Auth unlock for deeper data",
-      "No card required",
+      "Sign in to unlock deeper checks",
     ],
     href: "/#scan",
     cta: "Start free scan",
@@ -224,6 +226,7 @@ export default function HomePage() {
     <main>
       <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqJsonLd)}} />
       <AeoTopNav />
+      <PaymentReturnModal />
 
       <section className="hero" id="top">
         <div className="hero-float-logos" aria-hidden="true">
@@ -251,6 +254,7 @@ export default function HomePage() {
             <div id="scan" className="scan-anchor">
               <ScanForm />
             </div>
+            <InstallAppButton />
 
             <div className="sample-report-card">
               <div className="sample-report-header">
@@ -272,7 +276,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="sample-report-foot">
-                First result is one-page readiness only. Sign in to unlock deeper diagnostics and key-page site scans.
+                First result is one-page readiness only. Sign in to unlock deeper diagnostics and Deep site scans.
               </p>
             </div>
           </div>
@@ -421,6 +425,9 @@ export default function HomePage() {
           <AgencySupportBlock className="final-cta-card" />
         </div>
       </section>
+      <footer className="site-footer">
+        <a href="https://moads.agency/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>
+      </footer>
     </main>
   );
 }

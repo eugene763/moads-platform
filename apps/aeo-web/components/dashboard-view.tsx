@@ -124,7 +124,7 @@ export function DashboardView() {
         <div className="summary-stack">
           <p>Email: {session.user.email ?? "unknown"}</p>
           <p>Account ID: {session.account.id}</p>
-          <p className="tiny">Use credits for paid actions like AI tips and deeper report unlocks.</p>
+          <p className="tiny">Use credits to unlock all recommendations and deeper diagnostics.</p>
         </div>
         <div className="account-actions-row">
           <button type="button" className="cta-primary" onClick={() => setPacksOpen(true)}>

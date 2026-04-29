@@ -9,6 +9,8 @@ import {PlatformError, assertOrThrow} from "./errors.js";
 export const GLOBAL_CREDITS_WALLET_CURRENCY = "CREDITS";
 export const MOTREND_TEST_BOOTSTRAP_CREDITS = 3;
 export const MOTREND_TEST_BOOTSTRAP_REASON = "motrend_test_bootstrap";
+export const AEO_WELCOME_CREDITS = 1;
+export const AEO_WELCOME_REASON = "aeo_welcome_grant";
 
 export type DbClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
 
@@ -140,6 +142,42 @@ export async function grantMotrendBootstrapCredits(
       operationKey: `bootstrap:${input.accountId}:motrend`,
       metadataJson: {
         scope: "motrend-only",
+      },
+    });
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+export async function grantAeoWelcomeCredits(
+  tx: DbClient,
+  input: {
+    walletId: string;
+    accountId: string;
+    productId: string;
+  },
+): Promise<boolean> {
+  try {
+    await appendLedgerEntry(tx, {
+      walletId: input.walletId,
+      accountId: input.accountId,
+      productId: input.productId,
+      entryType: LedgerEntryType.GRANT,
+      amountDelta: AEO_WELCOME_CREDITS,
+      reasonCode: AEO_WELCOME_REASON,
+      refType: "product_membership",
+      refId: input.productId,
+      operationKey: `bootstrap:${input.accountId}:aeo`,
+      metadataJson: {
+        scope: "aeo-welcome",
       },
     });
     return true;

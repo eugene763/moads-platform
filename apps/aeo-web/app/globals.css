@@ -131,6 +131,19 @@ input {
   object-fit: contain;
 }
 
+.demo-label {
+  margin-left: 8px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.68);
+  font-family: "Coolvetica", var(--font-body), sans-serif;
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
 .top-nav nav {
   display: flex;
   align-items: center;
@@ -339,6 +352,22 @@ input {
   content: "✓ ";
   color: var(--ok);
   font-weight: 700;
+}
+
+.install-cta-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.desktop-install-cta {
+  padding: 9px 14px;
+  font-size: 0.86rem;
+}
+
+.install-cta-message {
+  margin-top: 0;
 }
 
 .form-hint,
@@ -1110,6 +1139,22 @@ input {
   padding: 0 0 80px;
 }
 
+.site-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0 24px 40px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.site-footer a {
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--ink);
+}
+
 .final-cta-card,
 .lead-footer {
   background: linear-gradient(135deg, #2d2f7a 0%, #383aa0 100%);
@@ -1184,12 +1229,56 @@ input {
   font-size: 1.25rem;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.compact-button {
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+.toast-message {
+  margin: -4px 0 12px;
+  color: var(--ok);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .score-card {
   display: flex;
   align-items: center;
   gap: 24px;
   flex-wrap: wrap;
   padding: 26px;
+}
+
+.site-score-card {
+  position: relative;
+}
+
+.score-delete-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.score-delete-button:hover {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .score-text-block {
@@ -1669,7 +1758,7 @@ input {
   padding-bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 16px));
   padding-left: 16px;
   overflow-y: auto;
-  z-index: 500;
+  z-index: 10000;
 }
 
 .modal-card {
@@ -1702,9 +1791,58 @@ input {
 }
 
 .auth-modal h3,
-.packs-modal h3 {
+.packs-modal h3,
+.payment-return-modal h3 {
   margin: 0 0 6px;
   font-size: 1.4rem;
+}
+
+.payment-return-modal {
+  width: min(520px, 100%);
+}
+
+.payment-return-modal.payment-success {
+  border-color: rgba(22, 163, 74, 0.28);
+}
+
+.payment-return-modal.payment-cancel {
+  border-color: rgba(190, 18, 60, 0.28);
+}
+
+.payment-return-kicker {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.payment-success .payment-return-kicker,
+.payment-success .payment-return-detail {
+  color: var(--ok);
+}
+
+.payment-cancel .payment-return-kicker,
+.payment-cancel .payment-return-detail {
+  color: var(--danger);
+}
+
+.payment-return-body {
+  margin: 8px 0 0;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.payment-return-detail {
+  margin: 12px 0 0;
+  font-weight: 800;
+}
+
+.payment-return-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .auth-subtitle {
@@ -1912,6 +2050,18 @@ input {
 
 .scans-form-panel .inline-scan-form {
   margin-bottom: 8px;
+}
+
+.scans-form-panel.input-highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(63, 89, 255, 0.14);
+}
+
+.scan-form-hint {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .skeleton-pulse {

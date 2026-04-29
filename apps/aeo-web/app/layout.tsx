@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   title: "Free AEO Checker, AEO Tracker & AEO Visibility Tool | MO ADS",
   description: "Free AEO checker and tracking tool for AI search visibility. Analyze page readiness, monitor AEO signals, and improve discoverability across AI search experiences.",
   keywords: "free AEO checker, AEO tracker, AEO visibility tool, AEO tool, best AEO tracker, AEO tracking tool, AEO analysis tools, AEO monitoring tool, AEO tools for AI search visibility analytics, AI tools for SEO and AEO, tool for AEO",
+  manifest: "/manifest.webmanifest",
   alternates: {
     canonical: "https://aeo.moads.agency/",
   },

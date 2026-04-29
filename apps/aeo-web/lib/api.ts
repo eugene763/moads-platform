@@ -14,6 +14,7 @@ export interface PublicScanReport {
   normalizedUrl?: string | null;
   finalUrl?: string | null;
   publicToken: string;
+  scanKind?: string;
   publicScore: number | null;
   status: string;
   confidenceLevel: string | null;
@@ -21,6 +22,7 @@ export interface PublicScanReport {
   lockedRecommendationsCount: number;
   report: {
     summary?: {
+      scope?: string;
       ratingSchemaStatus?: string;
       scanModeNote?: string | null;
     };
