@@ -25,6 +25,14 @@ export interface PublicScanReport {
       scope?: string;
       ratingSchemaStatus?: string;
       scanModeNote?: string | null;
+      softWarnings?: string[];
+    };
+    discovery?: {
+      skippedPages?: Array<{
+        host?: string;
+        pathname?: string;
+        reason?: string;
+      }>;
     };
     dimensions?: {
       access?: number;

@@ -629,6 +629,7 @@ export function ScansView() {
   const selectedScore = selectedScan?.publicScore ?? 0;
   const selectedStatusLabel = (selectedScan?.status ?? "pending").replace(/_/g, " ");
   const selectedScanCost = selectedScan ? scanCostLabel(selectedScan.scanId, firstScanId) : "Free";
+  const scanSoftWarnings = selectedScanDetail?.report.summary?.softWarnings ?? [];
 
   return (
     <div className="dashboard-grid">
@@ -714,6 +715,9 @@ export function ScansView() {
                 <p className={`score-heading ${scoreToneClass(selectedScan.publicScore)}`}>{selectedScan.publicScore ?? "--"}/100</p>
                 <p className={`status-chip ${statusToneClass(selectedStatusLabel)}`}>{selectedStatusLabel}</p>
                 {selectedScanCost !== "Free" ? <p className="tiny scan-cost-line">Scan cost: {selectedScanCost}</p> : null}
+                {scanSoftWarnings.map((warning) => (
+                  <p key={warning} className="tiny note-banner">{warning}</p>
+                ))}
               </div>
               <div className="score-actions">
                 <button type="button" className="cta-ghost" onClick={() => void repeatSelectedScan()} disabled={scanBusy}>

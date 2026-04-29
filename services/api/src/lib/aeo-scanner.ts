@@ -68,6 +68,18 @@ interface AeoSiteDiscoveryEvidence {
   candidateUrlsCount: number;
   selectedUrls: string[];
   selectionReasonByUrl: Record<string, string>;
+  skippedPages?: SkippedPageDiagnostic[];
+}
+
+interface SkippedPageDiagnostic {
+  host: string;
+  pathname: string;
+  reason: string;
+  httpStatus?: number | null;
+  contentType?: string | null;
+  bodyLength?: number | null;
+  htmlMarkerDetected?: boolean | null;
+  redirectCount?: number | null;
 }
 
 interface AggregateRatingEvidence {
@@ -659,7 +671,18 @@ function isRetryableStatus(status: number | null): boolean {
 }
 
 function hasNonHtmlExtension(pathname: string): boolean {
-  return /\.(xml|xsl|txt|json|rss|atom|pdf|csv|zip|jpg|jpeg|png|webp|gif|svg|ico|mp4|mp3|mov|webm)$/i.test(pathname);
+  return /\.(css|js|mjs|xml|xsl|txt|json|rss|atom|pdf|csv|zip|jpg|jpeg|png|webp|gif|svg|ico|woff|woff2|ttf|otf|eot|mp4|mp3|mov|webm)$/i.test(pathname);
+}
+
+function hasAssetResourcePath(pathname: string): boolean {
+  const path = pathname.toLowerCase();
+  return path.includes("/cdn/") ||
+    path.includes("/assets/") ||
+    path.includes("/static/") ||
+    path.includes("/_next/") ||
+    path.includes("/wp-content/uploads/") ||
+    path.includes("/fonts/") ||
+    path.includes("/images/");
 }
 
 function isTechnicalDiscoveryUrl(candidate: URL): boolean {
@@ -671,6 +694,7 @@ function isTechnicalDiscoveryUrl(candidate: URL): boolean {
     || path.includes("/robots.txt")
     || path.includes("/manifest")
     || path.includes("/api/")
+    || hasAssetResourcePath(path)
     || hasNonHtmlExtension(path);
 }
 
@@ -716,6 +740,11 @@ function sameOriginPageUrl(candidate: URL, origin: string): string | null {
     return null;
   }
 
+  try {
+    assertScannablePublicHost(candidate);
+  } catch {
+    return null;
+  }
   candidate.hash = "";
   candidate.search = "";
   return candidate.toString();
@@ -725,7 +754,7 @@ function findSameOriginPageCandidates(html: string, baseUrl: string): string[] {
   const base = new URL(baseUrl);
   const candidates: string[] = [];
 
-  for (const match of html.matchAll(/href=["']([^"']+)["']/gi)) {
+  for (const match of html.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi)) {
     const rawCandidate = match[1];
     if (!rawCandidate) {
       continue;
@@ -2139,8 +2168,13 @@ function buildFullSiteResult(input: {
   maxPages: number;
   discovery: AeoSiteDiscoveryEvidence;
 }): AeoFullSiteScanResult {
-  const pages = input.pages.length ? input.pages : [runBlockedSiteFallback(input.requestedUrl, input.normalizedUrl)];
+  const pages = input.pages;
+  if (!pages.length) {
+    throw new PlatformError(400, "non_html_response", "This URL does not return a readable HTML page.");
+  }
   const completedPages = pages.filter((page) => page.status === "completed");
+  const skippedPages = input.discovery.skippedPages ?? [];
+  const softWarnings = skippedPages.length ? ["Some pages could not be scanned because they did not return readable HTML."] : [];
   const averageScore = Math.round(pages.reduce((sum, page) => sum + page.publicScore, 0) / pages.length);
   const pageSummaries = pages.map((page) => ({
     url: page.finalUrl ?? page.requestedUrl,
@@ -2185,12 +2219,14 @@ function buildFullSiteResult(input: {
         scannedPages: pages.length,
         maxPages: input.maxPages,
         scanModeNote: `Deep Site Scan sampled ${pages.length} page${pages.length === 1 ? "" : "s"} in launch mode.`,
+        softWarnings,
       },
       dimensions: representative?.reportJson.dimensions ?? {},
       discovery: input.discovery,
       evidence: {
         pages: pageSummaries,
         sampledUrls: pageSummaries.map((page) => page.url),
+        skippedPages,
       },
       actionPlan: {
         topIssues: issues.slice(0, 5).map((issue) => ({
@@ -2225,6 +2261,7 @@ function buildFullSiteResult(input: {
       parserVersion: "aeo_parser_v4",
       scope: "site",
       sampledUrls: pageSummaries.map((page) => page.url),
+      skippedPages,
     },
     scannedPages: pages,
   };
@@ -2421,6 +2458,38 @@ function selectKeySitePages(input: {
   };
 }
 
+function readErrorDetailNumber(details: Record<string, unknown>, key: string): number | null {
+  const value = details[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readErrorDetailString(details: Record<string, unknown>, key: string): string | null {
+  const value = details[key];
+  return typeof value === "string" ? value : null;
+}
+
+function safeSkippedPageDiagnostic(url: string, error: unknown): SkippedPageDiagnostic {
+  const details = error instanceof PlatformError ? toRecord(error.details) ?? {} : {};
+  const finalUrl = readErrorDetailString(details, "finalUrl") ?? url;
+  let parsed: URL;
+  try {
+    parsed = new URL(finalUrl);
+  } catch {
+    parsed = new URL(url);
+  }
+
+  return {
+    host: parsed.hostname,
+    pathname: parsed.pathname || "/",
+    reason: error instanceof PlatformError ? error.code : "scan_failed",
+    httpStatus: readErrorDetailNumber(details, "httpStatus"),
+    contentType: readErrorDetailString(details, "contentType"),
+    bodyLength: readErrorDetailNumber(details, "bodyLength"),
+    htmlMarkerDetected: typeof details.htmlMarkerDetected === "boolean" ? details.htmlMarkerDetected : null,
+    redirectCount: readErrorDetailNumber(details, "redirectCount"),
+  };
+}
+
 export async function runAeoFullSiteScan(input: {
   siteUrl: string;
   maxPages?: number;
@@ -2470,6 +2539,7 @@ export async function runAeoFullSiteScan(input: {
     internalUrls,
     maxPages,
   });
+  const skippedPages: SkippedPageDiagnostic[] = [];
   const discovery: AeoSiteDiscoveryEvidence = {
     robotsFound: robots.ok,
     sitemapsFound: sitemapDiscovery.sitemapsFound,
@@ -2477,16 +2547,33 @@ export async function runAeoFullSiteScan(input: {
     candidateUrlsCount: selected.candidateUrlsCount,
     selectedUrls: selected.selectedUrls,
     selectionReasonByUrl: selected.selectionReasonByUrl,
+    skippedPages,
   };
 
   const pages: AeoDeterministicScanResult[] = [];
-  for (const url of selected.selectedUrls) {
-    pages.push(await runAeoDeterministicScan({
-      siteUrl: url,
-      timeoutMs,
-      fetchImpl,
-      ...(input.userAgent ? {userAgent: input.userAgent} : {}),
-    }));
+  for (let index = 0; index < selected.selectedUrls.length; index += 1) {
+    const url = selected.selectedUrls[index];
+    if (!url) {
+      continue;
+    }
+
+    try {
+      pages.push(await runAeoDeterministicScan({
+        siteUrl: url,
+        timeoutMs,
+        fetchImpl,
+        ...(input.userAgent ? {userAgent: input.userAgent} : {}),
+      }));
+    } catch (error) {
+      if (index === 0) {
+        throw error;
+      }
+      skippedPages.push(safeSkippedPageDiagnostic(url, error));
+    }
+  }
+
+  if (!pages.length) {
+    throw new PlatformError(400, "non_html_response", "This URL does not return a readable HTML page.");
   }
 
   return buildFullSiteResult({
