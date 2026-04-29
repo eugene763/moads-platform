@@ -1,5 +1,6 @@
 import {
   Prisma,
+  assertAeoSiteScanCreditsAvailableForAccount,
   chargeAeoSiteScanCredits,
   claimAeoScan,
   consumeAeoStarterOfferState,
@@ -304,6 +305,10 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const normalized = normalizeSiteUrl(body.siteUrl);
+    await assertAeoSiteScanCreditsAvailableForAccount(app.prisma, {
+      accountId: request.accountContext.accountId,
+    });
+
     const scan = await runAeoFullSiteScan({
       siteUrl: normalized.requestedUrl,
       maxPages: readPositiveInt(body.maxPages, 5),

@@ -9,6 +9,7 @@ import {assertOrThrow} from "./errors.js";
 import {
   debitWalletCredits,
   ensureGlobalCreditsWallet,
+  getWalletBalance,
   getWalletSnapshot,
 } from "./wallet.js";
 
@@ -37,6 +38,31 @@ function parseJsonObject(value: Prisma.JsonValue | null | undefined): Record<str
   }
 
   return value as Record<string, unknown>;
+}
+
+export function assertAeoSiteScanCreditsAvailable(balance: number): void {
+  assertOrThrow(
+    balance >= AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST,
+    409,
+    "insufficient_credits",
+    "Not enough credits for this operation.",
+    {
+      currentCredits: balance,
+      requiredCredits: AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST,
+      shortfallCredits: AEO_KEY_PAGE_SITE_SCAN_CREDIT_COST - balance,
+    },
+  );
+}
+
+export async function assertAeoSiteScanCreditsAvailableForAccount(
+  prisma: Prisma.DefaultPrismaClient,
+  input: {
+    accountId: string;
+  },
+) {
+  const wallet = await getWalletSnapshot(prisma, input.accountId);
+  assertAeoSiteScanCreditsAvailable(wallet.balance);
+  return wallet;
 }
 
 function shapeScanDetail(scan: {
@@ -279,6 +305,8 @@ export async function chargeAeoSiteScanCredits(
     assertOrThrow(product, 404, "product_not_found", "AEO product was not found.");
 
     const wallet = await ensureGlobalCreditsWallet(tx, input.accountId);
+    const balance = await getWalletBalance(tx, wallet.id);
+    assertAeoSiteScanCreditsAvailable(balance);
     await debitWalletCredits(tx, {
       walletId: wallet.id,
       accountId: input.accountId,
