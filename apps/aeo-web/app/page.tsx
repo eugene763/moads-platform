@@ -209,22 +209,97 @@ function floatStyle(item: typeof floatLogos[number]): CSSProperties {
 }
 
 export default function HomePage() {
-  const faqJsonLd = {
+  const homepageJsonLd = {
     "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: faqEntries.map((entry) => ({
-      "@type": "Question",
-      name: entry.question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: entry.answer,
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://moads.agency/#organization",
+        name: "MO Ads Agency",
+        url: "https://moads.agency/",
+        sameAs: [
+          "https://aeo.moads.agency/",
+        ],
       },
-    })),
+      {
+        "@type": "WebSite",
+        "@id": "https://aeo.moads.agency/#website",
+        name: "MO AEO Checker",
+        url: "https://aeo.moads.agency/",
+        publisher: {
+          "@id": "https://moads.agency/#organization",
+        },
+        inLanguage: "en",
+      },
+      {
+        "@type": ["SoftwareApplication", "WebApplication"],
+        "@id": "https://aeo.moads.agency/#software",
+        name: "MO AEO Checker",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        url: "https://aeo.moads.agency/",
+        description: "MO AEO Checker is a free AEO checker, AEO tracker, and AI search visibility tool for analyzing crawlability, structured data, answer formatting, and page readiness for AI search discovery.",
+        creator: {
+          "@id": "https://moads.agency/#organization",
+        },
+        publisher: {
+          "@id": "https://moads.agency/#organization",
+        },
+        offers: [
+          {"@id": "https://aeo.moads.agency/#offer-free"},
+          {"@id": "https://aeo.moads.agency/#offer-credit-packs"},
+          {"@id": "https://aeo.moads.agency/#offer-deep-audit"},
+        ],
+        keywords: [
+          "free AEO checker",
+          "AEO tracker",
+          "AEO visibility tool",
+          "AI search visibility analytics",
+          "AI tools for SEO and AEO",
+        ],
+      },
+      {
+        "@type": "Offer",
+        "@id": "https://aeo.moads.agency/#offer-free",
+        name: "Free AEO Check",
+        price: "0",
+        priceCurrency: "USD",
+        url: "https://aeo.moads.agency/#scan",
+      },
+      {
+        "@type": "Offer",
+        "@id": "https://aeo.moads.agency/#offer-credit-packs",
+        name: "Credit Packs",
+        price: "4.99",
+        priceCurrency: "USD",
+        url: "https://aeo.moads.agency/scans?intent=buy-credits",
+      },
+      {
+        "@type": "Offer",
+        "@id": "https://aeo.moads.agency/#offer-deep-audit",
+        name: "Deep Audit",
+        price: "690",
+        priceCurrency: "USD",
+        url: "https://moads.agency/#form",
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://aeo.moads.agency/#faq",
+        mainEntity: faqEntries.map((entry) => ({
+          "@type": "Question",
+          name: entry.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: entry.answer,
+          },
+        })),
+      },
+    ],
   };
 
   return (
     <main>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqJsonLd)}} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(homepageJsonLd)}} />
       <AeoTopNav />
       <PaymentReturnModal />
 
