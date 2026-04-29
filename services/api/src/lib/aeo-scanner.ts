@@ -1,3 +1,5 @@
+import {isIP} from "node:net";
+
 import {PlatformError} from "@moads/db";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
@@ -163,6 +165,63 @@ function sanitizeForJson(value: unknown): string {
     .replace(/\u2029/g, "");
 }
 
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const a = parts[0] ?? -1;
+  const b = parts[1] ?? -1;
+  return a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a === 0;
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return normalized === "::1" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe80:");
+}
+
+function isLikelyDomain(hostname: string): boolean {
+  if (!hostname.includes(".")) {
+    return false;
+  }
+
+  const labels = hostname.split(".");
+  const tld = labels.at(-1) ?? "";
+  return labels.every((label) => label.length > 0) &&
+    tld.length >= 2 &&
+    /[a-z]/i.test(tld);
+}
+
+function assertScannablePublicHost(parsed: URL): void {
+  if (parsed.username || parsed.password || parsed.port) {
+    throw new PlatformError(400, "aeo_site_url_invalid", "Enter a valid website URL, for example https://example.com");
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const ipVersion = isIP(hostname);
+  const isPrivateIp = ipVersion === 4 ? isPrivateIpv4(hostname) : ipVersion === 6 ? isPrivateIpv6(hostname) : false;
+  if (
+    !hostname ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".internal") ||
+    isPrivateIp ||
+    (ipVersion === 0 && !isLikelyDomain(hostname))
+  ) {
+    throw new PlatformError(400, "aeo_site_url_invalid", "Enter a valid website URL, for example https://example.com");
+  }
+}
+
 export function normalizeSiteUrl(input: string): {
   requestedUrl: string;
   normalizedUrl: string;
@@ -172,17 +231,23 @@ export function normalizeSiteUrl(input: string): {
     throw new PlatformError(400, "aeo_site_url_required", "siteUrl is required.");
   }
 
+  if (/[\s<>{}[\]|\\^`]/.test(trimmed)) {
+    throw new PlatformError(400, "aeo_site_url_invalid", "Enter a valid website URL, for example https://example.com");
+  }
+
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   let parsed: URL;
   try {
     parsed = new URL(candidate);
   } catch {
-    throw new PlatformError(400, "aeo_site_url_invalid", "siteUrl is invalid.");
+    throw new PlatformError(400, "aeo_site_url_invalid", "Enter a valid website URL, for example https://example.com");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new PlatformError(400, "aeo_site_url_invalid", "Only http and https URLs are supported.");
+    throw new PlatformError(400, "aeo_site_url_invalid", "Enter a valid website URL, for example https://example.com");
   }
+
+  assertScannablePublicHost(parsed);
 
   parsed.hash = "";
   if (!parsed.pathname) {

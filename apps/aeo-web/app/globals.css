@@ -232,6 +232,10 @@ input {
   background: var(--surface-2);
 }
 
+.cta-highlight {
+  box-shadow: 0 0 0 4px rgba(14, 165, 164, 0.22);
+}
+
 .hero {
   background: var(--bg);
   padding: 64px 0 56px;

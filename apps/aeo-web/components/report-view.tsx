@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 
 import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
@@ -37,6 +37,30 @@ function formatIssueTitle(code: string): string {
   return code
     .replace(/_/g, " ")
     .replace(/\b\w/g, (value) => value.toUpperCase());
+}
+
+function issuePriorityRank(severity: string | null | undefined): number {
+  const normalized = severity?.trim().toLowerCase();
+  if (normalized === "high") {
+    return 0;
+  }
+  if (normalized === "medium" || normalized === "med") {
+    return 1;
+  }
+  if (normalized === "low") {
+    return 2;
+  }
+  return 3;
+}
+
+function sortIssuesByPriority<T extends {severity?: string | null}>(issues: T[]): T[] {
+  return issues
+    .map((issue, index) => ({issue, index}))
+    .sort((a, b) => {
+      const priorityDelta = issuePriorityRank(a.issue.severity) - issuePriorityRank(b.issue.severity);
+      return priorityDelta || a.index - b.index;
+    })
+    .map(({issue}) => issue);
 }
 
 function buildDeveloperIssueSummary(
@@ -76,6 +100,10 @@ export function ReportView({publicToken}: {publicToken: string}) {
   const [claimBusy, setClaimBusy] = useState(false);
   const [pendingSiteScanIntent, setPendingSiteScanIntent] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [deepScanHint, setDeepScanHint] = useState<string | null>(null);
+  const [highlightDeepScanButton, setHighlightDeepScanButton] = useState(false);
+  const scoreCardRef = useRef<HTMLElement | null>(null);
+  const deepScanButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const publicScore = report?.publicScore ?? 0;
 
@@ -233,6 +261,39 @@ export function ReportView({publicToken}: {publicToken: string}) {
     window.location.href = `/scans?intent=site-scan&siteUrl=${encodeURIComponent(report.siteUrl)}&scanId=${encodeURIComponent(report.scanId)}`;
   }
 
+  function guideToDeepScanButton(): void {
+    setDeepScanHint("Run a Deep site scan to unlock all diagnostics.");
+    setHighlightDeepScanButton(true);
+    window.setTimeout(() => setHighlightDeepScanButton(false), 1800);
+    window.requestAnimationFrame(() => {
+      scoreCardRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+      deepScanButtonRef.current?.focus();
+    });
+  }
+
+  function handleCurrentIssuesDeepScanCta(): void {
+    if (!report) {
+      return;
+    }
+
+    if (!isAuthed) {
+      handleDeepSiteScanIntent();
+      return;
+    }
+
+    if (hasDeepSiteScanData()) {
+      setReport((previous) => previous ? {...previous, recommendationsLocked: false} : previous);
+      return;
+    }
+
+    if ((walletBalance ?? 0) <= 0) {
+      setPacksOpen(true);
+      return;
+    }
+
+    guideToDeepScanButton();
+  }
+
   function printReport(): void {
     window.print();
   }
@@ -330,13 +391,14 @@ export function ReportView({publicToken}: {publicToken: string}) {
     },
   ];
 
+  const sortedIssues = sortIssuesByPriority(report.issues);
   const issuesVisibleLimit = report.recommendationsLocked ? 3 : 5;
-  const visibleIssues = report.issues.slice(0, issuesVisibleLimit);
-  const issuesPreview = report.issues[issuesVisibleLimit] ?? null;
+  const visibleIssues = sortedIssues.slice(0, issuesVisibleLimit);
+  const issuesPreview = sortedIssues[issuesVisibleLimit] ?? null;
 
   return (
     <div className="report-shell">
-      <section className="panel score-card">
+      <section className="panel score-card" ref={scoreCardRef}>
         <ScoreRing score={publicScore} />
         <div className="score-text-block">
           <p className="score-kicker">AI DISCOVERY READINESS OF</p>
@@ -347,12 +409,19 @@ export function ReportView({publicToken}: {publicToken: string}) {
           {scanModeNote ? <p className="tiny note-banner">{scanModeNote}</p> : null}
         </div>
         <div className="score-actions">
-          <button type="button" className="cta-primary" onClick={handleDeepSiteScanIntent} disabled={claimBusy}>
+          <button
+            ref={deepScanButtonRef}
+            type="button"
+            className={`cta-primary${highlightDeepScanButton ? " cta-highlight" : ""}`}
+            onClick={handleDeepSiteScanIntent}
+            disabled={claimBusy}
+          >
             {claimBusy ? "Unlocking..." : "Run Deep site scan"}
           </button>
           <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
           <button type="button" className="cta-ghost" onClick={printReport}>Print</button>
         </div>
+        {deepScanHint ? <p className="scan-form-hint">{deepScanHint}</p> : null}
       </section>
 
       <section className="panel">
@@ -448,14 +517,14 @@ export function ReportView({publicToken}: {publicToken: string}) {
           {report.recommendationsLocked ? (
             <div className="lock-panel">
               <p>{Math.max(0, report.issues.length - visibleIssues.length)} more issue diagnostics unlock after sign-in.</p>
-              <button type="button" className="cta-primary" onClick={handleDeepSiteScanIntent}>
+              <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta}>
                 Unlock all fixes
               </button>
             </div>
           ) : report.issues.length > visibleIssues.length ? (
             <div className="unlock-panel">
               <p>Use 1 credit to unlock full issue diagnostics for this site and priority actions.</p>
-              <button type="button" className="cta-primary" onClick={handleDeepSiteScanIntent}>
+              <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta}>
                 Run Deep site scan
               </button>
             </div>

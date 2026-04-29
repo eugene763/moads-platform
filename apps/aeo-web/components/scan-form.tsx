@@ -6,6 +6,7 @@ import {FormEvent, useEffect, useState} from "react";
 import {apiRequest, PublicScanResponse} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
+import {normalizeWebsiteUrlInput, WEBSITE_URL_ERROR} from "../lib/url-validation";
 import {AuthModal} from "./auth-modal";
 
 const SCAN_COUNT_KEY = "aeo_public_scan_count_v1";
@@ -82,9 +83,9 @@ export function ScanForm() {
     event.preventDefault();
     setError(null);
 
-    const normalizedInput = siteUrl.trim();
+    const normalizedInput = normalizeWebsiteUrlInput(siteUrl);
     if (!normalizedInput) {
-      setError("Enter URL first.");
+      setError(WEBSITE_URL_ERROR);
       return;
     }
 

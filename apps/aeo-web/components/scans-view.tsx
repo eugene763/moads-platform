@@ -6,6 +6,7 @@ import {FormEvent, useEffect, useMemo, useRef, useState} from "react";
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
+import {normalizeWebsiteUrlInput, WEBSITE_URL_ERROR} from "../lib/url-validation";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
@@ -60,6 +61,30 @@ function formatIssueTitle(code: string): string {
     .replace(/\b\w/g, (value) => value.toUpperCase());
 }
 
+function issuePriorityRank(severity: string | null | undefined): number {
+  const normalized = severity?.trim().toLowerCase();
+  if (normalized === "high") {
+    return 0;
+  }
+  if (normalized === "medium" || normalized === "med") {
+    return 1;
+  }
+  if (normalized === "low") {
+    return 2;
+  }
+  return 3;
+}
+
+function sortIssuesByPriority<T extends {severity?: string | null}>(issues: T[]): T[] {
+  return issues
+    .map((issue, index) => ({issue, index}))
+    .sort((a, b) => {
+      const priorityDelta = issuePriorityRank(a.issue.severity) - issuePriorityRank(b.issue.severity);
+      return priorityDelta || a.index - b.index;
+    })
+    .map(({issue}) => issue);
+}
+
 function scanCostLabel(scanId: string, firstScanId: string | null): string {
   return scanId === firstScanId ? "Free" : "1 credit";
 }
@@ -112,8 +137,11 @@ export function ScansView() {
   const [scanHint, setScanHint] = useState<string | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [highlightScanForm, setHighlightScanForm] = useState(false);
+  const [highlightDeepScanButton, setHighlightDeepScanButton] = useState(false);
   const scanFormRef = useRef<HTMLElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedScoreCardRef = useRef<HTMLElement | null>(null);
+  const deepScanButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const [tabOrder, setTabOrder] = useState<string[]>([]);
   const [selectedSiteKey, setSelectedSiteKey] = useState<string | null>(null);
@@ -334,9 +362,9 @@ export function ScansView() {
   }
 
   async function runFullCheckByUrl(candidateRaw: string): Promise<void> {
-    const candidate = candidateRaw.trim();
+    const candidate = normalizeWebsiteUrlInput(candidateRaw);
     if (!candidate) {
-      setError("Enter URL first.");
+      setError(WEBSITE_URL_ERROR);
       return;
     }
 
@@ -395,6 +423,16 @@ export function ScansView() {
     await runFullCheckByUrl(candidate);
   }
 
+  function guideToDeepScanButton(): void {
+    setScanHint("Run a Deep site scan to unlock all diagnostics.");
+    setHighlightDeepScanButton(true);
+    window.setTimeout(() => setHighlightDeepScanButton(false), 1800);
+    window.requestAnimationFrame(() => {
+      selectedScoreCardRef.current?.scrollIntoView({behavior: "smooth", block: "start"});
+      deepScanButtonRef.current?.focus();
+    });
+  }
+
   async function runDeepSiteScanForSelected(): Promise<void> {
     const sourceUrl = selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? newSiteUrl;
     if (!sourceUrl.trim()) {
@@ -408,6 +446,19 @@ export function ScansView() {
     }
 
     await runFullCheckByUrl(sourceUrl);
+  }
+
+  function handleCurrentIssuesDeepScanCta(): void {
+    if (hasDeepSiteScanData) {
+      return;
+    }
+
+    if (walletBalance <= 0) {
+      setPacksOpen(true);
+      return;
+    }
+
+    guideToDeepScanButton();
   }
 
   async function deleteSelectedScan(): Promise<void> {
@@ -522,7 +573,7 @@ export function ScansView() {
     );
   }
 
-  const issues = selectedScanDetail?.issues ?? [];
+  const issues = sortIssuesByPriority(selectedScanDetail?.issues ?? []);
   const hasDeepSiteScanData = selectedScanDetail?.scanKind === "site_scan" || selectedScanDetail?.report.summary?.scope === "site";
   const issuesVisibleLimit = hasDeepSiteScanData ? issues.length : 5;
   const visibleIssues = issues.slice(0, issuesVisibleLimit);
@@ -613,7 +664,7 @@ export function ScansView() {
 
         {selectedScan ? (
           <>
-            <article className="surface-card selected-scan-card score-card site-score-card">
+            <article className="surface-card selected-scan-card score-card site-score-card" ref={selectedScoreCardRef}>
               <button
                 type="button"
                 className="score-delete-button"
@@ -635,6 +686,17 @@ export function ScansView() {
                 <button type="button" className="cta-ghost" onClick={() => void repeatSelectedScan()} disabled={scanBusy}>
                   {scanBusy ? "Scanning..." : "Repeat scanning"}
                 </button>
+                {!hasDeepSiteScanData ? (
+                  <button
+                    ref={deepScanButtonRef}
+                    type="button"
+                    className={`cta-primary${highlightDeepScanButton ? " cta-highlight" : ""}`}
+                    onClick={() => void runDeepSiteScanForSelected()}
+                    disabled={scanBusy}
+                  >
+                    {scanBusy ? "Scanning..." : "Run Deep site scan"}
+                  </button>
+                ) : null}
                 <button type="button" className="cta-ghost" onClick={() => void shareSelectedReport()}>Share</button>
                 <button type="button" className="cta-ghost" onClick={printSelectedReport}>Print</button>
               </div>
@@ -740,8 +802,8 @@ export function ScansView() {
               {issuesPreview ? (
                 <div className="unlock-panel">
                   <p>Use 1 credit to run a Deep site scan and unlock full issue diagnostics for this site.</p>
-                  <button type="button" className="cta-primary" onClick={() => void runDeepSiteScanForSelected()} disabled={scanBusy}>
-                    {scanBusy ? "Scanning..." : "Run Deep site scan"}
+                  <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta} disabled={scanBusy}>
+                    Run Deep site scan
                   </button>
                 </div>
               ) : null}
