@@ -6,7 +6,7 @@ import {FormEvent, MouseEvent, useEffect, useMemo, useRef, useState} from "react
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
-import {affectedPagesLabel, prepareCurrentIssues} from "../lib/current-issues";
+import {affectedPagesLabel, deriveCrawlerAccessibilityChecks, prepareCurrentIssues} from "../lib/current-issues";
 import {normalizeWebsiteUrlInput, WEBSITE_URL_ERROR} from "../lib/url-validation";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
@@ -595,24 +595,15 @@ export function ScansView() {
   const issuesVisibleLimit = hasDeepSiteScanData ? issues.length : 5;
   const visibleIssues = issues.slice(0, issuesVisibleLimit);
   const issuesPreview = hasDeepSiteScanData ? null : issues[5] ?? null;
-  const crawlability = selectedScanDetail?.report.evidence?.crawlability;
   const scoredNow = [
     ["AI Crawler Accessibility", selectedScanDetail?.report.dimensions?.aiCrawlerAccessibility],
     ["Answer Optimization", selectedScanDetail?.report.dimensions?.answerOptimization],
     ["Citation Readiness", selectedScanDetail?.report.dimensions?.citationReadiness],
     ["Technical Hygiene", selectedScanDetail?.report.dimensions?.technicalHygiene],
   ] as const;
-  const visibleCrawlerRows = [
-    {label: "Sitemap", value: crawlability?.sitemapExists ? "found" : "not found"},
-    {label: "Robots.txt", value: crawlability?.robotsExists ? "found" : "not found"},
-    {label: "Pre-rendered text", value: selectedScanDetail?.confidenceLevel === "low" ? "limited" : "detected"},
-  ];
-  const hiddenCrawlerRows = [
-    {label: "llms.txt", value: crawlability?.llmsTxtExists ? "found" : "not found"},
-    {label: "LLM guidance page", value: crawlability?.llmGuidancePage ? "found" : "not found"},
-    {label: "Canonical stability", value: selectedScanDetail?.issues.some((issue) => issue.code === "canonical_missing") ? "needs fix" : "stable"},
-    {label: "Blocked content", value: selectedScanDetail?.status === "blocked" ? "risk" : "clear"},
-  ];
+  const crawlerChecks = selectedScanDetail ? deriveCrawlerAccessibilityChecks(selectedScanDetail, issues) : {visible: [], hidden: []};
+  const visibleCrawlerRows = crawlerChecks.visible;
+  const hiddenCrawlerRows = crawlerChecks.hidden;
 
   const selectedUrl = normalizeUrlForDisplay(selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? "");
   const selectedScore = selectedScan?.publicScore ?? 0;

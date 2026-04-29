@@ -8,6 +8,11 @@ export interface RenderedIssue {
   affectedPages?: string[];
 }
 
+export interface CrawlerAccessibilityChecks {
+  visible: Array<{label: string; value: string}>;
+  hidden: Array<{label: string; value: string}>;
+}
+
 const TRAILING_PATH_MARKER = /\s+\((\/[^)]*|https?:\/\/[^)]+)\)\s*$/i;
 
 function issuePriorityRank(severity: string | null | undefined): number {
@@ -154,4 +159,76 @@ export function affectedPagesLabel(issue: RenderedIssue): string | null {
   const visible = pages.slice(0, 3).join(", ");
   const extra = pages.length > 3 ? ` +${pages.length - 3} more` : "";
   return `Found on ${pages.length} pages: ${visible}${extra}`;
+}
+
+function hasIssueCode(issues: Array<{code: string; message?: string}>, codes: string[]): boolean {
+  return issues.some((issue) => codes.includes(issue.code));
+}
+
+function hasIssueMessage(issues: Array<{code: string; message?: string}>, pattern: RegExp): boolean {
+  return issues.some((issue) => pattern.test(`${issue.code} ${issue.message ?? ""}`));
+}
+
+function checksCompleted(report: Pick<PublicScanReport, "status">): boolean {
+  return report.status === "completed" || report.status === "blocked";
+}
+
+function isSiteScopeReport(report: Pick<PublicScanReport, "scanKind" | "report">): boolean {
+  return report.scanKind === "site_scan" || report.report.summary?.scope === "site";
+}
+
+function hasTechnicalCheckSignal(report: Pick<PublicScanReport, "status" | "report">): boolean {
+  return checksCompleted(report) && report.report.dimensions?.technicalHygiene != null;
+}
+
+export function deriveCrawlerAccessibilityChecks(
+  report: Pick<PublicScanReport, "scanKind" | "status" | "confidenceLevel" | "report" | "issues">,
+  groupedIssues: RenderedIssue[],
+): CrawlerAccessibilityChecks {
+  const crawlability = report.report.evidence?.crawlability;
+  const allIssues = [...groupedIssues, ...report.issues];
+  const completed = checksCompleted(report);
+  const siteScope = isSiteScopeReport(report);
+  const technicalChecksRan = hasTechnicalCheckSignal(report);
+  const sitemapMissing = hasIssueCode(allIssues, ["sitemap_missing"]);
+  const robotsMissing = hasIssueCode(allIssues, ["robots_txt_missing", "robots_missing"]);
+  const jsOrTextWeak = hasIssueCode(allIssues, ["js_heavy_low_confidence", "empty_html", "low_visible_text", "rendering_accessibility_low"]) ||
+    hasIssueMessage(allIssues, /\b(js-only|client-rendered|raw html snapshot|empty html|low visible text|rendering)\b/i);
+  const canonicalIssue = hasIssueCode(allIssues, ["canonical_missing"]);
+  const blockedIssue = hasIssueCode(allIssues, ["fetch_blocked", "ai_bot_crawl_limited"]) ||
+    hasIssueMessage(allIssues, /\b(blocked|disallow|inaccessible|unreachable|challenge|timeout)\b/i);
+
+  // Display harmonization until score/evidence v2: prefer grouped issue evidence over sparse legacy fields.
+  const sitemap = sitemapMissing ? "not found" :
+    siteScope && completed ? "found" :
+    crawlability?.sitemapExists === true ? "found" :
+    "not checked";
+  const robots = robotsMissing ? "not found" :
+    siteScope && completed ? "found" :
+    crawlability?.robotsExists === true ? "found" :
+    "not checked";
+  const preRenderedText = jsOrTextWeak ? "limited" :
+    report.confidenceLevel === "low" ? "limited" :
+    report.confidenceLevel === "medium" || report.confidenceLevel === "high" ? "detected" :
+    "not checked";
+  const canonical = canonicalIssue ? "unstable" :
+    technicalChecksRan ? "stable" :
+    "not checked";
+  const blocked = blockedIssue || report.status === "blocked" ? "blocked" :
+    completed ? "clear" :
+    "not checked";
+
+  return {
+    visible: [
+      {label: "Sitemap", value: sitemap},
+      {label: "Robots.txt", value: robots},
+      {label: "Pre-rendered text", value: preRenderedText},
+    ],
+    hidden: [
+      {label: "llms.txt", value: crawlability?.llmsTxtExists === true ? "found" : crawlability?.llmsTxtExists === false ? "not found" : "not checked"},
+      {label: "LLM guidance page", value: crawlability?.llmGuidancePage ? "found" : crawlability ? "not found" : "not checked"},
+      {label: "Canonical stability", value: canonical},
+      {label: "Blocked content", value: blocked},
+    ],
+  };
 }

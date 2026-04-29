@@ -6,7 +6,7 @@ import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
-import {affectedPagesLabel, prepareCurrentIssues} from "../lib/current-issues";
+import {affectedPagesLabel, deriveCrawlerAccessibilityChecks, prepareCurrentIssues} from "../lib/current-issues";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
@@ -330,7 +330,6 @@ export function ReportView({publicToken}: {publicToken: string}) {
     return <div className="state-card">Report not found.</div>;
   }
 
-  const crawlability = report.report.evidence?.crawlability;
   const scanModeNote = report.report.summary?.scanModeNote;
   const displayUrl = normalizeUrlForDisplay(report.siteUrl || report.finalUrl || "");
 
@@ -341,35 +340,10 @@ export function ReportView({publicToken}: {publicToken: string}) {
     ["Technical Hygiene", report.report.dimensions?.technicalHygiene],
   ] as const;
 
-  const visibleCrawlerRows: Array<{label: string; value: string}> = [
-    {label: "Sitemap", value: crawlability?.sitemapExists ? "found" : "not found"},
-    {label: "Robots.txt", value: crawlability?.robotsExists ? "found" : "not found"},
-    {
-      label: "Pre-rendered text",
-      value: report.confidenceLevel === "low" ? "limited" : "detected",
-    },
-  ];
-
-  const hiddenCrawlerRows: Array<{label: string; value: string}> = [
-    {
-      label: "llms.txt",
-      value: crawlability?.llmsTxtExists ? "found" : "not found",
-    },
-    {
-      label: "LLM guidance page",
-      value: crawlability?.llmGuidancePage ? "found" : "not found",
-    },
-    {
-      label: "Canonical stability",
-      value: report.issues.some((issue) => issue.code === "canonical_missing") ? "needs fix" : "stable",
-    },
-    {
-      label: "Blocked content",
-      value: report.status === "blocked" ? "risk" : "clear",
-    },
-  ];
-
   const currentIssues = prepareCurrentIssues(report);
+  const crawlerChecks = deriveCrawlerAccessibilityChecks(report, currentIssues);
+  const visibleCrawlerRows = crawlerChecks.visible;
+  const hiddenCrawlerRows = crawlerChecks.hidden;
   const issuesVisibleLimit = report.recommendationsLocked ? 3 : 5;
   const visibleIssues = currentIssues.slice(0, issuesVisibleLimit);
   const issuesPreview = currentIssues[issuesVisibleLimit] ?? null;
