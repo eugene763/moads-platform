@@ -36,7 +36,7 @@ export function InstallAppButton() {
   return (
     <div className="install-cta-wrap">
       <button type="button" className="cta-ghost desktop-install-cta" onClick={() => void handleInstall()}>
-        Add AEO Checker to desktop
+        Install AEO Checker
       </button>
       {message ? <p className="tiny install-cta-message">{message}</p> : null}
     </div>

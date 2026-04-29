@@ -8,6 +8,8 @@ export interface RenderedIssue {
   affectedPages?: string[];
 }
 
+const TRAILING_PATH_MARKER = /\s+\((\/[^)]*|https?:\/\/[^)]+)\)\s*$/i;
+
 function issuePriorityRank(severity: string | null | undefined): number {
   const normalized = severity?.trim().toLowerCase();
   if (normalized === "high") {
@@ -24,6 +26,24 @@ function issuePriorityRank(severity: string | null | undefined): number {
 
 function normalizeText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function stripTrailingPageMarker(value: string): string {
+  return value.replace(TRAILING_PATH_MARKER, "").trim();
+}
+
+function affectedPageFromIssue(issue: {message: string; affectedPages?: string[]}): string[] {
+  const pages = issue.affectedPages ?? [];
+  const marker = issue.message.match(TRAILING_PATH_MARKER)?.[1];
+  if (!marker) {
+    return pages;
+  }
+
+  try {
+    return [...pages, new URL(marker).pathname || "/"];
+  } catch {
+    return [...pages, marker || "/"];
+  }
 }
 
 function isCommerceReport(report: Pick<PublicScanReport, "siteUrl" | "report" | "issues">): boolean {
@@ -99,14 +119,19 @@ export function prepareCurrentIssues(report: Pick<PublicScanReport, "siteUrl" | 
       normalizeText(title),
       normalizeText(issue.severity ?? ""),
       normalizeText(issueAction(issue.code)),
-      normalizeText(explainIssue(issue.code, issue.message)),
+      normalizeText(stripTrailingPageMarker(explainIssue(issue.code, issue.message))),
     ].join("|");
     const existing = seen.get(key);
     if (existing) {
-      existing.affectedPages = [...(existing.affectedPages ?? []), ...(issue.affectedPages ?? [])];
+      existing.affectedPages = [...(existing.affectedPages ?? []), ...affectedPageFromIssue(issue)];
       return;
     }
-    seen.set(key, {...issue, firstIndex: index});
+    seen.set(key, {
+      ...issue,
+      message: stripTrailingPageMarker(issue.message),
+      affectedPages: affectedPageFromIssue(issue),
+      firstIndex: index,
+    });
   });
 
   return Array.from(seen.values())

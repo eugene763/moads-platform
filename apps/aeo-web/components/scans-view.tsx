@@ -70,7 +70,7 @@ function buildDeveloperIssueSummary(
   input: {
     siteUrl: string;
     score: number | null;
-    issues: Array<{code: string; severity: string; message: string}>;
+    issues: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>;
   },
 ): string {
   const header = [
@@ -87,6 +87,7 @@ function buildDeveloperIssueSummary(
     `Severity: ${issue.severity}`,
     `Explanation: ${explainIssue(issue.code, issue.message)}`,
     `Action: ${issueAction(issue.code)}`,
+    ...(issue.affectedPages?.length ? [`Affected pages: ${issue.affectedPages.join(", ")}`] : []),
   ].join("\n"));
 
   return [...header, ...body].join("\n\n");
@@ -317,6 +318,8 @@ export function ScansView() {
   }, [loading, queryApplied, queryIntent, queryScanId, querySiteUrl, router, scans, session]);
 
   function selectSite(siteKey: string): void {
+    setError(null);
+    setScanHint(null);
     setSelectedSiteKey(siteKey);
     setTabOrder((previous) => [siteKey, ...previous.filter((key) => key !== siteKey)].slice(0, 6));
     const site = sitesByKey.get(siteKey);
@@ -345,6 +348,7 @@ export function ScansView() {
       return;
     }
 
+    setError(null);
     const candidateSiteKey = toSiteLabel(candidate);
     const isKnownSite = tabOrder.includes(candidateSiteKey);
     if (!isKnownSite && tabOrder.length >= 6) {
@@ -363,6 +367,7 @@ export function ScansView() {
       if (created.wallet) {
         setWalletBalance(created.wallet.balance);
       }
+      setError(null);
 
       await loadWorkspace();
 
@@ -454,9 +459,21 @@ export function ScansView() {
       await apiRequest(`/v1/aeo/scans/${selectedScan.scanId}`, {
         method: "DELETE",
       });
-      setScans((previous) => previous.filter((scan) => scan.scanId !== selectedScan.scanId));
+      const remainingScans = sortByDateDesc(scans.filter((scan) => scan.scanId !== selectedScan.scanId));
+      const remainingSiteKeys = new Set(remainingScans.map((scan) => toSiteLabel(scan.siteUrl)));
+      const nextScan = remainingScans[0] ?? null;
+      setScans(remainingScans);
       setSelectedScanDetail(null);
-      setSelectedScanId(null);
+      setError(null);
+      if (nextScan) {
+        const nextSiteKey = toSiteLabel(nextScan.siteUrl);
+        setSelectedSiteKey(nextSiteKey);
+        setSelectedScanId(nextScan.scanId);
+        setTabOrder((previous) => [nextSiteKey, ...previous.filter((key) => key !== nextSiteKey && remainingSiteKeys.has(key))].slice(0, 6));
+      } else {
+        setTabOrder([]);
+        focusNewScanInput();
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to delete scan.");
     } finally {
@@ -465,6 +482,7 @@ export function ScansView() {
   }
 
   function focusNewScanInput(): void {
+    setError(null);
     setSelectedSiteKey(null);
     setSelectedScanId(null);
     setNewSiteUrl("");
@@ -507,7 +525,7 @@ export function ScansView() {
     window.print();
   }
 
-  async function copyVisibleIssuesForDeveloper(issuesToCopy: Array<{code: string; severity: string; message: string}>): Promise<void> {
+  async function copyVisibleIssuesForDeveloper(issuesToCopy: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>): Promise<void> {
     const summary = buildDeveloperIssueSummary({
       siteUrl: selectedScanDetail?.siteUrl ?? selectedScan?.siteUrl ?? selectedUrl,
       score: selectedScanDetail?.publicScore ?? selectedScan?.publicScore ?? null,

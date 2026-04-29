@@ -117,7 +117,7 @@ const pricingCards: PricingCard[] = [
       "Pack S - 30 credits",
       "Pack M - 80 credits",
       "Pack L - 200 credits",
-      "AI tips cost 1 credit",
+      "Deep Site Scan costs 1 credit",
       "Checkout in AEO workspace",
     ],
     href: "/scans?intent=buy-credits",

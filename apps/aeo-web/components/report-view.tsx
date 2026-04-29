@@ -44,7 +44,7 @@ function buildDeveloperIssueSummary(
   input: {
     siteUrl: string;
     score: number | null;
-    issues: Array<{code: string; severity: string; message: string}>;
+    issues: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>;
   },
 ): string {
   const header = [
@@ -61,6 +61,7 @@ function buildDeveloperIssueSummary(
     `Severity: ${issue.severity}`,
     `Explanation: ${explainIssue(issue.code, issue.message)}`,
     `Action: ${issueAction(issue.code)}`,
+    ...(issue.affectedPages?.length ? [`Affected pages: ${issue.affectedPages.join(", ")}`] : []),
   ].join("\n"));
 
   return [...header, ...body].join("\n\n");
@@ -294,7 +295,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
     await navigator.clipboard.writeText(window.location.href).catch(() => undefined);
   }
 
-  async function copyVisibleIssuesForDeveloper(issues: Array<{code: string; severity: string; message: string}>): Promise<void> {
+  async function copyVisibleIssuesForDeveloper(issues: Array<{code: string; severity: string; message: string; affectedPages?: string[]}>): Promise<void> {
     if (!report) {
       return;
     }
