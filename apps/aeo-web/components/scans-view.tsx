@@ -443,13 +443,18 @@ export function ScansView() {
     guideToDeepScanButton();
   }
 
-  async function deleteSelectedScan(scanId: string): Promise<void> {
-    const scanToDelete = scans.find((scan) => scan.scanId === scanId) ?? selectedScan;
-    if (!scanToDelete) {
+  async function removeSelectedSiteFromWorkspace(): Promise<void> {
+    if (deleteBusy) {
       return;
     }
 
-    const confirmed = window.confirm("Delete this scan?\n\nThis will remove the scan from your workspace. This action cannot be undone.");
+    const siteToRemove = selectedSite;
+    const scansToRemove = siteToRemove?.scans ?? [];
+    if (!siteToRemove || !scansToRemove.length) {
+      return;
+    }
+
+    const confirmed = window.confirm("Remove this site from workspace?\n\nThis will remove all scans for this site from your workspace. Public report links will remain available.");
     if (!confirmed) {
       return;
     }
@@ -457,35 +462,41 @@ export function ScansView() {
     setDeleteBusy(true);
     setError(null);
     try {
-      await apiRequest<void | {scanId: string; removed: boolean}>(`/v1/aeo/scans/${scanToDelete.scanId}`, {
+      await Promise.all(scansToRemove.map((scan) => apiRequest<void | {scanId: string; removed: boolean}>(`/v1/aeo/scans/${scan.scanId}`, {
         method: "DELETE",
-      });
-      const remainingScans = sortByDateDesc(scans.filter((scan) => scan.scanId !== scanToDelete.scanId));
+      })));
+
+      const removedScanIds = new Set(scansToRemove.map((scan) => scan.scanId));
+      const remainingScans = sortByDateDesc(scans.filter((scan) => !removedScanIds.has(scan.scanId)));
       const remainingSiteKeys = new Set(remainingScans.map((scan) => toSiteLabel(scan.siteUrl)));
-      const nextScan = remainingScans[0] ?? null;
+      const nextSiteKey = visibleTabs.find((site) => site.key !== siteToRemove.key && remainingSiteKeys.has(site.key))?.key ??
+        (remainingScans[0] ? toSiteLabel(remainingScans[0].siteUrl) : null);
+      const nextScan = nextSiteKey ? remainingScans.find((scan) => toSiteLabel(scan.siteUrl) === nextSiteKey) ?? null : null;
+
       setScans(remainingScans);
       setSelectedScanDetail(null);
       setError(null);
-      if (nextScan) {
-        const nextSiteKey = toSiteLabel(nextScan.siteUrl);
+      if (nextScan && nextSiteKey) {
         setSelectedSiteKey(nextSiteKey);
         setSelectedScanId(nextScan.scanId);
-        setTabOrder((previous) => [nextSiteKey, ...previous.filter((key) => key !== nextSiteKey && remainingSiteKeys.has(key))].slice(0, 6));
+        setTabOrder((previous) => [nextSiteKey, ...previous.filter((key) => key !== siteToRemove.key && key !== nextSiteKey && remainingSiteKeys.has(key))].slice(0, 6));
       } else {
         setTabOrder([]);
         focusNewScanInput();
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to delete scan.");
+      const message = requestError instanceof Error ? requestError.message : "Failed to remove site from workspace.";
+      await loadWorkspace().catch(() => undefined);
+      setError(message);
     } finally {
       setDeleteBusy(false);
     }
   }
 
-  function handleDeleteScanClick(event: MouseEvent<HTMLButtonElement>, scanId: string): void {
+  function handleRemoveSiteClick(event: MouseEvent<HTMLButtonElement>): void {
     event.preventDefault();
     event.stopPropagation();
-    void deleteSelectedScan(scanId);
+    void removeSelectedSiteFromWorkspace();
   }
 
   function focusNewScanInput(): void {
@@ -674,9 +685,10 @@ export function ScansView() {
               <button
                 type="button"
                 className="score-delete-button"
-                onClick={(event) => handleDeleteScanClick(event, selectedScan.scanId)}
+                onClick={handleRemoveSiteClick}
                 disabled={deleteBusy}
-                aria-label="Delete scan"
+                aria-label="Remove this site from workspace"
+                title="Remove this site from workspace"
               >
                 ×
               </button>
