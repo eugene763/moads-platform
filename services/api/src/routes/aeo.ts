@@ -49,6 +49,24 @@ function toInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
 
+function isReusablePublicScanCache(scan: {
+  status: string;
+  httpStatus: number | null;
+  reports?: Array<{rawFetchMetaJson: Prisma.JsonValue | null}>;
+}): boolean {
+  if (scan.status.toLowerCase() !== "completed" || scan.httpStatus == null || scan.httpStatus < 200 || scan.httpStatus >= 400) {
+    return false;
+  }
+
+  const rawFetchMeta = scan.reports?.[0]?.rawFetchMetaJson;
+  if (!rawFetchMeta || typeof rawFetchMeta !== "object" || Array.isArray(rawFetchMeta)) {
+    return false;
+  }
+
+  const contentType = typeof rawFetchMeta.contentType === "string" ? rawFetchMeta.contentType.toLowerCase() : "";
+  return contentType.includes("text/html") || contentType.includes("application/xhtml+xml");
+}
+
 function assertRateLimit(ipKey: string, limitPerHour: number): void {
   const now = Date.now();
 
@@ -167,9 +185,20 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
       orderBy: {
         createdAt: "desc",
       },
+      include: {
+        reports: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+          select: {
+            rawFetchMetaJson: true,
+          },
+        },
+      },
     });
 
-    if (cached) {
+    if (cached && isReusablePublicScanCache(cached)) {
       reply.send({
         scanId: cached.id,
         publicToken: cached.publicToken,
@@ -275,15 +304,15 @@ export async function registerAeoRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const normalized = normalizeSiteUrl(body.siteUrl);
+    const scan = await runAeoFullSiteScan({
+      siteUrl: normalized.requestedUrl,
+      maxPages: readPositiveInt(body.maxPages, 5),
+    });
+
     const charged = await chargeAeoSiteScanCredits(app.prisma, {
       accountId: request.accountContext.accountId,
       userId: request.authContext.userId,
       operationKey: `aeo_site_scan:${request.accountContext.accountId}:${request.id}`,
-    });
-
-    const scan = await runAeoFullSiteScan({
-      siteUrl: normalized.requestedUrl,
-      maxPages: readPositiveInt(body.maxPages, 5),
     });
 
     const created = await createAeoSiteScan(app.prisma, {

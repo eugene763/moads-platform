@@ -861,6 +861,7 @@ async function fetchTextDocument(input: {
   redirected: boolean;
   contentType: string | null;
   linkHeader: string | null;
+  fetchErrorCode?: string | null;
 }> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
@@ -896,7 +897,7 @@ async function fetchTextDocument(input: {
       }
 
       return payload;
-    } catch {
+    } catch (error) {
       if (attempt === 0) {
         continue;
       }
@@ -908,6 +909,7 @@ async function fetchTextDocument(input: {
         redirected: false,
         contentType: null,
         linkHeader: null,
+        fetchErrorCode: classifyFetchFailure(error),
       };
     } finally {
       clearTimeout(timeout);
@@ -923,6 +925,50 @@ async function fetchTextDocument(input: {
     contentType: null,
     linkHeader: null,
   };
+}
+
+function classifyFetchFailure(error: unknown): string {
+  const record = error as {name?: unknown; code?: unknown; cause?: {code?: unknown}};
+  const value = String(record.code ?? record.cause?.code ?? record.name ?? "").toUpperCase();
+  if (value.includes("ABORT") || value.includes("TIMEOUT") || value.includes("ETIMEDOUT")) {
+    return "scan_timeout";
+  }
+  if (value.includes("ENOTFOUND") || value.includes("EAI_AGAIN")) {
+    return "domain_not_found";
+  }
+  return "site_unreachable";
+}
+
+function assertScannablePrimaryDocument(document: Awaited<ReturnType<typeof fetchTextDocument>>): void {
+  if (document.status == null) {
+    const code = document.fetchErrorCode === "scan_timeout" ? "scan_timeout" :
+      document.fetchErrorCode === "domain_not_found" ? "domain_not_found" :
+      "site_unreachable";
+    const message = code === "scan_timeout" ?
+      "We couldn’t reach this website before the scan timed out. Check the URL and try again." :
+      "We couldn’t reach this website. Check the URL and try again.";
+    throw new PlatformError(400, code, message);
+  }
+
+  if (document.status === 404 || document.status === 410) {
+    throw new PlatformError(400, "page_not_found", "This page was not found. Check the URL and try again.");
+  }
+
+  if (document.status === 401 || document.status === 403 || document.status === 429) {
+    throw new PlatformError(400, "scanner_blocked", "This website blocked the scanner. Check access settings and try again.");
+  }
+
+  if (document.status >= 500) {
+    throw new PlatformError(400, "site_unreachable", "We couldn’t reach this website. Check the URL and try again.");
+  }
+
+  if (!isLikelyHtmlContentType(document.contentType)) {
+    throw new PlatformError(400, "non_html_response", "This URL does not return a readable HTML page.");
+  }
+
+  if (!document.text.trim() || stripHtml(document.text).trim().length < 20) {
+    throw new PlatformError(400, "site_unreachable", "We couldn’t reach this website. Check the URL and try again.");
+  }
 }
 
 async function fetchLlmGuidanceEvidence(input: {
@@ -1988,61 +2034,33 @@ export async function runAeoDeterministicScan(input: {
   const startedAt = Date.now();
   let primaryDocument: Awaited<ReturnType<typeof fetchTextDocument>>;
   let html = "";
-  let blocked = false;
   let crawlability: CrawlabilityEvidence | null = null;
   let productPage: ProductPageSampleEvidence | null = null;
-  try {
-    primaryDocument = await fetchTextDocument({
-      url: requestedUrl,
-      fetchImpl,
-      timeoutMs,
-      ...(input.userAgent ? {userAgent: input.userAgent} : {}),
-    });
-    html = primaryDocument.text;
-  } catch (error) {
-    const responseMs = Date.now() - startedAt;
-
-    return evaluateAeoHtml({
-      requestedUrl,
-      normalizedUrl,
-      finalUrl: null,
-      httpStatus: null,
-      html: "",
-      blocked: true,
-      crawlability: null,
-      productPage: null,
-      fetchMeta: {
-        responseMs,
-        redirected: false,
-        contentType: null,
-        bytes: 0,
-        linkHeader: null,
-      },
-    });
-  }
+  primaryDocument = await fetchTextDocument({
+    url: requestedUrl,
+    fetchImpl,
+    timeoutMs,
+    ...(input.userAgent ? {userAgent: input.userAgent} : {}),
+  });
+  assertScannablePrimaryDocument(primaryDocument);
+  html = primaryDocument.text;
 
   const responseMs = Date.now() - startedAt;
   const httpStatus = primaryDocument.status;
   const contentType = primaryDocument.contentType;
 
-  if (httpStatus != null && (httpStatus === 401 || httpStatus === 403 || httpStatus === 429 || httpStatus >= 500)) {
-    blocked = true;
-  }
-
   const finalUrl = primaryDocument.finalUrl ?? requestedUrl;
 
-  if (!blocked) {
-    crawlability = await fetchCrawlabilityEvidence({
-      baseUrl: finalUrl,
-      fetchImpl,
-    });
-    productPage = await fetchProductPageEvidence({
-      html,
-      requestedUrl: finalUrl,
-      fetchImpl,
-      crawlability,
-    });
-  }
+  crawlability = await fetchCrawlabilityEvidence({
+    baseUrl: finalUrl,
+    fetchImpl,
+  });
+  productPage = await fetchProductPageEvidence({
+    html,
+    requestedUrl: finalUrl,
+    fetchImpl,
+    crawlability,
+  });
 
   return evaluateAeoHtml({
     requestedUrl,
@@ -2050,7 +2068,7 @@ export async function runAeoDeterministicScan(input: {
     finalUrl,
     httpStatus,
     html,
-    blocked,
+    blocked: false,
     crawlability,
     productPage,
     fetchMeta: {
@@ -2405,6 +2423,7 @@ export async function runAeoFullSiteScan(input: {
     timeoutMs,
     ...(input.userAgent ? {userAgent: input.userAgent} : {}),
   });
+  assertScannablePrimaryDocument(homepage);
 
   const discoveryBaseUrl = homepage.finalUrl ?? requestedUrl;
   const robotsUrl = new URL("/robots.txt", discoveryBaseUrl).toString();

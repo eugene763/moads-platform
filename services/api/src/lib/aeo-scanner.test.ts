@@ -49,7 +49,45 @@ describe("aeo scanner", () => {
     expect(result.issuesJson.find((issue) => issue.code === "canonical_missing")).toBeUndefined();
   });
 
-  it("reports missing aggregate rating", async () => {
+  it("rejects unreachable domains before scoring", async () => {
+    await expect(runAeoDeterministicScan({
+      siteUrl: "https://missing.example",
+      fetchImpl: async () => {
+        throw Object.assign(new Error("getaddrinfo ENOTFOUND missing.example"), {code: "ENOTFOUND"});
+      },
+    })).rejects.toMatchObject({
+      code: "domain_not_found",
+      message: "We couldn’t reach this website. Check the URL and try again.",
+    });
+  });
+
+  it("rejects 404 pages before scoring", async () => {
+    await expect(runAeoDeterministicScan({
+      siteUrl: "https://example.com/missing",
+      fetchImpl: async () => new Response("<html><body>Missing</body></html>", {
+        status: 404,
+        headers: {"content-type": "text/html; charset=utf-8"},
+      }),
+    })).rejects.toMatchObject({
+      code: "page_not_found",
+      message: "This page was not found. Check the URL and try again.",
+    });
+  });
+
+  it("rejects non-HTML responses before scoring", async () => {
+    await expect(runAeoDeterministicScan({
+      siteUrl: "https://example.com/file.pdf",
+      fetchImpl: async () => new Response("%PDF-1.4", {
+        status: 200,
+        headers: {"content-type": "application/pdf"},
+      }),
+    })).rejects.toMatchObject({
+      code: "non_html_response",
+      message: "This URL does not return a readable HTML page.",
+    });
+  });
+
+  it("does not require aggregate rating for generic pages", async () => {
     const html = `
       <html>
         <head>
@@ -57,7 +95,7 @@ describe("aeo scanner", () => {
         </head>
         <body>
           <h1>Basic Page</h1>
-          <p>No schema here.</p>
+          <p>This is a generic page with enough visible text for crawl confidence.</p>
         </body>
       </html>
     `;
@@ -75,7 +113,7 @@ describe("aeo scanner", () => {
     });
 
     expect(result.publicScore).toBeLessThan(70);
-    expect(result.issuesJson.some((issue) => issue.code === "aggregate_rating_missing")).toBe(true);
+    expect(result.issuesJson.some((issue) => issue.code === "aggregate_rating_missing")).toBe(false);
   });
 
   it("accepts canonical from HTTP Link header", async () => {
@@ -118,6 +156,7 @@ describe("aeo scanner", () => {
           <meta name="description" content="Home page" />
         </head>
         <body>
+          <p>Store home page with enough crawlable text for AI discovery checks and product navigation.</p>
           <a href="/collections/featured">Featured</a>
         </body>
       </html>
@@ -269,6 +308,13 @@ describe("aeo scanner", () => {
           });
         }
 
+        if (url === "https://example.com/pricing") {
+          return new Response(pageHtml("Pricing", "/pricing"), {
+            status: 200,
+            headers: {"content-type": "text/html; charset=utf-8"},
+          });
+        }
+
         return new Response("", {status: 404});
       },
     });
@@ -397,7 +443,11 @@ describe("aeo scanner", () => {
           return new Response(`
             <html>
               <head><title>Home</title><meta name="description" content="Home description" /></head>
-              <body><h1>Home</h1><a href="/pricing">Pricing</a></body>
+              <body>
+                <h1>Home</h1>
+                <p>Home page with crawlable text for AI discovery and pricing navigation.</p>
+                <a href="/pricing">Pricing</a>
+              </body>
             </html>
           `, {status: 200, headers: {"content-type": "text/html"}});
         }
