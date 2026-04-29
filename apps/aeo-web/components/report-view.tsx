@@ -6,6 +6,7 @@ import {apiRequest, PublicScanReport} from "../lib/api";
 import {trackGa4} from "../lib/analytics";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
+import {affectedPagesLabel, prepareCurrentIssues} from "../lib/current-issues";
 import {AuthModal} from "./auth-modal";
 import {CreditPacksModal} from "./credit-packs-modal";
 import {ScoreRing} from "./score-ring";
@@ -37,30 +38,6 @@ function formatIssueTitle(code: string): string {
   return code
     .replace(/_/g, " ")
     .replace(/\b\w/g, (value) => value.toUpperCase());
-}
-
-function issuePriorityRank(severity: string | null | undefined): number {
-  const normalized = severity?.trim().toLowerCase();
-  if (normalized === "high") {
-    return 0;
-  }
-  if (normalized === "medium" || normalized === "med") {
-    return 1;
-  }
-  if (normalized === "low") {
-    return 2;
-  }
-  return 3;
-}
-
-function sortIssuesByPriority<T extends {severity?: string | null}>(issues: T[]): T[] {
-  return issues
-    .map((issue, index) => ({issue, index}))
-    .sort((a, b) => {
-      const priorityDelta = issuePriorityRank(a.issue.severity) - issuePriorityRank(b.issue.severity);
-      return priorityDelta || a.index - b.index;
-    })
-    .map(({issue}) => issue);
 }
 
 function buildDeveloperIssueSummary(
@@ -262,7 +239,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
   }
 
   function guideToDeepScanButton(): void {
-    setDeepScanHint("Run a Deep site scan to unlock all diagnostics.");
+    setDeepScanHint("Run a Deep Site Scan to unlock all diagnostics.");
     setHighlightDeepScanButton(true);
     window.setTimeout(() => setHighlightDeepScanButton(false), 1800);
     window.requestAnimationFrame(() => {
@@ -391,10 +368,13 @@ export function ReportView({publicToken}: {publicToken: string}) {
     },
   ];
 
-  const sortedIssues = sortIssuesByPriority(report.issues);
+  const currentIssues = prepareCurrentIssues(report);
   const issuesVisibleLimit = report.recommendationsLocked ? 3 : 5;
-  const visibleIssues = sortedIssues.slice(0, issuesVisibleLimit);
-  const issuesPreview = sortedIssues[issuesVisibleLimit] ?? null;
+  const visibleIssues = currentIssues.slice(0, issuesVisibleLimit);
+  const issuesPreview = currentIssues[issuesVisibleLimit] ?? null;
+  const currentIssuesBadge = currentIssues.length === report.issues.length ?
+    `${currentIssues.length} issues` :
+    `${currentIssues.length} issues · ${report.issues.length} findings`;
 
   return (
     <div className="report-shell">
@@ -416,7 +396,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
             onClick={handleDeepSiteScanIntent}
             disabled={claimBusy}
           >
-            {claimBusy ? "Unlocking..." : "Run Deep site scan"}
+            {claimBusy ? "Unlocking..." : "Run Deep Site Scan"}
           </button>
           <button type="button" className="cta-ghost" onClick={() => void shareResult()}>Share</button>
           <button type="button" className="cta-ghost" onClick={printReport}>Print</button>
@@ -480,7 +460,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
         </div>
       </section>
 
-      {report.issues.length ? (
+      {currentIssues.length ? (
         <section className="panel">
           <div className="panel-header">
             <h2>Current Issues</h2>
@@ -488,7 +468,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
               <button type="button" className="cta-ghost compact-button" onClick={() => void copyVisibleIssuesForDeveloper(visibleIssues)}>
                 Send fixes to developer
               </button>
-              <span className="badge badge-score">{report.issues.length} signals</span>
+              <span className="badge badge-score">{currentIssuesBadge}</span>
             </div>
           </div>
           {exportMessage ? <p className="toast-message">{exportMessage}</p> : null}
@@ -499,6 +479,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
                   <p className="list-title">{formatIssueTitle(issue.code)}</p>
                   <p className="tiny">{explainIssue(issue.code, issue.message)}</p>
                   <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issue.code)}</p>
+                  {affectedPagesLabel(issue) ? <p className="tiny">{affectedPagesLabel(issue)}</p> : null}
                 </div>
                 <span className={`badge ${priorityBadgeClass(issue.severity)}`}>{issue.severity}</span>
               </li>
@@ -509,6 +490,7 @@ export function ReportView({publicToken}: {publicToken: string}) {
                   <p className="list-title">{formatIssueTitle(issuesPreview.code)}</p>
                   <p className="tiny">{explainIssue(issuesPreview.code, issuesPreview.message)}</p>
                   <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issuesPreview.code)}</p>
+                  {affectedPagesLabel(issuesPreview) ? <p className="tiny">{affectedPagesLabel(issuesPreview)}</p> : null}
                 </div>
                 <span className={`badge ${priorityBadgeClass(issuesPreview.severity)}`}>{issuesPreview.severity}</span>
               </li>
@@ -516,16 +498,16 @@ export function ReportView({publicToken}: {publicToken: string}) {
           </ul>
           {report.recommendationsLocked ? (
             <div className="lock-panel">
-              <p>{Math.max(0, report.issues.length - visibleIssues.length)} more issue diagnostics unlock after sign-in.</p>
+              <p>{Math.max(0, currentIssues.length - visibleIssues.length)} more issue diagnostics unlock after sign-in.</p>
               <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta}>
                 Unlock all fixes
               </button>
             </div>
-          ) : report.issues.length > visibleIssues.length ? (
+          ) : currentIssues.length > visibleIssues.length ? (
             <div className="unlock-panel">
               <p>Use 1 credit to unlock full issue diagnostics for this site and priority actions.</p>
               <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta}>
-                Run Deep site scan
+                Run Deep Site Scan
               </button>
             </div>
           ) : null}

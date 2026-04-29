@@ -276,7 +276,7 @@ export default function HomePage() {
                 </div>
               </div>
               <p className="sample-report-foot">
-                First result is one-page readiness only. Sign in to unlock deeper diagnostics and Deep site scans.
+                First result is one-page readiness only. Sign in to unlock deeper diagnostics and Deep Site Scans.
               </p>
             </div>
           </div>

@@ -3,6 +3,10 @@ const ISSUE_EXPLANATIONS: Record<string, string> = {
     "Search and AI systems can treat duplicate URLs as separate pages when canonical tags are missing. Add one stable canonical URL and keep it consistent across variants so indexing and summarization are cleaner.",
   aggregate_rating_missing:
     "Your page does not expose AggregateRating in JSON-LD, so trust and review signals are weaker for machine interpretation. Add valid rating fields and keep them aligned with visible on-page review data.",
+  product_page_schema_only:
+    "Product rating schema appears only on product pages. Collection or homepage schema should stay page-context aware instead of forcing product ratings onto every page.",
+  trust_signals_missing:
+    "The page has limited machine-readable trust signals such as Organization, author, contact, testimonial, review, or credibility metadata.",
   qa_pairs_low:
     "The page contains too few clear question-and-answer blocks for answer engines to extract structured responses. Add concise Q/A sections around real buyer questions and keep headings explicit.",
   direct_answer_quality_low:
@@ -22,6 +26,8 @@ const ISSUE_EXPLANATIONS: Record<string, string> = {
 const ISSUE_ACTIONS: Record<string, string> = {
   canonical_missing: "Set one canonical URL for this page and keep it consistent across duplicate variants.",
   aggregate_rating_missing: "Add valid Product/AggregateRating JSON-LD with ratingValue and ratingCount or reviewCount.",
+  product_page_schema_only: "Keep Product/AggregateRating schema on product pages. Add ItemList/Product snippets to collection pages only if products are visibly listed there.",
+  trust_signals_missing: "Add relevant trust signals such as Organization schema, clear contact details, author/source information, testimonials, or review references where appropriate.",
   qa_pairs_low: "Add at least 6 concise question-answer pairs that match real buyer intent.",
   direct_answer_quality_low: "Place a clear 40-80 word direct answer immediately under each question heading.",
   structured_answer_blocks_missing: "Use bullets, steps, or simple tables inside answer sections for clearer parsing.",

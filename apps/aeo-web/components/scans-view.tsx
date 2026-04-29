@@ -6,6 +6,7 @@ import {FormEvent, useEffect, useMemo, useRef, useState} from "react";
 import {ApiRequestError, apiRequest, PublicScanReport} from "../lib/api";
 import {explainIssue, issueAction, normalizeUrlForDisplay, scoreToneClass, statusToneClass, toSiteLabel, truncateSiteLabel} from "../lib/aeo-ui";
 import {clearAeoAuthIntent, readAeoAuthIntent, saveAeoAuthIntent} from "../lib/auth-intent";
+import {affectedPagesLabel, prepareCurrentIssues} from "../lib/current-issues";
 import {normalizeWebsiteUrlInput, WEBSITE_URL_ERROR} from "../lib/url-validation";
 import {AgencySupportBlock} from "./agency-support-block";
 import {AuthModal} from "./auth-modal";
@@ -59,30 +60,6 @@ function formatIssueTitle(code: string): string {
   return code
     .replace(/_/g, " ")
     .replace(/\b\w/g, (value) => value.toUpperCase());
-}
-
-function issuePriorityRank(severity: string | null | undefined): number {
-  const normalized = severity?.trim().toLowerCase();
-  if (normalized === "high") {
-    return 0;
-  }
-  if (normalized === "medium" || normalized === "med") {
-    return 1;
-  }
-  if (normalized === "low") {
-    return 2;
-  }
-  return 3;
-}
-
-function sortIssuesByPriority<T extends {severity?: string | null}>(issues: T[]): T[] {
-  return issues
-    .map((issue, index) => ({issue, index}))
-    .sort((a, b) => {
-      const priorityDelta = issuePriorityRank(a.issue.severity) - issuePriorityRank(b.issue.severity);
-      return priorityDelta || a.index - b.index;
-    })
-    .map(({issue}) => issue);
 }
 
 function scanCostLabel(scanId: string, firstScanId: string | null): string {
@@ -424,7 +401,7 @@ export function ScansView() {
   }
 
   function guideToDeepScanButton(): void {
-    setScanHint("Run a Deep site scan to unlock all diagnostics.");
+    setScanHint("Run a Deep Site Scan to unlock all diagnostics.");
     setHighlightDeepScanButton(true);
     window.setTimeout(() => setHighlightDeepScanButton(false), 1800);
     window.requestAnimationFrame(() => {
@@ -573,7 +550,11 @@ export function ScansView() {
     );
   }
 
-  const issues = sortIssuesByPriority(selectedScanDetail?.issues ?? []);
+  const issues = selectedScanDetail ? prepareCurrentIssues(selectedScanDetail) : [];
+  const rawIssuesCount = selectedScanDetail?.issues.length ?? 0;
+  const issuesBadge = issues.length === rawIssuesCount ?
+    `${issues.length} issues` :
+    `${issues.length} issues · ${rawIssuesCount} findings`;
   const hasDeepSiteScanData = selectedScanDetail?.scanKind === "site_scan" || selectedScanDetail?.report.summary?.scope === "site";
   const issuesVisibleLimit = hasDeepSiteScanData ? issues.length : 5;
   const visibleIssues = issues.slice(0, issuesVisibleLimit);
@@ -621,7 +602,7 @@ export function ScansView() {
             spellCheck={false}
           />
           <button type="submit" className="cta-primary" disabled={scanBusy}>
-            {scanBusy ? "Scanning..." : "Run Deep site scan"}
+            {scanBusy ? "Scanning..." : "Run Deep Site Scan"}
           </button>
         </form>
         <p className="tiny">Scans the homepage and key discovery pages selected from sitemap, robots.txt and internal links.</p>
@@ -694,7 +675,7 @@ export function ScansView() {
                     onClick={() => void runDeepSiteScanForSelected()}
                     disabled={scanBusy}
                   >
-                    {scanBusy ? "Scanning..." : "Run Deep site scan"}
+                    {scanBusy ? "Scanning..." : "Run Deep Site Scan"}
                   </button>
                 ) : null}
                 <button type="button" className="cta-ghost" onClick={() => void shareSelectedReport()}>Share</button>
@@ -740,7 +721,7 @@ export function ScansView() {
                     </ul>
                   ) : (
                     <div className="locked-subset">
-                      <p className="tiny">Run Deep site scan to unlock additional crawler checks.</p>
+                      <p className="tiny">Run Deep Site Scan to unlock additional crawler checks.</p>
                       <ul className="meta-list locked-rows">
                         {hiddenCrawlerRows.map((row) => (
                           <li key={row.label}>
@@ -758,9 +739,9 @@ export function ScansView() {
               </div>
               {!hasDeepSiteScanData ? (
                 <div className="unlock-panel">
-                  <p>Use 1 credit to run a Deep site scan for this site.</p>
+                  <p>Use 1 credit to run a Deep Site Scan for this site.</p>
                   <button type="button" className="cta-primary" onClick={() => void runDeepSiteScanForSelected()} disabled={scanBusy}>
-                    {scanBusy ? "Scanning..." : "Run Deep site scan"}
+                    {scanBusy ? "Scanning..." : "Run Deep Site Scan"}
                   </button>
                 </div>
               ) : null}
@@ -773,7 +754,7 @@ export function ScansView() {
                   <button type="button" className="cta-ghost compact-button" onClick={() => void copyVisibleIssuesForDeveloper(visibleIssues)}>
                     Send fixes to developer
                   </button>
-                  <span className="badge badge-score">{issues.length} total</span>
+                  <span className="badge badge-score">{issuesBadge}</span>
                 </div>
               </div>
               {exportMessage ? <p className="toast-message">{exportMessage}</p> : null}
@@ -784,6 +765,7 @@ export function ScansView() {
                       <p className="list-title">{formatIssueTitle(issue.code)}</p>
                       <p className="tiny">{explainIssue(issue.code, issue.message)}</p>
                       <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issue.code)}</p>
+                      {affectedPagesLabel(issue) ? <p className="tiny">{affectedPagesLabel(issue)}</p> : null}
                     </div>
                     <span className={`badge ${priorityBadgeClass(issue.severity)}`}>{issue.severity}</span>
                   </li>
@@ -794,6 +776,7 @@ export function ScansView() {
                       <p className="list-title">{formatIssueTitle(issuesPreview.code)}</p>
                       <p className="tiny">{explainIssue(issuesPreview.code, issuesPreview.message)}</p>
                       <p className="tiny issue-action"><strong>Action:</strong> {issueAction(issuesPreview.code)}</p>
+                      {affectedPagesLabel(issuesPreview) ? <p className="tiny">{affectedPagesLabel(issuesPreview)}</p> : null}
                     </div>
                     <span className={`badge ${priorityBadgeClass(issuesPreview.severity)}`}>{issuesPreview.severity}</span>
                   </li>
@@ -801,9 +784,9 @@ export function ScansView() {
               </ul>
               {issuesPreview ? (
                 <div className="unlock-panel">
-                  <p>Use 1 credit to run a Deep site scan and unlock full issue diagnostics for this site.</p>
+                  <p>Use 1 credit to run a Deep Site Scan and unlock full issue diagnostics for this site.</p>
                   <button type="button" className="cta-primary" onClick={handleCurrentIssuesDeepScanCta} disabled={scanBusy}>
-                    Run Deep site scan
+                    Run Deep Site Scan
                   </button>
                 </div>
               ) : null}

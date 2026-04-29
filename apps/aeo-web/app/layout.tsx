@@ -2,6 +2,7 @@ import type {Metadata} from "next";
 import {Inter} from "next/font/google";
 import Script from "next/script";
 
+import {isDevAeoEnvironment} from "../lib/search-indexing";
 import "./globals.css";
 
 const inter = Inter({
@@ -11,6 +12,7 @@ const inter = Inter({
 });
 
 const measurementId = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID;
+const devNoindex = isDevAeoEnvironment();
 
 export const metadata: Metadata = {
   title: "Free AEO Checker, AEO Tracker & AEO Visibility Tool | MO ADS",
@@ -20,6 +22,18 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://aeo.moads.agency/",
   },
+  ...(devNoindex ? {
+    robots: {
+      index: false,
+      follow: false,
+      nocache: true,
+      googleBot: {
+        index: false,
+        follow: false,
+        noarchive: true,
+      },
+    },
+  } : {}),
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

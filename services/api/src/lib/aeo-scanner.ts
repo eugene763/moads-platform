@@ -369,6 +369,10 @@ function extractAggregateRating(nodes: Array<Record<string, unknown>>): Aggregat
   return null;
 }
 
+function hasAnySchemaType(nodes: Array<Record<string, unknown>>, types: string[]): boolean {
+  return nodes.some((node) => types.some((type) => hasType(node, type)));
+}
+
 function extractTitle(html: string): string | null {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   return asText(titleMatch?.[1]?.replace(/\s+/g, " ") ?? null);
@@ -684,6 +688,12 @@ function isLikelyProductUrl(candidate: URL): boolean {
     || /\/dp\/[a-z0-9]{8,}/.test(path)
     || /product[^/]*\.html?$/.test(path)
     || /\/item\/[^/]+/.test(path);
+}
+
+function isLikelyCommerceUrl(candidate: URL): boolean {
+  const path = candidate.pathname.toLowerCase();
+  return isLikelyProductUrl(candidate)
+    || /(?:\/|^)(shop|store|stores|collections|collection|category|categories|pricing|prices|plans|offers?|deals?|cart|checkout|sku|item)(?:\/|$)/.test(path);
 }
 
 function dedupeUrls(urls: string[]): string[] {
@@ -1352,6 +1362,16 @@ function buildRecommendations(issues: AeoIssue[]): AeoRecommendation[] {
     });
   }
 
+  if (hasIssue("trust_signals_missing")) {
+    recommendations.push({
+      id: "add_general_trust_signals",
+      title: "Add machine-readable trust signals",
+      description: "Add relevant Organization schema, contact details, author/source information, testimonials, or review references where appropriate.",
+      impactScore: 5,
+      priority: "medium",
+    });
+  }
+
   if (hasIssue("aggregate_count_missing")) {
     recommendations.push({
       id: "add_review_count",
@@ -1475,8 +1495,8 @@ function buildRecommendations(issues: AeoIssue[]): AeoRecommendation[] {
   if (hasIssue("product_page_schema_only")) {
     recommendations.push({
       id: "surface_schema_on_target_pages",
-      title: "Surface schema on the URLs you share and rank",
-      description: "A sampled product page has rating evidence, but the scanned page does not. Make sure target landing URLs expose schema and visible trust signals too.",
+      title: "Keep product rating schema page-specific",
+      description: "Keep Product/AggregateRating schema on product pages. Add ItemList/Product snippets to collection pages only if products are visibly listed there.",
       impactScore: 4,
       priority: "low",
     });
@@ -1542,6 +1562,21 @@ function evaluateAeoHtml(input: {
       return false;
     }
   })();
+  const requestedUrl = (() => {
+    try {
+      return new URL(input.finalUrl ?? input.requestedUrl);
+    } catch {
+      return null;
+    }
+  })();
+  const commerceSchemaContext = hasAnySchemaType(jsonLdNodes, ["Product", "Offer", "AggregateRating", "Review", "ItemList"]);
+  const commerceUrlContext = requestedUrl ? isLikelyCommerceUrl(requestedUrl) : false;
+  const commerceHtmlContext = /\b(add to cart|add-to-cart|checkout|cart|sku|shopify|woocommerce|product-card|data-product|itemprop=["']offers?["']|price|pricing|buy now)\b/i.test(stripped) ||
+    /[$€£]\s?\d{1,5}(?:[.,]\d{2})?/.test(stripped);
+  // MVP heuristic. Replace with explicit page classification when crawl evidence is richer.
+  const productRatingApplicable = commerceSchemaContext || commerceUrlContext || commerceHtmlContext;
+  const weakGeneralTrustSignals = !hasAnySchemaType(jsonLdNodes, ["Organization", "LocalBusiness", "Person", "Article", "Review"]) &&
+    !/\b(contact|about|author|testimonial|review|privacy|address|phone|email)\b/i.test(stripped);
   const scoreAggregate = aggregate ?? (rootLikeRequest ? input.productPage?.aggregateRating ?? null : null);
   const scoreOnPage = (onPage.ratingValue != null || onPage.reviewsCount != null) ?
     onPage :
@@ -1633,7 +1668,7 @@ function evaluateAeoHtml(input: {
     issues.push(buildIssue("canonical_missing", "low", "technical_hygiene", 7, "Missing canonical signal."));
   }
 
-  if (!scoreAggregate) {
+  if (!scoreAggregate && productRatingApplicable) {
     issues.push(buildIssue(
       "aggregate_rating_missing",
       "high",
@@ -1641,7 +1676,15 @@ function evaluateAeoHtml(input: {
       15,
       "AggregateRating data was not found in JSON-LD.",
     ));
-  } else {
+  } else if (!scoreAggregate && weakGeneralTrustSignals) {
+    issues.push(buildIssue(
+      "trust_signals_missing",
+      "medium",
+      "citation_readiness",
+      5,
+      "The page has limited machine-readable trust signals such as Organization, author, contact, testimonial, review, or credibility metadata.",
+    ));
+  } else if (scoreAggregate && productRatingApplicable) {
     if (!hasCount) {
       issues.push(buildIssue(
         "aggregate_count_missing",
@@ -1775,13 +1818,13 @@ function evaluateAeoHtml(input: {
     }
   }
 
-  if (!aggregate && input.productPage?.sampled && input.productPage.aggregateRating) {
+  if (productRatingApplicable && !aggregate && input.productPage?.sampled && input.productPage.aggregateRating) {
     issues.push(buildIssue(
       "product_page_schema_only",
       "low",
       "citation_readiness",
       0,
-      "A sampled product page has rating schema, but the scanned URL does not expose it directly.",
+      "Product rating schema appears only on product pages.",
     ));
   }
 
@@ -2104,7 +2147,7 @@ function buildFullSiteResult(input: {
         confidenceLevel: lowestConfidence(pages),
         scannedPages: pages.length,
         maxPages: input.maxPages,
-        scanModeNote: `Key-page site scan sampled ${pages.length} page${pages.length === 1 ? "" : "s"} in launch mode.`,
+        scanModeNote: `Deep Site Scan sampled ${pages.length} page${pages.length === 1 ? "" : "s"} in launch mode.`,
       },
       dimensions: representative?.reportJson.dimensions ?? {},
       discovery: input.discovery,

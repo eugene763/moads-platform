@@ -129,7 +129,7 @@ export function PaymentReturnModal() {
           {isSuccess ? (
             <>
               <Link className="cta-primary" href="/dashboard#billing" onClick={closeModal}>Open account</Link>
-              <Link className="cta-ghost" href="/scans" onClick={closeModal}>Run Deep site scan</Link>
+              <Link className="cta-ghost" href="/scans" onClick={closeModal}>Run Deep Site Scan</Link>
             </>
           ) : (
             <Link className="cta-primary" href="/scans?intent=buy-credits" onClick={closeModal}>Choose another pack</Link>
